@@ -2,13 +2,29 @@ mod create;
 
 use jubako as jbk;
 
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use create::{Creator, Entry};
 use std::path::PathBuf;
 
 #[derive(Parser)]
+#[clap(name = "arx")]
 #[clap(author, version, about, long_about=None)]
 struct Cli {
+    #[clap(short, long, action=clap::ArgAction::Count)]
+    verbose: u8,
+
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    #[clap(arg_required_else_help = true)]
+    Create(Create),
+}
+
+#[derive(Args)]
+struct Create {
     // Input
     #[clap(value_parser)]
     infiles: Vec<PathBuf>,
@@ -16,30 +32,30 @@ struct Cli {
     // Archive name to create
     #[clap(short, long, value_parser)]
     outfile: PathBuf,
-
-    // verbose
-    #[clap(short, long, action=clap::ArgAction::Count)]
-    verbose: u8,
 }
 
 fn main() -> jbk::Result<()> {
-    let cli = Cli::parse();
+    let args = Cli::parse();
 
-    if cli.verbose > 0 {
-        println!("Creating archive {:?}", cli.outfile);
-        println!("With files {:?}", cli.infiles);
+    match args.command {
+        Commands::Create(create_cmd) => {
+            if args.verbose > 0 {
+                println!("Creating archive {:?}", create_cmd.outfile);
+                println!("With files {:?}", create_cmd.infiles);
+            }
+
+            let mut creator = Creator::new(&create_cmd.outfile);
+
+            creator.start()?;
+            for infile in create_cmd.infiles {
+                creator.push_back(Entry::new(infile)?);
+            }
+
+            creator.run()?;
+
+            creator.finalize(create_cmd.outfile)?;
+        }
     }
-
-    let mut creator = Creator::new(&cli.outfile);
-
-    creator.start()?;
-    for infile in cli.infiles {
-        creator.push_back(Entry::new(infile)?);
-    }
-
-    creator.run()?;
-
-    creator.finalize(cli.outfile)?;
 
     Ok(())
 }
