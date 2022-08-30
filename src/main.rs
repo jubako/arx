@@ -1,5 +1,6 @@
 mod create;
 mod entry;
+mod list;
 
 use jubako as jbk;
 
@@ -22,6 +23,9 @@ struct Cli {
 enum Commands {
     #[clap(arg_required_else_help = true)]
     Create(Create),
+
+    #[clap(arg_required_else_help = true)]
+    List(List),
 }
 
 #[derive(Args)]
@@ -33,6 +37,12 @@ struct Create {
     // Archive name to create
     #[clap(short, long, value_parser)]
     outfile: PathBuf,
+}
+
+#[derive(Args)]
+struct List {
+    #[clap(value_parser)]
+    infile: PathBuf,
 }
 
 fn main() -> jbk::Result<()> {
@@ -56,6 +66,13 @@ fn main() -> jbk::Result<()> {
 
             creator.finalize(create_cmd.outfile)
         }
-    }
 
+        Commands::List(list_cmd) => {
+            if args.verbose > 0 {
+                println!("Listing entries in archive {:?}", list_cmd.infile);
+            }
+
+            list::list(list_cmd.infile)
+        }
+    }
 }
