@@ -1,4 +1,5 @@
 mod create;
+mod dump;
 mod entry;
 mod list;
 
@@ -26,6 +27,9 @@ enum Commands {
 
     #[clap(arg_required_else_help = true)]
     List(List),
+
+    #[clap(arg_required_else_help = true)]
+    Dump(Dump),
 }
 
 #[derive(Args)]
@@ -43,6 +47,15 @@ struct Create {
 struct List {
     #[clap(value_parser)]
     infile: PathBuf,
+}
+
+#[derive(Args)]
+struct Dump {
+    #[clap(value_parser)]
+    infile: PathBuf,
+
+    #[clap(value_parser)]
+    path: String,
 }
 
 fn main() -> jbk::Result<()> {
@@ -73,6 +86,17 @@ fn main() -> jbk::Result<()> {
             }
 
             list::list(list_cmd.infile)
+        }
+
+        Commands::Dump(dump_cmd) => {
+            if args.verbose > 0 {
+                println!(
+                    "Dump entry {} in archive {:?}",
+                    dump_cmd.path, dump_cmd.infile
+                );
+            }
+
+            dump::dump(dump_cmd.infile, dump_cmd.path)
         }
     }
 }
