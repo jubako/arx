@@ -87,6 +87,7 @@ pub struct Creator {
     content_pack: jbk::creator::ContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_id: jbk::Idx<u32>,
+    entry_count: u32,
     queue: VecDeque<Entry>,
 }
 
@@ -103,6 +104,7 @@ impl Creator {
             jbk::Id(1),
             VENDOR_ID,
             jbk::FreeData::<U40>::clone_from_slice(&[0x00; 40]),
+            jbk::CompressionType::Zstd,
         );
 
         outfilename = outfile.file_name().unwrap().to_os_string();
@@ -117,7 +119,7 @@ impl Creator {
             jbk::FreeData::<U31>::clone_from_slice(&[0x00; 31]),
         );
 
-        let path_store = directory_pack.create_key_store();
+        let path_store = directory_pack.create_key_store(jbk::creator::KeyStoreKind::Plain);
 
         let entry_def = jbk::creator::Entry::new(vec![
             // File
@@ -143,6 +145,7 @@ impl Creator {
             content_pack,
             directory_pack,
             entry_store_id,
+            entry_count: 0,
             queue: VecDeque::<Entry>::new(),
         }
     }
@@ -153,8 +156,16 @@ impl Creator {
     }
 
     pub fn finalize(&mut self, outfile: PathBuf) -> jbk::Result<()> {
-        let content_pack_info = self.content_pack.finalize()?;
+        self.directory_pack.create_index(
+            "entries",
+            jubako::ContentAddress::new(0.into(), 0.into()),
+            0.into(),
+            self.entry_store_id,
+            jubako::Count(self.entry_count),
+            jubako::Idx(0),
+        );
         let directory_pack_info = self.directory_pack.finalize()?;
+        let content_pack_info = self.content_pack.finalize()?;
         let mut manifest_creator = jbk::creator::ManifestPackCreator::new(
             outfile,
             VENDOR_ID,
@@ -175,6 +186,9 @@ impl Creator {
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();
             self.handle(entry)?;
+            if self.entry_count % 1000 == 0 {
+                println!("{}", self.entry_count);
+            }
         }
         Ok(())
     }
@@ -196,9 +210,11 @@ impl Creator {
                     1,
                     vec![entry_path, jbk::creator::Value::Unsigned(nb_entries)],
                 );
+                self.entry_count += 1;
             }
             EntryKind::File => {
-                let mut file = fs::File::open(&entry.path)?;
+                let file = fs::File::open(&entry.path)?;
+                let mut file = jbk::creator::FileStream::new(file, jbk::End::None);
                 let content_id = self.content_pack.add_content(&mut file)?;
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
@@ -211,6 +227,7 @@ impl Creator {
                         )),
                     ],
                 );
+                self.entry_count += 1;
             }
             EntryKind::Link => {
                 let target = fs::read_link(&entry.path)?;
@@ -225,6 +242,7 @@ impl Creator {
                         },
                     ],
                 );
+                self.entry_count += 1;
             }
             EntryKind::Other => {}
         }

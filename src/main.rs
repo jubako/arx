@@ -53,9 +53,8 @@ fn main() -> jbk::Result<()> {
 
             creator.run()?;
 
-            creator.finalize(create_cmd.outfile)?;
+            creator.finalize(create_cmd.outfile)
         }
     }
 
-    Ok(())
 }
