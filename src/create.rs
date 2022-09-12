@@ -130,6 +130,7 @@ impl Creator {
             // Directory
             jbk::creator::Variant::new(vec![
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::new_int(), // index of the first entry
                 jbk::creator::Key::new_int(), // nb entries in the directory
             ]),
             // Link
@@ -186,6 +187,12 @@ impl Creator {
         }
     }
 
+    fn next_id(&self) -> u32 {
+        // Return the id that will be pushed back.
+        // The id is the entry_count (entries already added) + the size of the queue (entries to add)
+        self.entry_count + self.queue.len() as u32
+    }
+
     pub fn run(&mut self) -> jbk::Result<()> {
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();
@@ -205,6 +212,7 @@ impl Creator {
         match entry.kind {
             EntryKind::Dir => {
                 let mut nb_entries = 0;
+                let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
                 for sub_entry in fs::read_dir(&entry.path)? {
                     self.push_back(sub_entry?.into());
                     nb_entries += 1;
@@ -212,7 +220,11 @@ impl Creator {
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
                     1,
-                    vec![entry_path, jbk::creator::Value::Unsigned(nb_entries)],
+                    vec![
+                        entry_path,
+                        jbk::creator::Value::Unsigned(first_entry as u64),
+                        jbk::creator::Value::Unsigned(nb_entries)
+                    ],
                 );
                 self.entry_count += 1;
             }

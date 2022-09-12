@@ -29,7 +29,7 @@ impl<'a> Entry<'a> {
     }
 
     pub fn get_path(&self) -> jbk::Result<String> {
-        if let jbk::reader::Value::Array(path) = self.entry.get_value(0.into())? {
+        if let jbk::reader::Value::Array(path) = self.entry.get_value(0.into()).unwrap() {
             let path = path.resolve_to_vec(self.key_storage)?;
             Ok(String::from_utf8(path)?)
         } else {
@@ -49,13 +49,35 @@ impl<'a> Entry<'a> {
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
         assert!(self.entry.get_variant_id() == 2);
-        let v = self.entry.get_value(1.into())?;
+        let v = self.entry.get_value(1.into()).unwrap();
         if let jbk::reader::Value::Array(target) = v {
             let target = target.resolve_to_vec(self.key_storage)?;
             Ok(String::from_utf8(target)?)
         } else {
             panic!()
         }
+    }
+
+    pub fn get_first_child(&self) -> jbk::Idx<u32> {
+        assert!(self.entry.get_variant_id() == 1);
+        let v = self.entry.get_value(1.into()).unwrap();
+        jbk::Idx(match v {
+            jbk::reader::Value::U8(v) => *v as u32,
+            jbk::reader::Value::U16(v) => *v as u32,
+            jbk::reader::Value::U32(v) => *v,
+            _ => panic!()
+        })
+    }
+
+    pub fn get_nb_children(&self) -> jbk::Count<u32> {
+        assert!(self.entry.get_variant_id() == 1);
+        let v = self.entry.get_value(2.into()).unwrap();
+        jbk::Count(match v {
+            jbk::reader::Value::U8(v) => *v as u32,
+            jbk::reader::Value::U16(v) => *v as u32,
+            jbk::reader::Value::U32(v) => *v,
+            _ => panic!()
+        })
     }
 }
 
