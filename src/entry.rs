@@ -1,6 +1,7 @@
 use jubako as jbk;
 use std::fmt;
 
+#[derive(PartialEq)]
 pub enum EntryKind {
     File,
     Directory,
