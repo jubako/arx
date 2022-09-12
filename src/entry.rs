@@ -83,7 +83,10 @@ impl<'a> Entry<'a> {
 
 impl<'a> fmt::Display for Entry<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.get_path().unwrap())
+        match self.get_type() {
+            EntryKind::Directory => write!(f, "{}/", self.get_path().unwrap()),
+            _ => write!(f, "{}", self.get_path().unwrap())
+        }
         //write!(f, "{}", self.get_path().or(Err(fmt::Error))?)
     }
 }
