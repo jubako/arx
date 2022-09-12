@@ -179,7 +179,11 @@ impl Creator {
     }
 
     pub fn push_back(&mut self, entry: Entry) {
-        self.queue.push_back(entry);
+        if let EntryKind::Other = entry.kind {
+            // do not add other to the queue
+        } else {
+            self.queue.push_back(entry);
+        }
     }
 
     pub fn run(&mut self) -> jbk::Result<()> {
@@ -244,7 +248,7 @@ impl Creator {
                 );
                 self.entry_count += 1;
             }
-            EntryKind::Other => {}
+            EntryKind::Other => unreachable!()
         }
         Ok(())
     }
