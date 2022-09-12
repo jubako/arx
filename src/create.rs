@@ -130,7 +130,7 @@ impl Creator {
             // Directory
             jbk::creator::Variant::new(vec![
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)),
-                jbk::creator::Key::UnsignedInt(4), // nb entries in the directory
+                jbk::creator::Key::new_int(), // nb entries in the directory
             ]),
             // Link
             jbk::creator::Variant::new(vec![
