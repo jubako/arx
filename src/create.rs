@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use typenum::{U31, U40, U63};
 
-const VENDOR_ID: u32 = 0x41_52_57_00;
+const VENDOR_ID: u32 = 0x41_52_58_00;
 
 enum EntryKind {
     Dir,
