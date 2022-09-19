@@ -29,6 +29,18 @@ impl<'a> Entry<'a> {
         }
     }
 
+    pub fn is_file(&self) -> bool {
+        self.entry.get_variant_id() == 0
+    }
+
+    pub fn is_dir(&self) -> bool {
+        self.entry.get_variant_id() == 1
+    }
+
+    pub fn is_link(&self) -> bool {
+        self.entry.get_variant_id() == 2
+    }
+
     pub fn get_path(&self) -> jbk::Result<String> {
         if let jbk::reader::Value::Array(path) = self.entry.get_value(0.into()).unwrap() {
             let path = path.resolve_to_vec(self.key_storage)?;
@@ -54,7 +66,7 @@ impl<'a> Entry<'a> {
     }
 
     pub fn get_content_address(&self) -> &jbk::reader::Content {
-        assert!(self.entry.get_variant_id() == 0);
+        assert!(self.is_file());
         let v = self.entry.get_value(2.into()).unwrap();
         if let jbk::reader::Value::Content(c) = v {
             c
@@ -64,7 +76,7 @@ impl<'a> Entry<'a> {
     }
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
-        assert!(self.entry.get_variant_id() == 2);
+        assert!(self.is_link());
         let v = self.entry.get_value(2.into()).unwrap();
         if let jbk::reader::Value::Array(target) = v {
             let target = target.resolve_to_vec(self.key_storage)?;
@@ -75,7 +87,7 @@ impl<'a> Entry<'a> {
     }
 
     pub fn get_first_child(&self) -> jbk::Idx<u32> {
-        assert!(self.entry.get_variant_id() == 1);
+        assert!(self.is_dir());
         let v = self.entry.get_value(2.into()).unwrap();
         jbk::Idx(match v {
             jbk::reader::Value::U8(v) => *v as u32,
@@ -86,7 +98,7 @@ impl<'a> Entry<'a> {
     }
 
     pub fn get_nb_children(&self) -> jbk::Count<u32> {
-        assert!(self.entry.get_variant_id() == 1);
+        assert!(self.is_dir());
         let v = self.entry.get_value(3.into()).unwrap();
         jbk::Count(match v {
             jbk::reader::Value::U8(v) => *v as u32,
