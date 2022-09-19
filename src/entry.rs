@@ -38,9 +38,24 @@ impl<'a> Entry<'a> {
         }
     }
 
+    pub fn get_parent(&self) -> Option<jbk::Idx<u32>> {
+        let v = self.entry.get_value(1.into()).unwrap();
+        let idx = match v {
+            jbk::reader::Value::U8(v) => *v as u32,
+            jbk::reader::Value::U16(v) => *v as u32,
+            jbk::reader::Value::U32(v) => *v,
+            _ => panic!()
+        };
+        if idx == 0 {
+            None
+        } else {
+            Some(jbk::Idx(idx-1))
+        }
+    }
+
     pub fn get_content_address(&self) -> &jbk::reader::Content {
         assert!(self.entry.get_variant_id() == 0);
-        let v = self.entry.get_value(1.into()).unwrap();
+        let v = self.entry.get_value(2.into()).unwrap();
         if let jbk::reader::Value::Content(c) = v {
             c
         } else {
@@ -50,7 +65,7 @@ impl<'a> Entry<'a> {
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
         assert!(self.entry.get_variant_id() == 2);
-        let v = self.entry.get_value(1.into()).unwrap();
+        let v = self.entry.get_value(2.into()).unwrap();
         if let jbk::reader::Value::Array(target) = v {
             let target = target.resolve_to_vec(self.key_storage)?;
             Ok(String::from_utf8(target)?)
@@ -61,7 +76,7 @@ impl<'a> Entry<'a> {
 
     pub fn get_first_child(&self) -> jbk::Idx<u32> {
         assert!(self.entry.get_variant_id() == 1);
-        let v = self.entry.get_value(1.into()).unwrap();
+        let v = self.entry.get_value(2.into()).unwrap();
         jbk::Idx(match v {
             jbk::reader::Value::U8(v) => *v as u32,
             jbk::reader::Value::U16(v) => *v as u32,
@@ -72,7 +87,7 @@ impl<'a> Entry<'a> {
 
     pub fn get_nb_children(&self) -> jbk::Count<u32> {
         assert!(self.entry.get_variant_id() == 1);
-        let v = self.entry.get_value(2.into()).unwrap();
+        let v = self.entry.get_value(3.into()).unwrap();
         jbk::Count(match v {
             jbk::reader::Value::U8(v) => *v as u32,
             jbk::reader::Value::U16(v) => *v as u32,

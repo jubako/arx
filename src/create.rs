@@ -20,64 +20,72 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
+    parent: jbk::Idx<u32>
 }
 
 impl Entry {
-    pub fn new(path: PathBuf) -> jbk::Result<Self> {
+    pub fn new(path: PathBuf, parent: jbk::Idx<u32>) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
                 kind: EntryKind::Dir,
                 path,
+                parent,
             }
         } else if attr.is_file() {
             Self {
                 kind: EntryKind::File,
                 path,
+                parent,
             }
         } else if attr.is_symlink() {
             Self {
                 kind: EntryKind::Link,
                 path,
+                parent,
             }
         } else {
             Self {
                 kind: EntryKind::Other,
                 path,
+                parent,
             }
         })
     }
-}
 
-impl From<fs::DirEntry> for Entry {
-    fn from(dir_entry: fs::DirEntry) -> Self {
+    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Idx<u32>) -> Self {
         let path = dir_entry.path();
         if let Ok(file_type) = dir_entry.file_type() {
             if file_type.is_dir() {
                 Self {
                     kind: EntryKind::Dir,
                     path,
+                    parent,
                 }
             } else if file_type.is_file() {
                 Self {
                     kind: EntryKind::File,
                     path,
+                    parent,
                 }
             } else if file_type.is_symlink() {
                 Self {
                     kind: EntryKind::Link,
                     path,
+                    parent,
                 }
             } else {
                 Self {
                     kind: EntryKind::Other,
                     path,
+                    parent,
                 }
             }
         } else {
             Self {
                 kind: EntryKind::Other,
                 path,
+                parent,
             }
         }
     }
@@ -125,17 +133,20 @@ impl Creator {
             // File
             jbk::creator::Variant::new(vec![
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::new_int(), // index of the parent entry
                 jbk::creator::Key::ContentAddress,
             ]),
             // Directory
             jbk::creator::Variant::new(vec![
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::new_int(), // index of the parent entry
                 jbk::creator::Key::new_int(), // index of the first entry
                 jbk::creator::Key::new_int(), // nb entries in the directory
             ]),
             // Link
             jbk::creator::Variant::new(vec![
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::new_int(), // index of the parent entry
                 jbk::creator::Key::PString(0, Rc::clone(&path_store)), // Id of the linked entry
             ]),
         ]);
@@ -214,7 +225,7 @@ impl Creator {
                 let mut nb_entries = 0;
                 let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
                 for sub_entry in fs::read_dir(&entry.path)? {
-                    self.push_back(sub_entry?.into());
+                    self.push_back(Entry::new_from_fs(sub_entry?, jbk::Idx(self.entry_count+1)));
                     nb_entries += 1;
                 }
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
@@ -222,6 +233,7 @@ impl Creator {
                     1,
                     vec![
                         entry_path,
+                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
                         jbk::creator::Value::Unsigned(first_entry as u64),
                         jbk::creator::Value::Unsigned(nb_entries)
                     ],
@@ -237,6 +249,7 @@ impl Creator {
                     0,
                     vec![
                         entry_path,
+                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
                         jbk::creator::Value::Content(jubako::ContentAddress::new(
                             jbk::Id(1),
                             content_id,
@@ -252,6 +265,7 @@ impl Creator {
                     2,
                     vec![
                         entry_path,
+                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
                         jbk::creator::Value::Array {
                             data: target.into_os_string().into_vec(),
                             key_id: None,
