@@ -2,6 +2,7 @@ use crate::common::{Entry, EntryKind};
 use jubako as jbk;
 use std::ffi::OsStr;
 use std::path::Path;
+use std::rc::Rc;
 
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let container = jbk::reader::Container::new(&infile)?;
@@ -22,7 +23,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
             if idx == max {
                 return Err("Cannot found entry".to_string().into());
             }
-            let entry = Entry::new(index.get_entry(jbk::Idx(idx))?, &key_storage);
+            let entry = Entry::new(index.get_entry(jbk::Idx(idx))?, Rc::clone(&key_storage));
             if entry.get_parent() != current_parent {
                 return Err("Cannot found entry".to_string().into());
             }
@@ -43,7 +44,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     }
 
     if let Some(idx) = found {
-        let entry = Entry::new(index.get_entry(idx)?, &key_storage);
+        let entry = Entry::new(index.get_entry(idx)?, Rc::clone(&key_storage));
         match entry.get_type() {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {

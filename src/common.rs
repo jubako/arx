@@ -1,5 +1,6 @@
 use jubako as jbk;
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(PartialEq)]
 pub enum EntryKind {
@@ -8,16 +9,13 @@ pub enum EntryKind {
     Link,
 }
 
-pub struct Entry<'a> {
-    entry: jbk::reader::Entry<'a>,
-    key_storage: &'a jbk::reader::KeyStorage<'a>,
+pub struct Entry {
+    entry: jbk::reader::Entry,
+    key_storage: Rc<jbk::reader::KeyStorage>,
 }
 
-impl<'a> Entry<'a> {
-    pub fn new(
-        entry: jbk::reader::Entry<'a>,
-        key_storage: &'a jbk::reader::KeyStorage<'a>,
-    ) -> Self {
+impl Entry {
+    pub fn new(entry: jbk::reader::Entry, key_storage: Rc<jbk::reader::KeyStorage>) -> Self {
         Self { entry, key_storage }
     }
     pub fn get_type(&self) -> EntryKind {
@@ -43,7 +41,7 @@ impl<'a> Entry<'a> {
 
     pub fn get_path(&self) -> jbk::Result<String> {
         if let jbk::reader::Value::Array(path) = self.entry.get_value(0.into()).unwrap() {
-            let path = path.resolve_to_vec(self.key_storage)?;
+            let path = path.resolve_to_vec(&self.key_storage)?;
             Ok(String::from_utf8(path)?)
         } else {
             panic!()
@@ -79,7 +77,7 @@ impl<'a> Entry<'a> {
         assert!(self.is_link());
         let v = self.entry.get_value(2.into()).unwrap();
         if let jbk::reader::Value::Array(target) = v {
-            let target = target.resolve_to_vec(self.key_storage)?;
+            let target = target.resolve_to_vec(&self.key_storage)?;
             Ok(String::from_utf8(target)?)
         } else {
             panic!()
@@ -109,7 +107,7 @@ impl<'a> Entry<'a> {
     }
 }
 
-impl<'a> fmt::Display for Entry<'a> {
+impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.get_type() {
             EntryKind::Directory => write!(f, "{}/", self.get_path().unwrap()),
