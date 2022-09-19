@@ -1,4 +1,4 @@
-use crate::entry::{Entry, EntryKind};
+use crate::common::{Entry, EntryKind};
 use jubako as jbk;
 use std::fs::{create_dir, create_dir_all, File};
 use std::os::unix::fs::symlink;

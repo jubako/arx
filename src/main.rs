@@ -1,6 +1,6 @@
+mod common;
 mod create;
 mod dump;
-mod entry;
 mod extract;
 mod list;
 

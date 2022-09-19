@@ -1,4 +1,4 @@
-use crate::entry::{Entry, EntryKind};
+use crate::common::{Entry, EntryKind};
 use jubako as jbk;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;

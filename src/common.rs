@@ -44,12 +44,12 @@ impl<'a> Entry<'a> {
             jbk::reader::Value::U8(v) => *v as u32,
             jbk::reader::Value::U16(v) => *v as u32,
             jbk::reader::Value::U32(v) => *v,
-            _ => panic!()
+            _ => panic!(),
         };
         if idx == 0 {
             None
         } else {
-            Some(jbk::Idx(idx-1))
+            Some(jbk::Idx(idx - 1))
         }
     }
 
@@ -81,7 +81,7 @@ impl<'a> Entry<'a> {
             jbk::reader::Value::U8(v) => *v as u32,
             jbk::reader::Value::U16(v) => *v as u32,
             jbk::reader::Value::U32(v) => *v,
-            _ => panic!()
+            _ => panic!(),
         })
     }
 
@@ -92,7 +92,7 @@ impl<'a> Entry<'a> {
             jbk::reader::Value::U8(v) => *v as u32,
             jbk::reader::Value::U16(v) => *v as u32,
             jbk::reader::Value::U32(v) => *v,
-            _ => panic!()
+            _ => panic!(),
         })
     }
 }
@@ -101,7 +101,7 @@ impl<'a> fmt::Display for Entry<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.get_type() {
             EntryKind::Directory => write!(f, "{}/", self.get_path().unwrap()),
-            _ => write!(f, "{}", self.get_path().unwrap())
+            _ => write!(f, "{}", self.get_path().unwrap()),
         }
         //write!(f, "{}", self.get_path().or(Err(fmt::Error))?)
     }
