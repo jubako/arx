@@ -1,5 +1,6 @@
 use jubako as jbk;
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[derive(PartialEq)]
@@ -105,6 +106,14 @@ impl Entry {
             _ => panic!(),
         })
     }
+
+    pub fn as_range(&self) -> EntryRange {
+        assert!(self.is_dir());
+        EntryRange {
+            start: self.get_first_child(),
+            end: self.get_first_child() + self.get_nb_children(),
+        }
+    }
 }
 
 impl fmt::Display for Entry {
@@ -114,5 +123,120 @@ impl fmt::Display for Entry {
             _ => write!(f, "{}", self.get_path().unwrap()),
         }
         //write!(f, "{}", self.get_path().or(Err(fmt::Error))?)
+    }
+}
+
+pub struct EntryRange {
+    pub start: jbk::Idx<u32>,
+    pub end: jbk::Idx<u32>,
+}
+
+impl From<&jbk::reader::Index> for EntryRange {
+    fn from(index: &jbk::reader::Index) -> Self {
+        Self {
+            start: index.entry_offset(),
+            end: index.entry_offset() + index.entry_count(),
+        }
+    }
+}
+
+pub struct ReadEntry {
+    index: jbk::reader::Index,
+    key_storage: Rc<jbk::reader::KeyStorage>,
+    current: jbk::Idx<u32>,
+    end: jbk::Idx<u32>,
+}
+
+impl ReadEntry {
+    pub fn new(directory: &Rc<jbk::reader::DirectoryPack>, range: EntryRange) -> jbk::Result<Self> {
+        let index = directory.get_index_from_name("entries")?;
+        let key_storage = directory.get_key_storage();
+        Ok(Self {
+            index,
+            key_storage,
+            current: range.start,
+            end: range.end,
+        })
+    }
+}
+
+impl Iterator for ReadEntry {
+    type Item = jbk::Result<Entry>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == self.end {
+            None
+        } else {
+            let entry = self.index.get_entry(self.current);
+            self.current += 1;
+            Some(match entry {
+                Ok(e) => Ok(Entry::new(e, Rc::clone(&self.key_storage))),
+                Err(e) => Err(e),
+            })
+        }
+    }
+}
+
+pub trait ArxOperator {
+    fn on_start(&self, current_path: &dyn AsRef<Path>) -> jbk::Result<()>;
+    fn on_stop(&self, current_path: &dyn AsRef<Path>) -> jbk::Result<()>;
+    fn on_directory_enter(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
+    fn on_directory_exit(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
+    fn on_file(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
+    fn on_link(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
+}
+
+pub struct Arx {
+    pub container: jbk::reader::Container,
+    pub directory: Rc<jbk::reader::DirectoryPack>,
+}
+
+impl Arx {
+    pub fn new<P: AsRef<Path>>(file: P) -> jbk::Result<Self> {
+        let container = jbk::reader::Container::new(&file)?;
+        let directory = Rc::clone(container.get_directory_pack()?);
+        Ok(Self {
+            container,
+            directory,
+        })
+    }
+
+    pub fn walk(&self, range: EntryRange) -> jbk::Result<ReadEntry> {
+        ReadEntry::new(&self.directory, range)
+    }
+}
+
+pub struct ArxRunner<'a> {
+    arx: &'a Arx,
+    current_path: PathBuf,
+}
+
+impl<'a> ArxRunner<'a> {
+    pub fn new(arx: &'a Arx, current_path: PathBuf) -> Self {
+        Self { arx, current_path }
+    }
+
+    pub fn run(&mut self, range: EntryRange, op: &dyn ArxOperator) -> jbk::Result<()> {
+        op.on_start(&self.current_path)?;
+        self._run(range, op)?;
+        op.on_stop(&self.current_path)
+    }
+
+    fn _run(&mut self, range: EntryRange, op: &dyn ArxOperator) -> jbk::Result<()> {
+        for entry in self.arx.walk(range)? {
+            let entry = entry?;
+            match entry.get_type() {
+                EntryKind::File => op.on_file(&self.current_path, &entry)?,
+                EntryKind::Link => op.on_link(&self.current_path, &entry)?,
+                EntryKind::Directory => {
+                    op.on_directory_enter(&self.current_path, &entry)?;
+                    self.current_path.push(entry.get_path()?);
+                    self._run(entry.as_range(), op)?;
+                    self.current_path.pop();
+                    op.on_directory_exit(&self.current_path, &entry)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
