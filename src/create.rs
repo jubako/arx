@@ -96,6 +96,7 @@ pub struct Creator {
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_id: jbk::Idx<u32>,
     entry_count: u32,
+    root_count: u32,
     queue: VecDeque<Entry>,
 }
 
@@ -158,6 +159,7 @@ impl Creator {
             directory_pack,
             entry_store_id,
             entry_count: 0,
+            root_count: 0,
             queue: VecDeque::<Entry>::new(),
         }
     }
@@ -169,6 +171,14 @@ impl Creator {
             0.into(),
             self.entry_store_id,
             jubako::Count(self.entry_count),
+            jubako::Idx(0),
+        );
+        self.directory_pack.create_index(
+            "root",
+            jubako::ContentAddress::new(0.into(), 0.into()),
+            0.into(),
+            self.entry_store_id,
+            jubako::Count(self.root_count),
             jubako::Idx(0),
         );
         let directory_pack_info = self.directory_pack.finalize()?;
@@ -201,6 +211,7 @@ impl Creator {
 
     pub fn run(&mut self, outfile: PathBuf) -> jbk::Result<()> {
         self.content_pack.start()?;
+        self.root_count = self.queue.len() as u32;
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();
             self.handle(entry)?;
