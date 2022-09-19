@@ -162,12 +162,7 @@ impl Creator {
         }
     }
 
-    pub fn start(&mut self) -> jbk::Result<()> {
-        self.content_pack.start()?;
-        Ok(())
-    }
-
-    pub fn finalize(&mut self, outfile: PathBuf) -> jbk::Result<()> {
+    fn finalize(&mut self, outfile: PathBuf) -> jbk::Result<()> {
         self.directory_pack.create_index(
             "entries",
             jubako::ContentAddress::new(0.into(), 0.into()),
@@ -204,7 +199,8 @@ impl Creator {
         self.entry_count + self.queue.len() as u32
     }
 
-    pub fn run(&mut self) -> jbk::Result<()> {
+    pub fn run(&mut self, outfile: PathBuf) -> jbk::Result<()> {
+        self.content_pack.start()?;
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();
             self.handle(entry)?;
@@ -212,7 +208,7 @@ impl Creator {
                 println!("{}", self.entry_count);
             }
         }
-        Ok(())
+        self.finalize(outfile)
     }
 
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
