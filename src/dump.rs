@@ -1,7 +1,7 @@
 use crate::common::{Entry, EntryKind};
 use jubako as jbk;
-use std::path::Path;
 use std::ffi::OsStr;
+use std::path::Path;
 
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let container = jbk::reader::Container::new(&infile)?;
@@ -20,11 +20,11 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         let mut idx = min;
         loop {
             if idx == max {
-                return Err("Cannot found entry".to_string().into())
+                return Err("Cannot found entry".to_string().into());
             }
             let entry = Entry::new(index.get_entry(jbk::Idx(idx))?, &key_storage);
             if entry.get_parent() != current_parent {
-                return Err("Cannot found entry".to_string().into())
+                return Err("Cannot found entry".to_string().into());
             }
             let entry_path = entry.get_path()?;
             let entry_path: &OsStr = entry_path.as_ref();
@@ -33,7 +33,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                 found = Some(jbk::Idx(idx));
                 if entry.get_type() == EntryKind::Directory {
                     min = entry.get_first_child().0;
-                    max = min+entry.get_nb_children().0;
+                    max = min + entry.get_nb_children().0;
                     current_parent = Some(jbk::Idx(idx));
                 }
                 break;
@@ -54,8 +54,8 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                     &mut std::io::stdout().lock(),
                 )?;
                 Ok(())
-            },
-            EntryKind::Link => Err("Found link".to_string().into())
+            }
+            EntryKind::Link => Err("Found link".to_string().into()),
         }
     } else {
         Err("Cannot found entry".to_string().into())

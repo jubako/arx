@@ -20,7 +20,7 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
-    parent: jbk::Idx<u32>
+    parent: jbk::Idx<u32>,
 }
 
 impl Entry {
@@ -232,7 +232,10 @@ impl Creator {
                 let mut nb_entries = 0;
                 let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
                 for sub_entry in fs::read_dir(&entry.path)? {
-                    self.push_back(Entry::new_from_fs(sub_entry?, jbk::Idx(self.entry_count+1)));
+                    self.push_back(Entry::new_from_fs(
+                        sub_entry?,
+                        jbk::Idx(self.entry_count + 1),
+                    ));
                     nb_entries += 1;
                 }
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
@@ -242,7 +245,7 @@ impl Creator {
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.0 as u64),
                         jbk::creator::Value::Unsigned(first_entry as u64),
-                        jbk::creator::Value::Unsigned(nb_entries)
+                        jbk::creator::Value::Unsigned(nb_entries),
                     ],
                 );
                 self.entry_count += 1;
@@ -281,7 +284,7 @@ impl Creator {
                 );
                 self.entry_count += 1;
             }
-            EntryKind::Other => unreachable!()
+            EntryKind::Other => unreachable!(),
         }
         Ok(())
     }

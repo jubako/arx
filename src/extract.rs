@@ -11,7 +11,9 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
     let key_storage = directory.get_key_storage();
     let entry_count = index.entry_count();
 
-    struct RangeLoop<'a> { f: &'a dyn Fn(&RangeLoop, u32, u32, PathBuf) -> jbk::Result<()>}
+    struct RangeLoop<'a> {
+        f: &'a dyn Fn(&RangeLoop, u32, u32, PathBuf) -> jbk::Result<()>,
+    }
     let range_loop = RangeLoop {
         f: &|range_loop, min, max, current_path| {
             for idx in min..max {
@@ -28,7 +30,12 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
                         create_dir(&target_path)?;
                         let first_child = entry.get_first_child().0;
                         let nb_children = entry.get_nb_children().0;
-                        (range_loop.f)(&range_loop, first_child, first_child+nb_children, target_path)?;
+                        (range_loop.f)(
+                            &range_loop,
+                            first_child,
+                            first_child + nb_children,
+                            target_path,
+                        )?;
                     }
                     EntryKind::Link => {
                         let target = entry.get_target_link()?;
@@ -37,7 +44,7 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
                 }
             }
             Ok(())
-        }
+        },
     };
     create_dir_all(&outdir)?;
     (range_loop.f)(&range_loop, 0, entry_count.0, outdir.as_ref().to_path_buf())
