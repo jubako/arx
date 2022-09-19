@@ -224,7 +224,7 @@ impl Creator {
 
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path = jbk::creator::Value::Array {
-            data: entry.path.as_os_str().to_os_string().into_vec(),
+            data: entry.path.file_name().unwrap().to_os_string().into_vec(),
             key_id: None,
         };
         match entry.kind {

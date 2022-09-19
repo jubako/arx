@@ -106,7 +106,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            dump::dump(dump_cmd.infile, dump_cmd.path)
+            dump::dump(dump_cmd.infile, dump_cmd.path.into())
         }
 
         Commands::Extract(extract_cmd) => {
