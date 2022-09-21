@@ -12,12 +12,12 @@ pub enum EntryKind {
 
 pub struct Entry {
     entry: jbk::reader::Entry,
-    key_storage: Rc<jbk::reader::KeyStorage>,
+    resolver: Rc<jbk::reader::Resolver>,
 }
 
 impl Entry {
-    pub fn new(entry: jbk::reader::Entry, key_storage: Rc<jbk::reader::KeyStorage>) -> Self {
-        Self { entry, key_storage }
+    pub fn new(entry: jbk::reader::Entry, resolver: Rc<jbk::reader::Resolver>) -> Self {
+        Self { entry, resolver }
     }
     pub fn get_type(&self) -> EntryKind {
         match self.entry.get_variant_id() {
@@ -41,22 +41,16 @@ impl Entry {
     }
 
     pub fn get_path(&self) -> jbk::Result<String> {
-        if let jbk::reader::Value::Array(path) = self.entry.get_value(0.into()).unwrap() {
-            let path = path.resolve_to_vec(&self.key_storage)?;
-            Ok(String::from_utf8(path)?)
-        } else {
-            panic!()
-        }
+        let path = self
+            .resolver
+            .resolve_to_vec(self.entry.get_value(0.into())?)?;
+        Ok(String::from_utf8(path)?)
     }
 
     pub fn get_parent(&self) -> Option<jbk::Idx<u32>> {
-        let v = self.entry.get_value(1.into()).unwrap();
-        let idx = match v {
-            jbk::reader::Value::U8(v) => *v as u32,
-            jbk::reader::Value::U16(v) => *v as u32,
-            jbk::reader::Value::U32(v) => *v,
-            _ => panic!(),
-        };
+        let idx = self
+            .resolver
+            .resolve_to_unsigned(self.entry.get_value(1.into()).unwrap()) as u32;
         if idx == 0 {
             None
         } else {
@@ -66,45 +60,32 @@ impl Entry {
 
     pub fn get_content_address(&self) -> &jbk::reader::Content {
         assert!(self.is_file());
-        let v = self.entry.get_value(2.into()).unwrap();
-        if let jbk::reader::Value::Content(c) = v {
-            c
-        } else {
-            panic!()
-        }
+        self.resolver
+            .resolve_to_content(self.entry.get_value(2.into()).unwrap())
     }
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
         assert!(self.is_link());
-        let v = self.entry.get_value(2.into()).unwrap();
-        if let jbk::reader::Value::Array(target) = v {
-            let target = target.resolve_to_vec(&self.key_storage)?;
-            Ok(String::from_utf8(target)?)
-        } else {
-            panic!()
-        }
+        let path = self
+            .resolver
+            .resolve_to_vec(self.entry.get_value(2.into())?)?;
+        Ok(String::from_utf8(path)?)
     }
 
     pub fn get_first_child(&self) -> jbk::Idx<u32> {
         assert!(self.is_dir());
-        let v = self.entry.get_value(2.into()).unwrap();
-        jbk::Idx(match v {
-            jbk::reader::Value::U8(v) => *v as u32,
-            jbk::reader::Value::U16(v) => *v as u32,
-            jbk::reader::Value::U32(v) => *v,
-            _ => panic!(),
-        })
+        jbk::Idx(
+            self.resolver
+                .resolve_to_unsigned(self.entry.get_value(2.into()).unwrap()) as u32,
+        )
     }
 
     pub fn get_nb_children(&self) -> jbk::Count<u32> {
         assert!(self.is_dir());
-        let v = self.entry.get_value(3.into()).unwrap();
-        jbk::Count(match v {
-            jbk::reader::Value::U8(v) => *v as u32,
-            jbk::reader::Value::U16(v) => *v as u32,
-            jbk::reader::Value::U32(v) => *v,
-            _ => panic!(),
-        })
+        jbk::Count(
+            self.resolver
+                .resolve_to_unsigned(self.entry.get_value(3.into()).unwrap()) as u32,
+        )
     }
 
     pub fn as_range(&self) -> EntryRange {
@@ -142,7 +123,7 @@ impl From<&jbk::reader::Index> for EntryRange {
 
 pub struct ReadEntry {
     index: jbk::reader::Index,
-    key_storage: Rc<jbk::reader::KeyStorage>,
+    resolver: Rc<jbk::reader::Resolver>,
     current: jbk::Idx<u32>,
     end: jbk::Idx<u32>,
 }
@@ -150,10 +131,10 @@ pub struct ReadEntry {
 impl ReadEntry {
     pub fn new(directory: &Rc<jbk::reader::DirectoryPack>, range: EntryRange) -> jbk::Result<Self> {
         let index = directory.get_index_from_name("entries")?;
-        let key_storage = directory.get_key_storage();
+        let resolver = directory.get_resolver();
         Ok(Self {
             index,
-            key_storage,
+            resolver,
             current: range.start,
             end: range.end,
         })
@@ -170,7 +151,7 @@ impl Iterator for ReadEntry {
             let entry = self.index.get_entry(self.current);
             self.current += 1;
             Some(match entry {
-                Ok(e) => Ok(Entry::new(e, Rc::clone(&self.key_storage))),
+                Ok(e) => Ok(Entry::new(e, Rc::clone(&self.resolver))),
                 Err(e) => Err(e),
             })
         }
