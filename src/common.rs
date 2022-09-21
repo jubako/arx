@@ -1,9 +1,10 @@
 use jubako as jbk;
+//use jbk::reader::Finder;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum EntryKind {
     File,
     Directory,
@@ -92,7 +93,7 @@ impl Entry {
         assert!(self.is_dir());
         EntryRange {
             start: self.get_first_child(),
-            end: self.get_first_child() + self.get_nb_children(),
+            count: self.get_nb_children(),
         }
     }
 }
@@ -109,20 +110,20 @@ impl fmt::Display for Entry {
 
 pub struct EntryRange {
     pub start: jbk::Idx<u32>,
-    pub end: jbk::Idx<u32>,
+    pub count: jbk::Count<u32>,
 }
 
 impl From<&jbk::reader::Index> for EntryRange {
     fn from(index: &jbk::reader::Index) -> Self {
         Self {
-            start: index.entry_offset(),
-            end: index.entry_offset() + index.entry_count(),
+            start: jbk::Idx(0),
+            count: index.entry_count(),
         }
     }
 }
 
 pub struct ReadEntry {
-    index: jbk::reader::Index,
+    finder: jbk::reader::Finder,
     resolver: Rc<jbk::reader::Resolver>,
     current: jbk::Idx<u32>,
     end: jbk::Idx<u32>,
@@ -130,13 +131,15 @@ pub struct ReadEntry {
 
 impl ReadEntry {
     pub fn new(directory: &Rc<jbk::reader::DirectoryPack>, range: EntryRange) -> jbk::Result<Self> {
-        let index = directory.get_index_from_name("entries")?;
         let resolver = directory.get_resolver();
+        let finder = directory
+            .get_index_from_name("entries")?
+            .get_finder(Rc::clone(&resolver));
         Ok(Self {
-            index,
+            finder,
             resolver,
             current: range.start,
-            end: range.end,
+            end: range.start + range.count,
         })
     }
 }
@@ -148,7 +151,7 @@ impl Iterator for ReadEntry {
         if self.current == self.end {
             None
         } else {
-            let entry = self.index.get_entry(self.current);
+            let entry = self.finder.get_entry(self.current);
             self.current += 1;
             Some(match entry {
                 Ok(e) => Ok(Entry::new(e, Rc::clone(&self.resolver))),

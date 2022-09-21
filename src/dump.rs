@@ -1,6 +1,8 @@
 use crate::common::{Entry, EntryKind};
 use jubako as jbk;
-use std::ffi::OsStr;
+//use jbk::reader::Finder;
+//use std::ffi::OsStr;
+use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -8,43 +10,39 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let container = jbk::reader::Container::new(&infile)?;
     let directory = container.get_directory_pack()?;
     let index = directory.get_index_from_name("root")?;
-    let key_storage = directory.get_key_storage();
-    let mut current_parent: Option<jbk::Idx<u32>> = None;
-    let mut min = 0;
-    let mut max = index.entry_count().0;
-    let mut found: Option<jbk::Idx<u32>> = None;
+    let resolver = directory.get_resolver();
+    let mut current: Option<Entry> = None;
     for component in path.as_ref().iter() {
         // Search for the current component.
         // All children of a parent are stored concatened.
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
-        let mut idx = min;
-        loop {
-            if idx == max {
-                return Err("Cannot found entry".to_string().into());
-            }
-            let entry = Entry::new(index.get_entry(jbk::Idx(idx))?, Rc::clone(&key_storage));
-            if entry.get_parent() != current_parent {
-                return Err("Cannot found entry".to_string().into());
-            }
-            let entry_path = entry.get_path()?;
-            let entry_path: &OsStr = entry_path.as_ref();
-            if entry_path == component {
-                // We have found the entry of the componnent
-                found = Some(jbk::Idx(idx));
-                if entry.get_type() == EntryKind::Directory {
-                    min = entry.get_first_child().0;
-                    max = min + entry.get_nb_children().0;
-                    current_parent = Some(jbk::Idx(idx));
+        let finder = match current {
+            None => index.get_finder(Rc::clone(&resolver)),
+            Some(c) => {
+                if !c.is_dir() {
+                    return Err("Cannot found entry".to_string().into());
                 }
-                break;
+                let offset = c.get_first_child();
+                let count = c.get_nb_children();
+                jbk::reader::Finder::new(index.get_store(), offset, count, Rc::clone(&resolver))
             }
-            idx += 1;
+        };
+        let entry = finder.find(
+            0,
+            jbk::reader::Value::Array(component.to_os_string().into_vec()),
+        )?;
+        match entry {
+            None => {
+                return Err("Cannot found entry".to_string().into());
+            }
+            Some(entry) => {
+                current = Some(Entry::new(entry, Rc::clone(&resolver)));
+            }
         }
     }
 
-    if let Some(idx) = found {
-        let entry = Entry::new(index.get_entry(idx)?, Rc::clone(&key_storage));
+    if let Some(entry) = current {
         match entry.get_type() {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {
