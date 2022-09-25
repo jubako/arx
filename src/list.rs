@@ -45,6 +45,7 @@ pub fn list<P: AsRef<Path>>(infile: P) -> jbk::Result<()> {
     let mut runner = ArxRunner::new(&arx, PathBuf::new());
 
     let index = arx.directory.get_index_from_name("root")?;
+    let resolver = arx.directory.get_resolver();
     let op = Lister {};
-    runner.run((&index).into(), &op)
+    runner.run(index.get_finder(resolver), &op)
 }

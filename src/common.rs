@@ -88,14 +88,6 @@ impl Entry {
                 .resolve_to_unsigned(self.entry.get_value(3.into()).unwrap()) as u32,
         )
     }
-
-    pub fn as_range(&self) -> EntryRange {
-        assert!(self.is_dir());
-        EntryRange {
-            start: self.get_first_child(),
-            count: self.get_nb_children(),
-        }
-    }
 }
 
 impl fmt::Display for Entry {
@@ -108,43 +100,25 @@ impl fmt::Display for Entry {
     }
 }
 
-pub struct EntryRange {
-    pub start: jbk::Idx<u32>,
-    pub count: jbk::Count<u32>,
-}
 
-impl From<&jbk::reader::Index> for EntryRange {
-    fn from(index: &jbk::reader::Index) -> Self {
-        Self {
-            start: jbk::Idx(0),
-            count: index.entry_count(),
-        }
-    }
-}
-
-pub struct ReadEntry {
-    finder: jbk::reader::Finder,
-    resolver: Rc<jbk::reader::Resolver>,
+pub struct ReadEntry<'a> {
+    finder: &'a jbk::reader::Finder,
     current: jbk::Idx<u32>,
     end: jbk::Idx<u32>,
 }
 
-impl ReadEntry {
-    pub fn new(directory: &Rc<jbk::reader::DirectoryPack>, range: EntryRange) -> jbk::Result<Self> {
-        let resolver = directory.get_resolver();
-        let finder = directory
-            .get_index_from_name("entries")?
-            .get_finder(Rc::clone(&resolver));
-        Ok(Self {
+impl<'a> ReadEntry<'a> {
+    pub fn new(finder: &'a jbk::reader::Finder) -> Self {
+        let end = jbk::Idx(0) + finder.count();
+        Self {
             finder,
-            resolver,
-            current: range.start,
-            end: range.start + range.count,
-        })
+            current: jbk::Idx(0),
+            end,
+        }
     }
 }
 
-impl Iterator for ReadEntry {
+impl<'a> Iterator for ReadEntry<'a> {
     type Item = jbk::Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -154,7 +128,7 @@ impl Iterator for ReadEntry {
             let entry = self.finder.get_entry(self.current);
             self.current += 1;
             Some(match entry {
-                Ok(e) => Ok(Entry::new(e, Rc::clone(&self.resolver))),
+                Ok(e) => Ok(Entry::new(e, Rc::clone(self.finder.get_resolver()))),
                 Err(e) => Err(e),
             })
         }
@@ -185,8 +159,8 @@ impl Arx {
         })
     }
 
-    pub fn walk(&self, range: EntryRange) -> jbk::Result<ReadEntry> {
-        ReadEntry::new(&self.directory, range)
+    pub fn walk<'a>(&self, finder: &'a jbk::reader::Finder) -> ReadEntry<'a> {
+        ReadEntry::new(finder)
     }
 }
 
@@ -200,14 +174,14 @@ impl<'a> ArxRunner<'a> {
         Self { arx, current_path }
     }
 
-    pub fn run(&mut self, range: EntryRange, op: &dyn ArxOperator) -> jbk::Result<()> {
+    pub fn run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
         op.on_start(&self.current_path)?;
-        self._run(range, op)?;
+        self._run(finder, op)?;
         op.on_stop(&self.current_path)
     }
 
-    fn _run(&mut self, range: EntryRange, op: &dyn ArxOperator) -> jbk::Result<()> {
-        for entry in self.arx.walk(range)? {
+    fn _run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
+        for entry in self.arx.walk(&finder) {
             let entry = entry?;
             match entry.get_type() {
                 EntryKind::File => op.on_file(&self.current_path, &entry)?,
@@ -215,7 +189,13 @@ impl<'a> ArxRunner<'a> {
                 EntryKind::Directory => {
                     op.on_directory_enter(&self.current_path, &entry)?;
                     self.current_path.push(entry.get_path()?);
-                    self._run(entry.as_range(), op)?;
+                    let finder = jbk::reader::Finder::new(
+                        Rc::clone(finder.get_store()),
+                        entry.get_first_child(),
+                        entry.get_nb_children(),
+                        Rc::clone(finder.get_resolver()),
+                    );
+                    self._run(finder, op)?;
                     self.current_path.pop();
                     op.on_directory_exit(&self.current_path, &entry)?;
                 }
