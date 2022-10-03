@@ -223,10 +223,9 @@ impl Creator {
     }
 
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
-        let entry_path = jbk::creator::Value::Array {
-            data: entry.path.file_name().unwrap().to_os_string().into_vec(),
-            key_id: None,
-        };
+        let entry_path = jbk::creator::Value::Array(
+            entry.path.file_name().unwrap().to_os_string().into_vec(),
+        );
         match entry.kind {
             EntryKind::Dir => {
                 let mut nb_entries = 0;
@@ -260,10 +259,10 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.0 as u64),
-                        jbk::creator::Value::Content(jubako::ContentAddress::new(
+                        jbk::creator::Value::Content(jbk::creator::Content::from((
                             jbk::Id(1),
                             content_id,
-                        )),
+                        ))),
                     ],
                 );
                 self.entry_count += 1;
@@ -276,10 +275,7 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.0 as u64),
-                        jbk::creator::Value::Array {
-                            data: target.into_os_string().into_vec(),
-                            key_id: None,
-                        },
+                        jbk::creator::Value::Array(target.into_os_string().into_vec()),
                     ],
                 );
                 self.entry_count += 1;

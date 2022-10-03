@@ -1,5 +1,6 @@
 use crate::common::{Entry, EntryKind};
 use jubako as jbk;
+use jbk::reader::IndexStoreTrait;
 //use jbk::reader::Finder;
 //use std::ffi::OsStr;
 use std::os::unix::ffi::OsStringExt;
@@ -10,8 +11,9 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let container = jbk::reader::Container::new(&infile)?;
     let directory = container.get_directory_pack()?;
     let index = directory.get_index_from_name("root")?;
+    let store = index.get_store();
     let resolver = directory.get_resolver();
-    let mut current: Option<Entry> = None;
+    let mut current: Option<jbk::Idx<u32>> = None;
     for component in path.as_ref().iter() {
         // Search for the current component.
         // All children of a parent are stored concatened.
@@ -20,29 +22,29 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         let finder = match current {
             None => index.get_finder(Rc::clone(&resolver)),
             Some(c) => {
-                if !c.is_dir() {
+                let parent = Entry::new(store.get_entry(c)?, Rc::clone(&resolver));
+                if !parent.is_dir() {
                     return Err("Cannot found entry".to_string().into());
                 }
-                let offset = c.get_first_child();
-                let count = c.get_nb_children();
+                let offset = parent.get_first_child();
+                let count = parent.get_nb_children();
                 jbk::reader::Finder::new(index.get_store(), offset, count, Rc::clone(&resolver))
             }
         };
-        let entry = finder.find(
+        let found = finder.find(
             0,
             jbk::reader::Value::Array(component.to_os_string().into_vec()),
         )?;
-        match entry {
-            None => {
-                return Err("Cannot found entry".to_string().into());
-            }
-            Some(entry) => {
-                current = Some(Entry::new(entry, Rc::clone(&resolver)));
+        match found {
+            None => return Err("Cannot found entry".to_string().into()),
+            Some(idx) => {
+                current = Some(finder.offset() + idx);
             }
         }
     }
 
-    if let Some(entry) = current {
+    if let Some(idx) = current {
+        let entry = Entry::new(store.get_entry(idx)?, Rc::clone(&resolver));
         match entry.get_type() {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {

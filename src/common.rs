@@ -1,5 +1,5 @@
 use jubako as jbk;
-//use jbk::reader::Finder;
+use jbk::reader::EntryTrait;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
