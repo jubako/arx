@@ -12,14 +12,28 @@ pub enum EntryKind {
 }
 
 pub struct Entry {
+    idx: jbk::Idx<u32>,
     entry: jbk::reader::Entry,
     resolver: Rc<jbk::reader::Resolver>,
 }
 
 impl Entry {
-    pub fn new(entry: jbk::reader::Entry, resolver: Rc<jbk::reader::Resolver>) -> Self {
-        Self { entry, resolver }
+    pub fn new(
+        idx: jbk::Idx<u32>,
+        entry: jbk::reader::Entry,
+        resolver: Rc<jbk::reader::Resolver>,
+    ) -> Self {
+        Self {
+            idx,
+            entry,
+            resolver,
+        }
     }
+
+    pub fn idx(&self) -> jbk::Idx<u32> {
+        self.idx
+    }
+
     pub fn get_type(&self) -> EntryKind {
         match self.entry.get_variant_id() {
             0 => EntryKind::File,
@@ -100,7 +114,6 @@ impl fmt::Display for Entry {
     }
 }
 
-
 pub struct ReadEntry<'a> {
     finder: &'a jbk::reader::Finder,
     current: jbk::Idx<u32>,
@@ -116,6 +129,10 @@ impl<'a> ReadEntry<'a> {
             end,
         }
     }
+
+    pub fn skip(&mut self, to_skip: jbk::Count<u32>) {
+        self.current += to_skip.0;
+    }
 }
 
 impl<'a> Iterator for ReadEntry<'a> {
@@ -126,11 +143,16 @@ impl<'a> Iterator for ReadEntry<'a> {
             None
         } else {
             let entry = self.finder.get_entry(self.current);
-            self.current += 1;
-            Some(match entry {
-                Ok(e) => Ok(Entry::new(e, Rc::clone(self.finder.get_resolver()))),
+            let ret = Some(match entry {
+                Ok(e) => Ok(Entry::new(
+                    self.current,
+                    e,
+                    Rc::clone(self.finder.get_resolver()),
+                )),
                 Err(e) => Err(e),
-            })
+            });
+            self.current += 1;
+            ret
         }
     }
 }

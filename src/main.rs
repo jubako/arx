@@ -3,6 +3,7 @@ mod create;
 mod dump;
 mod extract;
 mod list;
+mod mount;
 
 use jubako as jbk;
 
@@ -34,6 +35,9 @@ enum Commands {
 
     #[clap(arg_required_else_help = true)]
     Extract(Extract),
+
+    #[clap(arg_required_else_help = true)]
+    Mount(Mount),
 }
 
 #[derive(Args)]
@@ -69,6 +73,15 @@ struct Extract {
 
     #[clap(value_parser)]
     outdir: PathBuf,
+}
+
+#[derive(Args)]
+struct Mount {
+    #[clap(value_parser)]
+    infile: PathBuf,
+
+    #[clap(value_parser)]
+    mountdir: PathBuf,
 }
 
 fn main() -> jbk::Result<()> {
@@ -118,6 +131,17 @@ fn main() -> jbk::Result<()> {
             }
 
             extract::extract(extract_cmd.infile, extract_cmd.outdir)
+        }
+
+        Commands::Mount(mount_cmd) => {
+            if args.verbose > 0 {
+                println!(
+                    "Mount archive {:?} in {:?}",
+                    mount_cmd.infile, mount_cmd.mountdir
+                );
+            }
+
+            mount::mount(mount_cmd.infile, mount_cmd.mountdir)
         }
     }
 }

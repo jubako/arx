@@ -22,7 +22,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         let finder = match current {
             None => index.get_finder(Rc::clone(&resolver)),
             Some(c) => {
-                let parent = Entry::new(store.get_entry(c)?, Rc::clone(&resolver));
+                let parent = Entry::new(c, store.get_entry(c)?, Rc::clone(&resolver));
                 if !parent.is_dir() {
                     return Err("Cannot found entry".to_string().into());
                 }
@@ -44,7 +44,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     }
 
     if let Some(idx) = current {
-        let entry = Entry::new(store.get_entry(idx)?, Rc::clone(&resolver));
+        let entry = Entry::new(idx, store.get_entry(idx)?, Rc::clone(&resolver));
         match entry.get_type() {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {
