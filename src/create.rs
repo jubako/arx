@@ -223,9 +223,8 @@ impl Creator {
     }
 
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
-        let entry_path = jbk::creator::Value::Array(
-            entry.path.file_name().unwrap().to_os_string().into_vec(),
-        );
+        let entry_path =
+            jbk::creator::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
         match entry.kind {
             EntryKind::Dir => {
                 let mut nb_entries = 0;
