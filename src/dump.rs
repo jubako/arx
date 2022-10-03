@@ -1,6 +1,6 @@
 use crate::common::{Entry, EntryKind};
-use jubako as jbk;
 use jbk::reader::IndexStoreTrait;
+use jubako as jbk;
 //use jbk::reader::Finder;
 //use std::ffi::OsStr;
 use std::os::unix::ffi::OsStringExt;
