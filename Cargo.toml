@@ -12,6 +12,7 @@ typenum = "1.15.0"
 fuse = "0.3.1"
 libc = "0.2.134"
 time = "0.1.38"
+lru = "0.8.1"
 
 [profile.release]
 #debug = 1

@@ -2,8 +2,10 @@ use crate::common::{Arx, Entry, EntryKind, ReadEntry};
 use jubako as jbk;
 //use jbk::reader::Finder;
 use libc::ENOENT;
+use lru::LruCache;
 use std::cmp::min;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
+use std::num::NonZeroUsize;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
@@ -104,6 +106,8 @@ struct ArxFs<'a> {
     arx: Arx,
     resolver: Rc<jbk::reader::Resolver>,
     entry_finder: jbk::reader::Finder,
+    resolve_cache: LruCache<(u64, OsString), Option<jbk::Idx<u32>>>,
+    attr_cache: LruCache<u32, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -118,6 +122,8 @@ impl<'a> ArxFs<'a> {
             arx,
             resolver,
             entry_finder,
+            resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
+            attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             stats,
         })
     }
@@ -194,17 +200,34 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         self.stats.lookup();
         // Lookup for entry `name` in directory `parent`
         // First get parent finder
-        let finder = self.get_finder(parent).unwrap();
-        match finder
-            .find(0, jbk::reader::Value::Array(name.to_os_string().into_vec()))
-            .unwrap()
-        {
+        let idx = self.resolve_cache.get(&(parent, name.to_os_string()));
+        let idx = match idx {
+            Some(idx) => *idx,
+            None => {
+                let finder = self.get_finder(parent).unwrap();
+                let idx = finder
+                    .find(0, jbk::reader::Value::Array(name.to_os_string().into_vec()))
+                    .unwrap()
+                    .map(|idx| idx + finder.offset());
+                self.resolve_cache.push((parent, name.to_os_string()), idx);
+                idx
+            }
+        };
+        match idx {
             None => reply.error(ENOENT),
             Some(idx) => {
-                let entry = self.entry_finder.get_entry(idx + finder.offset()).unwrap();
-                let entry = Entry::new(finder.offset() + idx, entry, Rc::clone(&self.resolver));
-                let attr = entry.to_fillattr(&self.arx.container).unwrap();
-                reply.entry(&TTL, &attr, 0)
+                let attr = self.attr_cache.get(&idx.0);
+                let attr = match attr {
+                    Some(attr) => attr,
+                    None => {
+                        let entry = self.entry_finder.get_entry(idx).unwrap();
+                        let entry = Entry::new(idx, entry, Rc::clone(&self.resolver));
+                        let attr = entry.to_fillattr(&self.arx.container).unwrap();
+                        self.attr_cache.push(idx.0, attr);
+                        self.attr_cache.get(&idx.0).unwrap()
+                    }
+                };
+                reply.entry(&TTL, attr, 0)
             }
         }
     }
@@ -230,8 +253,18 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             };
             reply.attr(&TTL, &attr);
         } else {
-            let entry = self.get_entry(ino).unwrap();
-            reply.attr(&TTL, &entry.to_fillattr(&self.arx.container).unwrap());
+            let idx = ino as u32 - 2;
+            let attr = self.attr_cache.get(&idx);
+            let attr = match attr {
+                Some(attr) => attr,
+                None => {
+                    let entry = self.get_entry(ino).unwrap();
+                    let attr = entry.to_fillattr(&self.arx.container).unwrap();
+                    self.attr_cache.push(idx, attr);
+                    self.attr_cache.get(&idx).unwrap()
+                }
+            };
+            reply.attr(&TTL, attr);
         }
     }
 
