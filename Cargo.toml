@@ -16,3 +16,4 @@ lru = "0.8.1"
 
 [profile.release]
 #debug = 1
+lto = true
