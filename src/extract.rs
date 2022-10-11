@@ -27,7 +27,7 @@ impl<'a> ArxOperator for Extractor<'a> {
     fn on_file(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()> {
         let path = current_path.as_ref().join(entry.get_path()?);
         let content_address = entry.get_content_address();
-        let reader = self.container.get_reader(content_address)?;
+        let reader = self.container.get_reader(&content_address)?;
         let mut file = File::create(path)?;
         std::io::copy(&mut reader.create_stream_all(), &mut file)?;
         Ok(())

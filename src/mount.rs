@@ -80,7 +80,7 @@ impl Entry {
             ),
             EntryKind::File => {
                 let content_address = self.get_content_address();
-                let reader = container.get_reader(content_address)?;
+                let reader = container.get_reader(&content_address)?;
                 let size = reader.size();
                 (size.0, fuse::FileType::RegularFile)
             }
@@ -185,7 +185,7 @@ impl fuse::Filesystem for ArxFs {
         match &entry.get_type() {
             EntryKind::File => {
                 let content_address = entry.get_content_address();
-                let reader = self.arx.container.get_reader(content_address).unwrap();
+                let reader = self.arx.container.get_reader(&content_address).unwrap();
                 let mut stream = reader.create_stream_from(jbk::Offset(offset.try_into().unwrap()));
                 let size = min(size, stream.size().0 as u32);
                 let data = stream.read_vec(size as usize).unwrap();

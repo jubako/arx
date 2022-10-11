@@ -58,14 +58,14 @@ impl Entry {
     pub fn get_path(&self) -> jbk::Result<String> {
         let path = self
             .resolver
-            .resolve_to_vec(self.entry.get_value(0.into())?)?;
+            .resolve_to_vec(&self.entry.get_value(0.into())?)?;
         Ok(String::from_utf8(path)?)
     }
 
     pub fn get_parent(&self) -> Option<jbk::Idx<u32>> {
         let idx = self
             .resolver
-            .resolve_to_unsigned(self.entry.get_value(1.into()).unwrap()) as u32;
+            .resolve_to_unsigned(&self.entry.get_value(1.into()).unwrap()) as u32;
         if idx == 0 {
             None
         } else {
@@ -73,17 +73,18 @@ impl Entry {
         }
     }
 
-    pub fn get_content_address(&self) -> &jbk::reader::Content {
+    pub fn get_content_address(&self) -> jbk::reader::Content {
         assert!(self.is_file());
         self.resolver
-            .resolve_to_content(self.entry.get_value(2.into()).unwrap())
+            .resolve_to_content(&self.entry.get_value(2.into()).unwrap())
+            .clone()
     }
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
         assert!(self.is_link());
         let path = self
             .resolver
-            .resolve_to_vec(self.entry.get_value(2.into())?)?;
+            .resolve_to_vec(&self.entry.get_value(2.into())?)?;
         Ok(String::from_utf8(path)?)
     }
 
@@ -91,7 +92,7 @@ impl Entry {
         assert!(self.is_dir());
         jbk::Idx(
             self.resolver
-                .resolve_to_unsigned(self.entry.get_value(2.into()).unwrap()) as u32,
+                .resolve_to_unsigned(&self.entry.get_value(2.into()).unwrap()) as u32,
         )
     }
 
@@ -99,7 +100,7 @@ impl Entry {
         assert!(self.is_dir());
         jbk::Count(
             self.resolver
-                .resolve_to_unsigned(self.entry.get_value(3.into()).unwrap()) as u32,
+                .resolve_to_unsigned(&self.entry.get_value(3.into()).unwrap()) as u32,
         )
     }
 }

@@ -49,7 +49,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {
                 let content_address = entry.get_content_address();
-                let reader = container.get_reader(content_address)?;
+                let reader = container.get_reader(&content_address)?;
                 std::io::copy(
                     &mut reader.create_stream_all(),
                     &mut std::io::stdout().lock(),
