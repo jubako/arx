@@ -11,6 +11,85 @@ use std::rc::Rc;
 const TTL: time::Timespec = time::Timespec { sec: 1000, nsec: 0 }; // Nothing change on oar side, TTL is long
 const UNIX_EPOCH: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
 
+struct StatCounter {
+    nb_lookup: u64,
+    nb_getattr: u64,
+    nb_readlink: u64,
+    nb_open: u64,
+    nb_read: u64,
+    nb_release: u64,
+    nb_opendir: u64,
+    nb_readdir: u64,
+    nb_releasedir: u64,
+}
+
+impl StatCounter {
+    pub fn new() -> Self {
+        Self {
+            nb_lookup: 0,
+            nb_getattr: 0,
+            nb_readlink: 0,
+            nb_open: 0,
+            nb_read: 0,
+            nb_release: 0,
+            nb_opendir: 0,
+            nb_readdir: 0,
+            nb_releasedir: 0,
+        }
+    }
+
+    pub fn lookup(&mut self) {
+        self.nb_lookup += 1;
+    }
+
+    pub fn getattr(&mut self) {
+        self.nb_getattr += 1;
+    }
+
+    pub fn readlink(&mut self) {
+        self.nb_readlink += 1;
+    }
+
+    pub fn open(&mut self) {
+        self.nb_open += 1;
+    }
+
+    pub fn read(&mut self) {
+        self.nb_read += 1;
+    }
+
+    pub fn release(&mut self) {
+        self.nb_release += 1;
+    }
+
+    pub fn opendir(&mut self) {
+        self.nb_opendir += 1;
+    }
+
+    pub fn readdir(&mut self) {
+        self.nb_readdir += 1;
+    }
+
+    pub fn releasedir(&mut self) {
+        self.nb_releasedir += 1;
+    }
+}
+
+impl std::fmt::Display for StatCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "nb_lookup: {}", self.nb_lookup)?;
+        writeln!(f, "nb_getattr: {}", self.nb_getattr)?;
+        writeln!(f, "nb_readlink: {}", self.nb_readlink)?;
+        writeln!(f, "nb_open: {}", self.nb_open)?;
+        writeln!(f, "nb_read: {}", self.nb_read)?;
+        writeln!(f, "nb_release: {}", self.nb_release)?;
+        writeln!(f, "nb_opendir: {}", self.nb_opendir)?;
+        writeln!(f, "nb_readdir: {}", self.nb_readdir)?;
+        writeln!(f, "nb_releasedir: {}", self.nb_releasedir)?;
+        Ok(())
+    }
+}
+
 // Root ino (from kernel pov) is 1.
 // However, our root is the "root" index and it doesn't have a ino
 // and the first entry we have (a child of "root" index) is 0
@@ -21,14 +100,15 @@ const UNIX_EPOCH: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
 // On the opposite side:
 // - entry n => send inode n+2
 
-struct ArxFs {
+struct ArxFs<'a> {
     arx: Arx,
     resolver: Rc<jbk::reader::Resolver>,
     entry_finder: jbk::reader::Finder,
+    pub stats: &'a mut StatCounter,
 }
 
-impl ArxFs {
-    pub fn new(arx: Arx) -> jbk::Result<Self> {
+impl<'a> ArxFs<'a> {
+    pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let resolver = arx.directory.get_resolver();
         let entry_finder = arx
             .directory
@@ -38,6 +118,7 @@ impl ArxFs {
             arx,
             resolver,
             entry_finder,
+            stats,
         })
     }
 
@@ -108,8 +189,9 @@ impl Entry {
     }
 }
 
-impl fuse::Filesystem for ArxFs {
+impl<'a> fuse::Filesystem for ArxFs<'a> {
     fn lookup(&mut self, _req: &fuse::Request, parent: u64, name: &OsStr, reply: fuse::ReplyEntry) {
+        self.stats.lookup();
         // Lookup for entry `name` in directory `parent`
         // First get parent finder
         let finder = self.get_finder(parent).unwrap();
@@ -128,6 +210,7 @@ impl fuse::Filesystem for ArxFs {
     }
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
+        self.stats.getattr();
         if ino == 1 {
             let attr = fuse::FileAttr {
                 ino,
@@ -153,6 +236,7 @@ impl fuse::Filesystem for ArxFs {
     }
 
     fn readlink(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyData) {
+        self.stats.readlink();
         let entry = self.get_entry(ino).unwrap();
         match &entry.get_type() {
             EntryKind::Link => {
@@ -164,6 +248,7 @@ impl fuse::Filesystem for ArxFs {
     }
 
     fn open(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {
+        self.stats.open();
         let entry = self.get_entry(ino).unwrap();
         match &entry.get_type() {
             EntryKind::File => reply.opened(0, 0),
@@ -181,6 +266,7 @@ impl fuse::Filesystem for ArxFs {
         size: u32,
         reply: fuse::ReplyData,
     ) {
+        self.stats.read();
         let entry = self.get_entry(ino).unwrap();
         match &entry.get_type() {
             EntryKind::File => {
@@ -206,10 +292,12 @@ impl fuse::Filesystem for ArxFs {
         _flush: bool,
         reply: fuse::ReplyEmpty,
     ) {
+        self.stats.release();
         reply.ok()
     }
 
     fn opendir(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {
+        self.stats.opendir();
         if ino == 1 {
             reply.opened(0, 0)
         } else {
@@ -229,6 +317,7 @@ impl fuse::Filesystem for ArxFs {
         offset: i64,
         mut reply: fuse::ReplyDirectory,
     ) {
+        self.stats.readdir();
         let finder = self.get_finder(ino).unwrap();
         let nb_entry = (finder.count().0 + 2) as i64; // we include "." and ".."
         let mut readentry = ReadEntry::new(&finder);
@@ -285,18 +374,22 @@ impl fuse::Filesystem for ArxFs {
         _flags: u32,
         reply: fuse::ReplyEmpty,
     ) {
+        self.stats.releasedir();
         reply.ok()
     }
 }
 
 pub fn mount<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
+    let mut stats = StatCounter::new();
     let arx = Arx::new(infile)?;
-    let arxfs = ArxFs::new(arx)?;
+    let arxfs = ArxFs::new(arx, &mut stats)?;
 
     let options = ["-o", "-ro", "-o", "fsname=arx"]
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
     fuse::mount(arxfs, &outdir, &options)?;
+
+    println!("Stats:\n {}", stats);
     Ok(())
 }
