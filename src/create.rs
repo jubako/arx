@@ -133,22 +133,22 @@ impl Creator {
         let entry_def = jbk::creator::Entry::new(vec![
             // File
             jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
                 jbk::creator::Key::new_int(), // index of the parent entry
                 jbk::creator::Key::ContentAddress,
             ]),
             // Directory
             jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
                 jbk::creator::Key::new_int(), // index of the parent entry
                 jbk::creator::Key::new_int(), // index of the first entry
                 jbk::creator::Key::new_int(), // nb entries in the directory
             ]),
             // Link
             jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(0, Rc::clone(&path_store)),
+                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
                 jbk::creator::Key::new_int(), // index of the parent entry
-                jbk::creator::Key::PString(0, Rc::clone(&path_store)), // Id of the linked entry
+                jbk::creator::Key::PString(1, Rc::clone(&path_store)), // Id of the linked entry
             ]),
         ]);
 
