@@ -280,7 +280,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
     }
 
-    fn open(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {
+    fn open(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
         self.stats.open();
         let entry = self.get_entry(ino).unwrap();
         match &entry.get_type() {
@@ -329,7 +329,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         reply.ok()
     }
 
-    fn opendir(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {
+    fn opendir(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
         self.stats.opendir();
         if ino == 1 {
             reply.opened(0, 0)
