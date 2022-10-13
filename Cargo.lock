@@ -241,6 +241,8 @@ dependencies = [
 [[package]]
 name = "jubako"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95736f43d07b79faae92e893daf3b76da1d11c92851b2d53c4d7e76451ba530f"
 dependencies = [
  "blake3",
  "clap",
