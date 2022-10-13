@@ -1,7 +1,12 @@
 [package]
-name = "arx"
-version = "0.1.0"
 edition = "2021"
+name = "arx"
+description = "A file archive based on Jubako container"
+version = "0.1.0"
+authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
+repository = "https://framagit.org/jubako/arx"
+categories = ["command-line-utilities", "compression", "filesystem"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
