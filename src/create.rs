@@ -1,5 +1,6 @@
 use jubako as jbk;
 
+use jbk::creator::layout;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
@@ -130,25 +131,25 @@ impl Creator {
 
         let path_store = directory_pack.create_value_store(jbk::creator::ValueStoreKind::Plain);
 
-        let entry_def = jbk::creator::Entry::new(vec![
+        let entry_def = layout::Entry::new(vec![
             // File
-            jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
-                jbk::creator::Key::new_int(), // index of the parent entry
-                jbk::creator::Key::ContentAddress,
+            layout::Variant::new(vec![
+                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::new_int(), // index of the parent entry
+                layout::Property::ContentAddress,
             ]),
             // Directory
-            jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
-                jbk::creator::Key::new_int(), // index of the parent entry
-                jbk::creator::Key::new_int(), // index of the first entry
-                jbk::creator::Key::new_int(), // nb entries in the directory
+            layout::Variant::new(vec![
+                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::new_int(), // index of the parent entry
+                layout::Property::new_int(), // index of the first entry
+                layout::Property::new_int(), // nb entries in the directory
             ]),
             // Link
-            jbk::creator::Variant::new(vec![
-                jbk::creator::Key::PString(1, Rc::clone(&path_store)),
-                jbk::creator::Key::new_int(), // index of the parent entry
-                jbk::creator::Key::PString(1, Rc::clone(&path_store)), // Id of the linked entry
+            layout::Variant::new(vec![
+                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::new_int(), // index of the parent entry
+                layout::Property::PString(1, Rc::clone(&path_store)), // Id of the linked entry
             ]),
         ]);
 
