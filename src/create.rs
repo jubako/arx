@@ -128,7 +128,7 @@ impl Creator {
             jbk::FreeData::<U31>::clone_from_slice(&[0x00; 31]),
         );
 
-        let path_store = directory_pack.create_key_store(jbk::creator::KeyStoreKind::Plain);
+        let path_store = directory_pack.create_value_store(jbk::creator::ValueStoreKind::Plain);
 
         let entry_def = jbk::creator::Entry::new(vec![
             // File
