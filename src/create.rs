@@ -134,22 +134,22 @@ impl Creator {
         let entry_def = layout::Entry::new(vec![
             // File
             layout::Variant::new(vec![
-                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::VLArray(1, Rc::clone(&path_store)),
                 layout::Property::new_int(), // index of the parent entry
                 layout::Property::ContentAddress,
             ]),
             // Directory
             layout::Variant::new(vec![
-                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::VLArray(1, Rc::clone(&path_store)),
                 layout::Property::new_int(), // index of the parent entry
                 layout::Property::new_int(), // index of the first entry
                 layout::Property::new_int(), // nb entries in the directory
             ]),
             // Link
             layout::Variant::new(vec![
-                layout::Property::PString(1, Rc::clone(&path_store)),
+                layout::Property::VLArray(1, Rc::clone(&path_store)),
                 layout::Property::new_int(), // index of the parent entry
-                layout::Property::PString(1, Rc::clone(&path_store)), // Id of the linked entry
+                layout::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
             ]),
         ]);
 
