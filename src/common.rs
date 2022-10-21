@@ -217,7 +217,6 @@ impl<'a> ArxRunner<'a> {
                         Rc::clone(finder.get_store()),
                         entry.get_first_child(),
                         entry.get_nb_children(),
-                        finder.get_resolver().clone(),
                     );
                     self._run(finder, op)?;
                     op.on_directory_exit(&mut self.current_path, &entry)?;

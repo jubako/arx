@@ -22,7 +22,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
         let finder = match current {
-            None => index.get_finder(&entry_storage, resolver.clone())?,
+            None => index.get_finder(&entry_storage)?,
             Some(c) => {
                 let parent = Entry::new(c, store.get_entry(c)?, Rc::clone(&value_storage));
                 if !parent.is_dir() {
@@ -30,13 +30,15 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                 }
                 let offset = parent.get_first_child();
                 let count = parent.get_nb_children();
-                jbk::reader::Finder::new(Rc::clone(store), offset, count, resolver.clone())
+                jbk::reader::Finder::new(Rc::clone(store), offset, count)
             }
         };
-        let found = finder.find(
+        let comparator = jbk::reader::PropertyCompare::new(
+            resolver.clone(),
             jbk::PropertyIdx::from(0),
             jbk::reader::Value::Array(component.to_os_string().into_vec()),
-        )?;
+        );
+        let found = finder.find(&comparator)?;
         match found {
             None => return Err("Cannot found entry".to_string().into()),
             Some(idx) => {
