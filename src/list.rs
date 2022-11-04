@@ -45,11 +45,8 @@ pub fn list<P: AsRef<Path>>(infile: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let mut runner = ArxRunner::new(&arx, PathBuf::new());
 
-    let index = arx.directory.get_index_from_name("root")?;
-    let resolver = jbk::reader::Resolver::new(Rc::clone(arx.container.get_value_storage()));
+    let index = arx.get_index_for_name("root")?;
+    let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
     let op = Lister {};
-    runner.run(
-        index.get_finder(arx.container.get_entry_storage(), resolver)?,
-        &op,
-    )
+    runner.run(index.get_finder(arx.get_entry_storage(), resolver)?, &op)
 }

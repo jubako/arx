@@ -169,23 +169,23 @@ pub trait ArxOperator {
     fn on_link(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
 }
 
-pub struct Arx {
-    pub container: jbk::reader::Container,
-    pub directory: Rc<jbk::reader::DirectoryPack>,
+pub struct Arx(jbk::reader::Container);
+
+impl std::ops::Deref for Arx {
+    type Target = jbk::reader::Container;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl Arx {
     pub fn new<P: AsRef<Path>>(file: P) -> jbk::Result<Self> {
         let container = jbk::reader::Container::new(&file)?;
-        let directory = Rc::clone(container.get_directory_pack());
-        Ok(Self {
-            container,
-            directory,
-        })
+        Ok(Self(container))
     }
 
-    pub fn walk<'a>(&self, finder: &'a jbk::reader::Finder) -> ReadEntry<'a> {
-        ReadEntry::new(Rc::clone(self.container.get_value_storage()), finder)
+    pub fn walk<'s, 'finder>(&'s self, finder: &'finder jbk::reader::Finder) -> ReadEntry<'finder> {
+        ReadEntry::new(Rc::clone(self.get_value_storage()), finder)
     }
 }
 
