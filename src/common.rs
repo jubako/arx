@@ -14,15 +14,16 @@ pub enum EntryKind {
 pub struct Entry {
     idx: jbk::EntryIdx,
     entry: jbk::reader::Entry,
-    resolver: Rc<jbk::reader::Resolver>,
+    resolver: jbk::reader::Resolver,
 }
 
 impl Entry {
     pub fn new(
         idx: jbk::EntryIdx,
         entry: jbk::reader::Entry,
-        resolver: Rc<jbk::reader::Resolver>,
+        value_storage: Rc<jbk::reader::ValueStorage>,
     ) -> Self {
+        let resolver = jbk::reader::Resolver::new(value_storage);
         Self {
             idx,
             entry,
@@ -115,16 +116,21 @@ impl fmt::Display for Entry {
     }
 }
 
-pub struct ReadEntry<'a> {
-    finder: &'a jbk::reader::Finder,
+pub struct ReadEntry<'finder> {
+    value_storage: Rc<jbk::reader::ValueStorage>,
+    finder: &'finder jbk::reader::Finder,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
 
-impl<'a> ReadEntry<'a> {
-    pub fn new(finder: &'a jbk::reader::Finder) -> Self {
+impl<'finder> ReadEntry<'finder> {
+    pub fn new(
+        value_storage: Rc<jbk::reader::ValueStorage>,
+        finder: &'finder jbk::reader::Finder,
+    ) -> Self {
         let end = jbk::EntryIdx::from(0) + finder.count();
         Self {
+            value_storage,
             finder,
             current: jbk::EntryIdx::from(0),
             end,
@@ -136,7 +142,7 @@ impl<'a> ReadEntry<'a> {
     }
 }
 
-impl<'a> Iterator for ReadEntry<'a> {
+impl<'finder> Iterator for ReadEntry<'finder> {
     type Item = jbk::Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -145,11 +151,7 @@ impl<'a> Iterator for ReadEntry<'a> {
         } else {
             let entry = self.finder.get_entry(self.current);
             let ret = Some(match entry {
-                Ok(e) => Ok(Entry::new(
-                    self.current,
-                    e,
-                    Rc::clone(self.finder.get_resolver()),
-                )),
+                Ok(e) => Ok(Entry::new(self.current, e, Rc::clone(&self.value_storage))),
                 Err(e) => Err(e),
             });
             self.current += 1;
@@ -175,7 +177,7 @@ pub struct Arx {
 impl Arx {
     pub fn new<P: AsRef<Path>>(file: P) -> jbk::Result<Self> {
         let container = jbk::reader::Container::new(&file)?;
-        let directory = Rc::clone(container.get_directory_pack()?);
+        let directory = Rc::clone(container.get_directory_pack());
         Ok(Self {
             container,
             directory,
@@ -183,7 +185,7 @@ impl Arx {
     }
 
     pub fn walk<'a>(&self, finder: &'a jbk::reader::Finder) -> ReadEntry<'a> {
-        ReadEntry::new(finder)
+        ReadEntry::new(Rc::clone(self.container.get_value_storage()), finder)
     }
 }
 
@@ -216,7 +218,7 @@ impl<'a> ArxRunner<'a> {
                         Rc::clone(finder.get_store()),
                         entry.get_first_child(),
                         entry.get_nb_children(),
-                        Rc::clone(finder.get_resolver()),
+                        finder.get_resolver().clone(),
                     );
                     self._run(finder, op)?;
                     self.current_path.pop();
