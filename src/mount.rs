@@ -160,7 +160,9 @@ impl<'a> ArxFs<'a> {
     }
 
     pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
-        let finder = self.entry_index.get_finder(self.arx.get_entry_storage())?;
+        let finder = self
+            .entry_index
+            .get_finder::<jbk::reader::AnySchema>(self.arx.get_entry_storage())?;
         let entry = finder.get_entry(idx)?;
         Ok(Entry::new(
             idx,
@@ -169,7 +171,7 @@ impl<'a> ArxFs<'a> {
         ))
     }
 
-    pub fn get_finder(&self, ino: Ino) -> jbk::Result<jbk::reader::Finder> {
+    pub fn get_finder(&self, ino: Ino) -> jbk::Result<jbk::reader::Finder<jbk::reader::AnySchema>> {
         match ino.try_into() {
             Err(_) => {
                 let index = self.arx.get_index_for_name("root")?;
@@ -183,10 +185,9 @@ impl<'a> ArxFs<'a> {
                     let offset = entry.get_first_child();
                     let count = entry.get_nb_children();
                     let store = self
-                        .arx
-                        .get_entry_storage()
-                        .get_entry_store(self.entry_index.get_store_id())?;
-                    Ok(jbk::reader::Finder::new(Rc::clone(store), offset, count))
+                        .entry_index
+                        .get_store::<jbk::reader::AnySchema>(self.arx.get_entry_storage())?;
+                    Ok(jbk::reader::Finder::new(Rc::clone(&store), offset, count))
                 }
             }
         }
@@ -263,7 +264,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     None => {
                         let finder = self
                             .entry_index
-                            .get_finder(self.arx.get_entry_storage())
+                            .get_finder::<jbk::reader::AnySchema>(self.arx.get_entry_storage())
                             .unwrap();
                         let entry = finder.get_entry(idx).unwrap();
                         let entry = Entry::new(idx, entry, Rc::clone(self.arx.get_value_storage()));

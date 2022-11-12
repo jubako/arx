@@ -36,7 +36,7 @@ impl Entry {
     }
 
     pub fn get_type(&self) -> EntryKind {
-        match self.entry.get_variant_id() {
+        match self.entry.get_variant_id().into_u8() {
             0 => EntryKind::File,
             1 => EntryKind::Directory,
             2 => EntryKind::Link,
@@ -45,15 +45,15 @@ impl Entry {
     }
 
     pub fn is_file(&self) -> bool {
-        self.entry.get_variant_id() == 0
+        self.entry.get_variant_id() == 0.into()
     }
 
     pub fn is_dir(&self) -> bool {
-        self.entry.get_variant_id() == 1
+        self.entry.get_variant_id() == 1.into()
     }
 
     pub fn is_link(&self) -> bool {
-        self.entry.get_variant_id() == 2
+        self.entry.get_variant_id() == 2.into()
     }
 
     pub fn get_path(&self) -> jbk::Result<String> {
@@ -118,7 +118,7 @@ impl fmt::Display for Entry {
 
 pub struct ReadEntry<'finder> {
     value_storage: Rc<jbk::reader::ValueStorage>,
-    finder: &'finder jbk::reader::Finder,
+    finder: &'finder jbk::reader::Finder<jbk::reader::AnySchema>,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
@@ -126,7 +126,7 @@ pub struct ReadEntry<'finder> {
 impl<'finder> ReadEntry<'finder> {
     pub fn new(
         value_storage: Rc<jbk::reader::ValueStorage>,
-        finder: &'finder jbk::reader::Finder,
+        finder: &'finder jbk::reader::Finder<jbk::reader::AnySchema>,
     ) -> Self {
         let end = jbk::EntryIdx::from(0) + finder.count();
         Self {
@@ -184,7 +184,10 @@ impl Arx {
         Ok(Self(container))
     }
 
-    pub fn walk<'s, 'finder>(&'s self, finder: &'finder jbk::reader::Finder) -> ReadEntry<'finder> {
+    pub fn walk<'s, 'finder>(
+        &'s self,
+        finder: &'finder jbk::reader::Finder<jbk::reader::AnySchema>,
+    ) -> ReadEntry<'finder> {
         ReadEntry::new(Rc::clone(self.get_value_storage()), finder)
     }
 }
@@ -199,13 +202,21 @@ impl<'a> ArxRunner<'a> {
         Self { arx, current_path }
     }
 
-    pub fn run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
+    pub fn run(
+        &mut self,
+        finder: jbk::reader::Finder<jbk::reader::AnySchema>,
+        op: &dyn ArxOperator,
+    ) -> jbk::Result<()> {
         op.on_start(&mut self.current_path)?;
         self._run(finder, op)?;
         op.on_stop(&mut self.current_path)
     }
 
-    fn _run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
+    fn _run(
+        &mut self,
+        finder: jbk::reader::Finder<jbk::reader::AnySchema>,
+        op: &dyn ArxOperator,
+    ) -> jbk::Result<()> {
         for entry in self.arx.walk(&finder) {
             let entry = entry?;
             match entry.get_type() {
@@ -214,7 +225,7 @@ impl<'a> ArxRunner<'a> {
                 EntryKind::Directory => {
                     op.on_directory_enter(&mut self.current_path, &entry)?;
                     let finder = jbk::reader::Finder::new(
-                        Rc::clone(finder.get_store()),
+                        Rc::clone(&finder.get_store()),
                         entry.get_first_child(),
                         entry.get_nb_children(),
                     );

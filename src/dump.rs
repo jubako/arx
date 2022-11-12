@@ -13,7 +13,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let value_storage = directory.create_value_storage();
     let entry_storage = directory.create_entry_storage();
     let index = directory.get_index_from_name("root")?;
-    let store = entry_storage.get_entry_store(index.get_store_id())?;
+    let store = index.get_store::<jbk::reader::AnySchema>(&entry_storage)?;
     let resolver = jbk::reader::Resolver::new(Rc::clone(&value_storage));
     let mut current: Option<jbk::EntryIdx> = None;
     for component in path.as_ref().iter() {
@@ -30,7 +30,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                 }
                 let offset = parent.get_first_child();
                 let count = parent.get_nb_children();
-                jbk::reader::Finder::new(Rc::clone(store), offset, count)
+                jbk::reader::Finder::new(Rc::clone(&store), offset, count)
             }
         };
         let comparator = jbk::reader::PropertyCompare::new(
