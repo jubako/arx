@@ -7,7 +7,6 @@ use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use typenum::{U31, U40, U63};
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
@@ -21,11 +20,11 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
-    parent: jbk::Idx<u32>,
+    parent: jbk::EntryIdx,
 }
 
 impl Entry {
-    pub fn new(path: PathBuf, parent: jbk::Idx<u32>) -> jbk::Result<Self> {
+    pub fn new(path: PathBuf, parent: jbk::EntryIdx) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
@@ -54,7 +53,7 @@ impl Entry {
         })
     }
 
-    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Idx<u32>) -> Self {
+    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::EntryIdx) -> Self {
         let path = dir_entry.path();
         if let Ok(file_type) = dir_entry.file_type() {
             if file_type.is_dir() {
@@ -95,9 +94,9 @@ impl Entry {
 pub struct Creator {
     content_pack: jbk::creator::ContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
-    entry_store_id: jbk::Idx<u32>,
-    entry_count: u32,
-    root_count: u32,
+    entry_store_id: jbk::EntryStoreIdx,
+    entry_count: jbk::EntryCount,
+    root_count: jbk::EntryCount,
     queue: VecDeque<Entry>,
 }
 
@@ -111,9 +110,9 @@ impl Creator {
         content_pack_path.set_file_name(outfilename);
         let content_pack = jbk::creator::ContentPackCreator::new(
             content_pack_path,
-            jbk::Id(1),
+            jbk::PackId::from(1),
             VENDOR_ID,
-            jbk::FreeData::<U40>::clone_from_slice(&[0x00; 40]),
+            jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
         );
 
@@ -124,9 +123,9 @@ impl Creator {
         directory_pack_path.set_file_name(outfilename);
         let mut directory_pack = jbk::creator::DirectoryPackCreator::new(
             directory_pack_path,
-            jbk::Id(0),
+            jbk::PackId::from(0),
             VENDOR_ID,
-            jbk::FreeData::<U31>::clone_from_slice(&[0x00; 31]),
+            jbk::FreeData31::clone_from_slice(&[0x00; 31]),
         );
 
         let path_store = directory_pack.create_value_store(jbk::creator::ValueStoreKind::Plain);
@@ -159,8 +158,8 @@ impl Creator {
             content_pack,
             directory_pack,
             entry_store_id,
-            entry_count: 0,
-            root_count: 0,
+            entry_count: 0.into(),
+            root_count: 0.into(),
             queue: VecDeque::<Entry>::new(),
         }
     }
@@ -169,25 +168,25 @@ impl Creator {
         self.directory_pack.create_index(
             "entries",
             jubako::ContentAddress::new(0.into(), 0.into()),
-            0.into(),
+            jbk::PropertyIdx::from(0),
             self.entry_store_id,
-            jubako::Count(self.entry_count),
-            jubako::Idx(0),
+            self.entry_count,
+            jubako::EntryIdx::from(0),
         );
         self.directory_pack.create_index(
             "root",
             jubako::ContentAddress::new(0.into(), 0.into()),
-            0.into(),
+            jbk::PropertyIdx::from(0),
             self.entry_store_id,
-            jubako::Count(self.root_count),
-            jubako::Idx(0),
+            self.root_count,
+            jubako::EntryIdx::from(0),
         );
         let directory_pack_info = self.directory_pack.finalize()?;
         let content_pack_info = self.content_pack.finalize()?;
         let mut manifest_creator = jbk::creator::ManifestPackCreator::new(
             outfile,
             VENDOR_ID,
-            jbk::FreeData::<U63>::clone_from_slice(&[0x00; 63]),
+            jbk::FreeData63::clone_from_slice(&[0x00; 63]),
         );
 
         manifest_creator.add_pack(directory_pack_info);
@@ -204,7 +203,7 @@ impl Creator {
         }
     }
 
-    fn next_id(&self) -> u32 {
+    fn next_id(&self) -> jbk::EntryCount {
         // Return the id that will be pushed back.
         // The id is the entry_count (entries already added) + the size of the queue (entries to add)
         self.entry_count + self.queue.len() as u32
@@ -212,11 +211,11 @@ impl Creator {
 
     pub fn run(&mut self, outfile: PathBuf) -> jbk::Result<()> {
         self.content_pack.start()?;
-        self.root_count = self.queue.len() as u32;
+        self.root_count = (self.queue.len() as u32).into();
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();
             self.handle(entry)?;
-            if self.entry_count % 1000 == 0 {
+            if self.entry_count.into_u32() % 1000 == 0 {
                 println!("{}", self.entry_count);
             }
         }
@@ -233,7 +232,7 @@ impl Creator {
                 for sub_entry in fs::read_dir(&entry.path)? {
                     self.push_back(Entry::new_from_fs(
                         sub_entry?,
-                        jbk::Idx(self.entry_count + 1),
+                        jbk::EntryIdx::from(self.entry_count.into_u32() + 1),
                     ));
                     nb_entries += 1;
                 }
@@ -242,8 +241,8 @@ impl Creator {
                     1,
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
-                        jbk::creator::Value::Unsigned(first_entry as u64),
+                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
+                        jbk::creator::Value::Unsigned(first_entry.into_u64()),
                         jbk::creator::Value::Unsigned(nb_entries),
                     ],
                 );
@@ -258,9 +257,9 @@ impl Creator {
                     0,
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
+                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
                         jbk::creator::Value::Content(jbk::creator::Content::from((
-                            jbk::Id(1),
+                            jbk::PackId::from(1),
                             content_id,
                         ))),
                     ],
@@ -274,7 +273,7 @@ impl Creator {
                     2,
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.0 as u64),
+                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
                         jbk::creator::Value::Array(target.into_os_string().into_vec()),
                     ],
                 );

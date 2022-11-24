@@ -106,7 +106,7 @@ struct ArxFs<'a> {
     arx: Arx,
     resolver: Rc<jbk::reader::Resolver>,
     entry_finder: jbk::reader::Finder,
-    resolve_cache: LruCache<(u64, OsString), Option<jbk::Idx<u32>>>,
+    resolve_cache: LruCache<(u64, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<u32, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
 }
@@ -130,7 +130,7 @@ impl<'a> ArxFs<'a> {
 
     pub fn get_entry(&self, ino: u64) -> jbk::Result<Entry> {
         assert!(ino >= 2);
-        let idx = jbk::Idx((ino - 2) as u32);
+        let idx = jbk::EntryIdx::from((ino - 2) as u32);
         let entry = self.entry_finder.get_entry(idx)?;
         Ok(Entry::new(idx, entry, Rc::clone(&self.resolver)))
     }
@@ -159,17 +159,17 @@ impl<'a> ArxFs<'a> {
 
 impl Entry {
     fn to_fillattr(&self, container: &jbk::reader::Container) -> jbk::Result<fuse::FileAttr> {
-        let ino = self.idx().0 + 2;
+        let ino = self.idx().into_u64() + 2;
         let (size, kind) = match &self.get_type() {
             EntryKind::Directory => (
-                ((self.get_nb_children().0 + 1) as u64 * 10),
+                (self.get_nb_children() + 1).into_u64() * 10,
                 fuse::FileType::Directory,
             ),
             EntryKind::File => {
                 let content_address = self.get_content_address();
                 let reader = container.get_reader(&content_address)?;
                 let size = reader.size();
-                (size.0, fuse::FileType::RegularFile)
+                (size.into_u64(), fuse::FileType::RegularFile)
             }
             EntryKind::Link => (
                 self.get_target_link()?.len() as u64,
@@ -206,7 +206,10 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             None => {
                 let finder = self.get_finder(parent).unwrap();
                 let idx = finder
-                    .find(0, jbk::reader::Value::Array(name.to_os_string().into_vec()))
+                    .find(
+                        jbk::PropertyIdx::from(0),
+                        jbk::reader::Value::Array(name.to_os_string().into_vec()),
+                    )
                     .unwrap()
                     .map(|idx| idx + finder.offset());
                 self.resolve_cache.push((parent, name.to_os_string()), idx);
@@ -216,15 +219,15 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match idx {
             None => reply.error(ENOENT),
             Some(idx) => {
-                let attr = self.attr_cache.get(&idx.0);
+                let attr = self.attr_cache.get(&idx.into_u32());
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
                         let entry = self.entry_finder.get_entry(idx).unwrap();
                         let entry = Entry::new(idx, entry, Rc::clone(&self.resolver));
                         let attr = entry.to_fillattr(&self.arx.container).unwrap();
-                        self.attr_cache.push(idx.0, attr);
-                        self.attr_cache.get(&idx.0).unwrap()
+                        self.attr_cache.push(idx.into_u32(), attr);
+                        self.attr_cache.get(&idx.into_u32()).unwrap()
                     }
                 };
                 reply.entry(&TTL, attr, 0)
@@ -305,8 +308,8 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             EntryKind::File => {
                 let content_address = entry.get_content_address();
                 let reader = self.arx.container.get_reader(&content_address).unwrap();
-                let mut stream = reader.create_stream_from(jbk::Offset(offset.try_into().unwrap()));
-                let size = min(size, stream.size().0 as u32);
+                let mut stream = reader.create_stream_from(jbk::Offset::from(offset as u64));
+                let size = min(size, stream.size().into_u64() as u32);
                 let data = stream.read_vec(size as usize).unwrap();
                 reply.data(&data)
             }
@@ -352,12 +355,12 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
     ) {
         self.stats.readdir();
         let finder = self.get_finder(ino).unwrap();
-        let nb_entry = (finder.count().0 + 2) as i64; // we include "." and ".."
+        let nb_entry = (finder.count().into_u32() + 2) as i64; // we include "." and ".."
         let mut readentry = ReadEntry::new(&finder);
         // If offset != 0, offset corresponds to what has already been seen. So we must start after.
         let offset = if offset == 0 { 0 } else { offset + 1 };
         if offset > 2 {
-            ReadEntry::skip(&mut readentry, jbk::Count((offset - 2) as u32));
+            ReadEntry::skip(&mut readentry, jbk::EntryCount::from((offset - 2) as u32));
         }
         for i in offset..nb_entry {
             if i == 0 {
@@ -369,7 +372,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     let entry = self.get_entry(ino).unwrap();
                     match entry.get_parent() {
                         None => 1,
-                        Some(parent_id) => parent_id.0 as u64 + 2,
+                        Some(parent_id) => parent_id.into_u64() + 2,
                     }
                 };
                 reply.add(parent_ino, i as i64, fuse::FileType::Directory, "..");
@@ -383,7 +386,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                             EntryKind::Directory => fuse::FileType::Directory,
                             EntryKind::Link => fuse::FileType::Symlink,
                         };
-                        let entry_ino = finder.offset().0 as u64 + (i as u64 - 2) + 2;
+                        let entry_ino = finder.offset().into_u64() + (i as u64 - 2) + 2;
                         if reply.add(
                             entry_ino,
                             /* offset =*/ i as i64,

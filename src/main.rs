@@ -97,7 +97,7 @@ fn main() -> jbk::Result<()> {
             let mut creator = Creator::new(&create_cmd.outfile);
 
             for infile in create_cmd.infiles {
-                creator.push_back(Entry::new(infile, jbk::Idx(0))?);
+                creator.push_back(Entry::new(infile, jbk::EntryIdx::from(0))?);
             }
 
             creator.run(create_cmd.outfile)

@@ -12,14 +12,14 @@ pub enum EntryKind {
 }
 
 pub struct Entry {
-    idx: jbk::Idx<u32>,
+    idx: jbk::EntryIdx,
     entry: jbk::reader::Entry,
     resolver: Rc<jbk::reader::Resolver>,
 }
 
 impl Entry {
     pub fn new(
-        idx: jbk::Idx<u32>,
+        idx: jbk::EntryIdx,
         entry: jbk::reader::Entry,
         resolver: Rc<jbk::reader::Resolver>,
     ) -> Self {
@@ -30,7 +30,7 @@ impl Entry {
         }
     }
 
-    pub fn idx(&self) -> jbk::Idx<u32> {
+    pub fn idx(&self) -> jbk::EntryIdx {
         self.idx
     }
 
@@ -62,14 +62,14 @@ impl Entry {
         Ok(String::from_utf8(path)?)
     }
 
-    pub fn get_parent(&self) -> Option<jbk::Idx<u32>> {
+    pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
         let idx = self
             .resolver
             .resolve_to_unsigned(&self.entry.get_value(1.into()).unwrap()) as u32;
         if idx == 0 {
             None
         } else {
-            Some(jbk::Idx(idx - 1))
+            Some(jbk::EntryIdx::from(idx - 1))
         }
     }
 
@@ -88,17 +88,17 @@ impl Entry {
         Ok(String::from_utf8(path)?)
     }
 
-    pub fn get_first_child(&self) -> jbk::Idx<u32> {
+    pub fn get_first_child(&self) -> jbk::EntryIdx {
         assert!(self.is_dir());
-        jbk::Idx(
+        jbk::EntryIdx::from(
             self.resolver
                 .resolve_to_unsigned(&self.entry.get_value(2.into()).unwrap()) as u32,
         )
     }
 
-    pub fn get_nb_children(&self) -> jbk::Count<u32> {
+    pub fn get_nb_children(&self) -> jbk::EntryCount {
         assert!(self.is_dir());
-        jbk::Count(
+        jbk::EntryCount::from(
             self.resolver
                 .resolve_to_unsigned(&self.entry.get_value(3.into()).unwrap()) as u32,
         )
@@ -117,22 +117,22 @@ impl fmt::Display for Entry {
 
 pub struct ReadEntry<'a> {
     finder: &'a jbk::reader::Finder,
-    current: jbk::Idx<u32>,
-    end: jbk::Idx<u32>,
+    current: jbk::EntryIdx,
+    end: jbk::EntryIdx,
 }
 
 impl<'a> ReadEntry<'a> {
     pub fn new(finder: &'a jbk::reader::Finder) -> Self {
-        let end = jbk::Idx(0) + finder.count();
+        let end = jbk::EntryIdx::from(0) + finder.count();
         Self {
             finder,
-            current: jbk::Idx(0),
+            current: jbk::EntryIdx::from(0),
             end,
         }
     }
 
-    pub fn skip(&mut self, to_skip: jbk::Count<u32>) {
-        self.current += to_skip.0;
+    pub fn skip(&mut self, to_skip: jbk::EntryCount) {
+        self.current += to_skip;
     }
 }
 
