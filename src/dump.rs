@@ -1,5 +1,5 @@
 use crate::common::{Entry, EntryKind};
-use jbk::reader::IndexStoreTrait;
+use jbk::reader::EntryStoreTrait;
 use jubako as jbk;
 //use jbk::reader::Finder;
 //use std::ffi::OsStr;
@@ -13,7 +13,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let index = directory.get_index_from_name("root")?;
     let store = index.get_store();
     let resolver = directory.get_resolver();
-    let mut current: Option<jbk::Idx<u32>> = None;
+    let mut current: Option<jbk::EntryIdx> = None;
     for component in path.as_ref().iter() {
         // Search for the current component.
         // All children of a parent are stored concatened.
@@ -32,7 +32,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
             }
         };
         let found = finder.find(
-            0,
+            jbk::PropertyIdx::from(0),
             jbk::reader::Value::Array(component.to_os_string().into_vec()),
         )?;
         match found {
