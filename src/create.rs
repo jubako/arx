@@ -250,7 +250,8 @@ impl Creator {
             }
             EntryKind::File => {
                 let file = fs::File::open(&entry.path)?;
-                let mut file = jbk::creator::FileStream::new(file, jbk::End::None);
+                let mut file =
+                    jbk::creator::Stream::new(jbk::creator::FileSource::new(file), jbk::End::None);
                 let content_id = self.content_pack.add_content(&mut file)?;
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
