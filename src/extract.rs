@@ -3,6 +3,7 @@ use jubako as jbk;
 use std::fs::{create_dir, create_dir_all, File};
 use std::os::unix::fs::symlink;
 use std::path::Path;
+use std::rc::Rc;
 
 struct Extractor<'a> {
     container: &'a jbk::reader::Container,
@@ -59,8 +60,8 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let mut runner = ArxRunner::new(&arx, outdir.as_ref().to_path_buf());
 
-    let index = arx.directory.get_index_from_name("root")?;
-    let resolver = arx.directory.get_resolver();
-    let op = Extractor::new(&arx.container);
-    runner.run(index.get_finder(resolver), &op)
+    let index = arx.get_index_for_name("root")?;
+    let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
+    let op = Extractor::new(&arx);
+    runner.run(index.get_finder(arx.get_entry_storage(), resolver)?, &op)
 }

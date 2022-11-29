@@ -104,8 +104,8 @@ impl std::fmt::Display for StatCounter {
 
 struct ArxFs<'a> {
     arx: Arx,
-    resolver: Rc<jbk::reader::Resolver>,
-    entry_finder: jbk::reader::Finder,
+    resolver: jbk::reader::Resolver,
+    entry_index: jbk::reader::Index,
     resolve_cache: LruCache<(u64, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<u32, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
@@ -113,15 +113,12 @@ struct ArxFs<'a> {
 
 impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
-        let resolver = arx.directory.get_resolver();
-        let entry_finder = arx
-            .directory
-            .get_index_from_name("entries")?
-            .get_finder(Rc::clone(&resolver));
+        let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
+        let entry_index = arx.get_index_for_name("entries")?;
         Ok(Self {
             arx,
             resolver,
-            entry_finder,
+            entry_index,
             resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             stats,
@@ -130,15 +127,22 @@ impl<'a> ArxFs<'a> {
 
     pub fn get_entry(&self, ino: u64) -> jbk::Result<Entry> {
         assert!(ino >= 2);
+        let finder = self
+            .entry_index
+            .get_finder(self.arx.get_entry_storage(), self.resolver.clone())?;
         let idx = jbk::EntryIdx::from((ino - 2) as u32);
-        let entry = self.entry_finder.get_entry(idx)?;
-        Ok(Entry::new(idx, entry, Rc::clone(&self.resolver)))
+        let entry = finder.get_entry(idx)?;
+        Ok(Entry::new(
+            idx,
+            entry,
+            Rc::clone(self.arx.get_value_storage()),
+        ))
     }
 
     pub fn get_finder(&self, ino: u64) -> jbk::Result<jbk::reader::Finder> {
         if ino == 1 {
-            let index = self.arx.directory.get_index_from_name("root")?;
-            Ok(index.get_finder(Rc::clone(&self.resolver)))
+            let index = self.arx.get_index_for_name("root")?;
+            Ok(index.get_finder(self.arx.get_entry_storage(), self.resolver.clone())?)
         } else {
             let entry = self.get_entry(ino)?;
             if !entry.is_dir() {
@@ -146,11 +150,15 @@ impl<'a> ArxFs<'a> {
             } else {
                 let offset = entry.get_first_child();
                 let count = entry.get_nb_children();
+                let store = self
+                    .arx
+                    .get_entry_storage()
+                    .get_entry_store(self.entry_index.get_store_id())?;
                 Ok(jbk::reader::Finder::new(
-                    Rc::clone(self.entry_finder.get_store()),
+                    Rc::clone(store),
                     offset,
                     count,
-                    Rc::clone(&self.resolver),
+                    jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
                 ))
             }
         }
@@ -223,9 +231,16 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let entry = self.entry_finder.get_entry(idx).unwrap();
-                        let entry = Entry::new(idx, entry, Rc::clone(&self.resolver));
-                        let attr = entry.to_fillattr(&self.arx.container).unwrap();
+                        let finder = self
+                            .entry_index
+                            .get_finder(
+                                self.arx.get_entry_storage(),
+                                jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
+                            )
+                            .unwrap();
+                        let entry = finder.get_entry(idx).unwrap();
+                        let entry = Entry::new(idx, entry, Rc::clone(self.arx.get_value_storage()));
+                        let attr = entry.to_fillattr(&self.arx).unwrap();
                         self.attr_cache.push(idx.into_u32(), attr);
                         self.attr_cache.get(&idx.into_u32()).unwrap()
                     }
@@ -262,7 +277,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 Some(attr) => attr,
                 None => {
                     let entry = self.get_entry(ino).unwrap();
-                    let attr = entry.to_fillattr(&self.arx.container).unwrap();
+                    let attr = entry.to_fillattr(&self.arx).unwrap();
                     self.attr_cache.push(idx, attr);
                     self.attr_cache.get(&idx).unwrap()
                 }
@@ -307,9 +322,10 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match &entry.get_type() {
             EntryKind::File => {
                 let content_address = entry.get_content_address();
-                let reader = self.arx.container.get_reader(&content_address).unwrap();
-                let mut stream = reader.create_stream_from(jbk::Offset::from(offset as u64));
-                let size = min(size, stream.size().into_u64() as u32);
+                let reader = self.arx.get_reader(&content_address).unwrap();
+                let mut stream =
+                    reader.create_stream_from(jbk::Offset::new(offset.try_into().unwrap()));
+                let size = min(size as u64, stream.size().into_u64());
                 let data = stream.read_vec(size as usize).unwrap();
                 reply.data(&data)
             }
@@ -355,8 +371,8 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
     ) {
         self.stats.readdir();
         let finder = self.get_finder(ino).unwrap();
-        let nb_entry = (finder.count().into_u32() + 2) as i64; // we include "." and ".."
-        let mut readentry = ReadEntry::new(&finder);
+        let nb_entry = (finder.count().into_u64() + 2) as i64; // we include "." and ".."
+        let mut readentry = ReadEntry::new(Rc::clone(self.arx.get_value_storage()), &finder);
         // If offset != 0, offset corresponds to what has already been seen. So we must start after.
         let offset = if offset == 0 { 0 } else { offset + 1 };
         if offset > 2 {

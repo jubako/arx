@@ -9,10 +9,12 @@ use std::rc::Rc;
 
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let container = jbk::reader::Container::new(&infile)?;
-    let directory = container.get_directory_pack()?;
+    let directory = container.get_directory_pack();
+    let value_storage = directory.create_value_storage();
+    let entry_storage = directory.create_entry_storage();
     let index = directory.get_index_from_name("root")?;
-    let store = index.get_store();
-    let resolver = directory.get_resolver();
+    let store = entry_storage.get_entry_store(index.get_store_id())?;
+    let resolver = jbk::reader::Resolver::new(Rc::clone(&value_storage));
     let mut current: Option<jbk::EntryIdx> = None;
     for component in path.as_ref().iter() {
         // Search for the current component.
@@ -20,15 +22,15 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
         let finder = match current {
-            None => index.get_finder(Rc::clone(&resolver)),
+            None => index.get_finder(&entry_storage, resolver.clone())?,
             Some(c) => {
-                let parent = Entry::new(c, store.get_entry(c)?, Rc::clone(&resolver));
+                let parent = Entry::new(c, store.get_entry(c)?, Rc::clone(&value_storage));
                 if !parent.is_dir() {
                     return Err("Cannot found entry".to_string().into());
                 }
                 let offset = parent.get_first_child();
                 let count = parent.get_nb_children();
-                jbk::reader::Finder::new(index.get_store(), offset, count, Rc::clone(&resolver))
+                jbk::reader::Finder::new(Rc::clone(store), offset, count, resolver.clone())
             }
         };
         let found = finder.find(
@@ -44,7 +46,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     }
 
     if let Some(idx) = current {
-        let entry = Entry::new(idx, store.get_entry(idx)?, Rc::clone(&resolver));
+        let entry = Entry::new(idx, store.get_entry(idx)?, Rc::clone(&value_storage));
         match entry.get_type() {
             EntryKind::Directory => Err("Found directory".to_string().into()),
             EntryKind::File => {
