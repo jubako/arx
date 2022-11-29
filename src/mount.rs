@@ -5,6 +5,7 @@ use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;
 use std::ffi::{OsStr, OsString};
+use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
@@ -102,12 +103,45 @@ impl std::fmt::Display for StatCounter {
 // On the opposite side:
 // - entry n => send inode n+2
 
+#[derive(Hash, Copy, Clone, Eq, PartialEq)]
+struct Ino(NonZeroU64);
+
+impl Ino {
+    fn get(&self) -> u64 {
+        self.0.get()
+    }
+}
+
+impl From<u64> for Ino {
+    fn from(v: u64) -> Self {
+        assert_ne!(v, 0);
+        Self(unsafe { NonZeroU64::new_unchecked(v) })
+    }
+}
+
+impl From<jbk::EntryIdx> for Ino {
+    fn from(idx: jbk::EntryIdx) -> Ino {
+        Self::from(idx.into_u64() + 2)
+    }
+}
+
+impl TryInto<jbk::EntryIdx> for Ino {
+    type Error = ();
+
+    fn try_into(self) -> Result<jbk::EntryIdx, ()> {
+        match self.0.get() {
+            1 => Err(()),
+            v => Ok(jbk::EntryIdx::from((v - 2) as u32)),
+        }
+    }
+}
+
 struct ArxFs<'a> {
     arx: Arx,
     resolver: jbk::reader::Resolver,
     entry_index: jbk::reader::Index,
-    resolve_cache: LruCache<(u64, OsString), Option<jbk::EntryIdx>>,
-    attr_cache: LruCache<u32, fuse::FileAttr>,
+    resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
+    attr_cache: LruCache<jbk::EntryIdx, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -125,12 +159,11 @@ impl<'a> ArxFs<'a> {
         })
     }
 
-    pub fn get_entry(&self, ino: u64) -> jbk::Result<Entry> {
-        assert!(ino >= 2);
+    pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
+        let resolver = jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage()));
         let finder = self
             .entry_index
-            .get_finder(self.arx.get_entry_storage(), self.resolver.clone())?;
-        let idx = jbk::EntryIdx::from((ino - 2) as u32);
+            .get_finder(self.arx.get_entry_storage(), resolver)?;
         let entry = finder.get_entry(idx)?;
         Ok(Entry::new(
             idx,
@@ -139,27 +172,30 @@ impl<'a> ArxFs<'a> {
         ))
     }
 
-    pub fn get_finder(&self, ino: u64) -> jbk::Result<jbk::reader::Finder> {
-        if ino == 1 {
-            let index = self.arx.get_index_for_name("root")?;
-            Ok(index.get_finder(self.arx.get_entry_storage(), self.resolver.clone())?)
-        } else {
-            let entry = self.get_entry(ino)?;
-            if !entry.is_dir() {
-                Err("Invalid entry".to_string().into())
-            } else {
-                let offset = entry.get_first_child();
-                let count = entry.get_nb_children();
-                let store = self
-                    .arx
-                    .get_entry_storage()
-                    .get_entry_store(self.entry_index.get_store_id())?;
-                Ok(jbk::reader::Finder::new(
-                    Rc::clone(store),
-                    offset,
-                    count,
-                    jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
-                ))
+    pub fn get_finder(&self, ino: Ino) -> jbk::Result<jbk::reader::Finder> {
+        match ino.try_into() {
+            Err(_) => {
+                let index = self.arx.get_index_for_name("root")?;
+                Ok(index.get_finder(self.arx.get_entry_storage(), self.resolver.clone())?)
+            }
+            Ok(idx) => {
+                let entry = self.get_entry(idx)?;
+                if !entry.is_dir() {
+                    Err("Invalid entry".to_string().into())
+                } else {
+                    let offset = entry.get_first_child();
+                    let count = entry.get_nb_children();
+                    let store = self
+                        .arx
+                        .get_entry_storage()
+                        .get_entry_store(self.entry_index.get_store_id())?;
+                    Ok(jbk::reader::Finder::new(
+                        Rc::clone(store),
+                        offset,
+                        count,
+                        jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
+                    ))
+                }
             }
         }
     }
@@ -167,7 +203,6 @@ impl<'a> ArxFs<'a> {
 
 impl Entry {
     fn to_fillattr(&self, container: &jbk::reader::Container) -> jbk::Result<fuse::FileAttr> {
-        let ino = self.idx().into_u64() + 2;
         let (size, kind) = match &self.get_type() {
             EntryKind::Directory => (
                 (self.get_nb_children() + 1).into_u64() * 10,
@@ -185,7 +220,7 @@ impl Entry {
             ),
         };
         Ok(fuse::FileAttr {
-            ino: ino as u64,
+            ino: Ino::from(self.idx()).get(),
             size,
             kind,
             blocks: 1,
@@ -206,6 +241,7 @@ impl Entry {
 impl<'a> fuse::Filesystem for ArxFs<'a> {
     fn lookup(&mut self, _req: &fuse::Request, parent: u64, name: &OsStr, reply: fuse::ReplyEntry) {
         self.stats.lookup();
+        let parent = Ino::from(parent);
         // Lookup for entry `name` in directory `parent`
         // First get parent finder
         let idx = self.resolve_cache.get(&(parent, name.to_os_string()));
@@ -227,7 +263,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match idx {
             None => reply.error(ENOENT),
             Some(idx) => {
-                let attr = self.attr_cache.get(&idx.into_u32());
+                let attr = self.attr_cache.get(&idx);
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
@@ -241,8 +277,8 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                         let entry = finder.get_entry(idx).unwrap();
                         let entry = Entry::new(idx, entry, Rc::clone(self.arx.get_value_storage()));
                         let attr = entry.to_fillattr(&self.arx).unwrap();
-                        self.attr_cache.push(idx.into_u32(), attr);
-                        self.attr_cache.get(&idx.into_u32()).unwrap()
+                        self.attr_cache.push(idx, attr);
+                        self.attr_cache.get(&idx).unwrap()
                     }
                 };
                 reply.entry(&TTL, attr, 0)
@@ -252,59 +288,74 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
         self.stats.getattr();
-        if ino == 1 {
-            let attr = fuse::FileAttr {
-                ino,
-                size: 0,
-                kind: fuse::FileType::Directory,
-                blocks: 1,
-                atime: UNIX_EPOCH,
-                mtime: UNIX_EPOCH,
-                ctime: UNIX_EPOCH,
-                crtime: UNIX_EPOCH,
-                perm: 0o555,
-                nlink: 2,
-                uid: 1000,
-                gid: 1000,
-                rdev: 0,
-                flags: 0,
-            };
-            reply.attr(&TTL, &attr);
-        } else {
-            let idx = ino as u32 - 2;
-            let attr = self.attr_cache.get(&idx);
-            let attr = match attr {
-                Some(attr) => attr,
-                None => {
-                    let entry = self.get_entry(ino).unwrap();
-                    let attr = entry.to_fillattr(&self.arx).unwrap();
-                    self.attr_cache.push(idx, attr);
-                    self.attr_cache.get(&idx).unwrap()
-                }
-            };
-            reply.attr(&TTL, attr);
+        let ino = Ino::from(ino);
+        match ino.try_into() {
+            Err(_) => {
+                let attr = fuse::FileAttr {
+                    ino: ino.get(),
+                    size: 0,
+                    kind: fuse::FileType::Directory,
+                    blocks: 1,
+                    atime: UNIX_EPOCH,
+                    mtime: UNIX_EPOCH,
+                    ctime: UNIX_EPOCH,
+                    crtime: UNIX_EPOCH,
+                    perm: 0o555,
+                    nlink: 2,
+                    uid: 1000,
+                    gid: 1000,
+                    rdev: 0,
+                    flags: 0,
+                };
+                reply.attr(&TTL, &attr);
+            }
+            Ok(idx) => {
+                let attr = self.attr_cache.get(&idx);
+                let attr = match attr {
+                    Some(attr) => attr,
+                    None => {
+                        let entry = self.get_entry(idx).unwrap();
+                        let attr = entry.to_fillattr(&self.arx).unwrap();
+                        self.attr_cache.push(idx, attr);
+                        self.attr_cache.get(&idx).unwrap()
+                    }
+                };
+                reply.attr(&TTL, attr);
+            }
         }
     }
 
     fn readlink(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyData) {
         self.stats.readlink();
-        let entry = self.get_entry(ino).unwrap();
-        match &entry.get_type() {
-            EntryKind::Link => {
-                let target_link = entry.get_target_link().unwrap();
-                reply.data(target_link.as_bytes())
+        let ino = Ino::from(ino);
+        match ino.try_into() {
+            Err(_) => reply.error(libc::ENOLINK),
+            Ok(idx) => {
+                let entry = self.get_entry(idx).unwrap();
+                match &entry.get_type() {
+                    EntryKind::Link => {
+                        let target_link = entry.get_target_link().unwrap();
+                        reply.data(target_link.as_bytes())
+                    }
+                    _ => reply.error(libc::ENOLINK),
+                }
             }
-            _ => reply.error(libc::ENOLINK),
         }
     }
 
     fn open(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
         self.stats.open();
-        let entry = self.get_entry(ino).unwrap();
-        match &entry.get_type() {
-            EntryKind::File => reply.opened(0, 0),
-            EntryKind::Directory => reply.error(libc::EISDIR),
-            EntryKind::Link => reply.error(libc::ENOENT), // [FIXME] What to return here ?
+        let ino = Ino::from(ino);
+        match ino.try_into() {
+            Err(_) => reply.error(libc::EISDIR),
+            Ok(idx) => {
+                let entry = self.get_entry(idx).unwrap();
+                match &entry.get_type() {
+                    EntryKind::File => reply.opened(0, 0),
+                    EntryKind::Directory => reply.error(libc::EISDIR),
+                    EntryKind::Link => reply.error(libc::ENOENT), // [FIXME] What to return here ?
+                }
+            }
         }
     }
 
@@ -318,19 +369,25 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         reply: fuse::ReplyData,
     ) {
         self.stats.read();
-        let entry = self.get_entry(ino).unwrap();
-        match &entry.get_type() {
-            EntryKind::File => {
-                let content_address = entry.get_content_address();
-                let reader = self.arx.get_reader(&content_address).unwrap();
-                let mut stream =
-                    reader.create_stream_from(jbk::Offset::new(offset.try_into().unwrap()));
-                let size = min(size as u64, stream.size().into_u64());
-                let data = stream.read_vec(size as usize).unwrap();
-                reply.data(&data)
+        let ino = Ino::from(ino);
+        match ino.try_into() {
+            Err(_) => reply.error(libc::EISDIR),
+            Ok(idx) => {
+                let entry = self.get_entry(idx).unwrap();
+                match &entry.get_type() {
+                    EntryKind::File => {
+                        let content_address = entry.get_content_address();
+                        let reader = self.arx.get_reader(&content_address).unwrap();
+                        let mut stream =
+                            reader.create_stream_from(jbk::Offset::new(offset.try_into().unwrap()));
+                        let size = min(size as u64, stream.size().into_u64());
+                        let data = stream.read_vec(size as usize).unwrap();
+                        reply.data(&data)
+                    }
+                    EntryKind::Directory => reply.error(libc::EISDIR),
+                    EntryKind::Link => reply.error(libc::ENOENT), // [FIXME] What to return here ?
+                }
             }
-            EntryKind::Directory => reply.error(libc::EISDIR),
-            EntryKind::Link => reply.error(libc::ENOENT), // [FIXME] What to return here ?
         }
     }
 
@@ -350,13 +407,15 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn opendir(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
         self.stats.opendir();
-        if ino == 1 {
-            reply.opened(0, 0)
-        } else {
-            let entry = self.get_entry(ino).unwrap();
-            match &entry.get_type() {
-                EntryKind::Directory => reply.opened(0, 0),
-                _ => reply.error(libc::ENOTDIR),
+        let ino = Ino::from(ino);
+        match ino.try_into() {
+            Err(_) => reply.opened(0, 0),
+            Ok(idx) => {
+                let entry = self.get_entry(idx).unwrap();
+                match &entry.get_type() {
+                    EntryKind::Directory => reply.opened(0, 0),
+                    _ => reply.error(libc::ENOTDIR),
+                }
             }
         }
     }
@@ -370,28 +429,31 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         mut reply: fuse::ReplyDirectory,
     ) {
         self.stats.readdir();
+        let ino = Ino::from(ino);
         let finder = self.get_finder(ino).unwrap();
         let nb_entry = (finder.count().into_u64() + 2) as i64; // we include "." and ".."
         let mut readentry = ReadEntry::new(Rc::clone(self.arx.get_value_storage()), &finder);
         // If offset != 0, offset corresponds to what has already been seen. So we must start after.
         let offset = if offset == 0 { 0 } else { offset + 1 };
         if offset > 2 {
+            // We skip offset entries (minus "." and "..")
             ReadEntry::skip(&mut readentry, jbk::EntryCount::from((offset - 2) as u32));
         }
         for i in offset..nb_entry {
             if i == 0 {
-                reply.add(ino, i as i64, fuse::FileType::Directory, ".");
+                reply.add(ino.get(), i as i64, fuse::FileType::Directory, ".");
             } else if i == 1 {
-                let parent_ino = if ino == 1 {
-                    ino
-                } else {
-                    let entry = self.get_entry(ino).unwrap();
-                    match entry.get_parent() {
-                        None => 1,
-                        Some(parent_id) => parent_id.into_u64() + 2,
+                let parent_ino = match ino.try_into() {
+                    Err(_) => ino,
+                    Ok(idx) => {
+                        let entry = self.get_entry(idx).unwrap();
+                        match entry.get_parent() {
+                            None => Ino::from(1),
+                            Some(parent_id) => parent_id.into(),
+                        }
                     }
                 };
-                reply.add(parent_ino, i as i64, fuse::FileType::Directory, "..");
+                reply.add(parent_ino.get(), i as i64, fuse::FileType::Directory, "..");
             } else {
                 match readentry.next() {
                     None => break,
@@ -402,10 +464,11 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                             EntryKind::Directory => fuse::FileType::Directory,
                             EntryKind::Link => fuse::FileType::Symlink,
                         };
-                        let entry_ino = finder.offset().into_u64() + (i as u64 - 2) + 2;
+                        // We remove "." and ".."
+                        let entry_idx = finder.offset().into_u64() + (i as u64 - 2);
                         if reply.add(
-                            entry_ino,
-                            /* offset =*/ i as i64,
+                            entry_idx,
+                            /* offset =*/ i,
                             kind,
                             entry.get_path().unwrap(),
                         ) {
