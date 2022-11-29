@@ -161,12 +161,12 @@ impl<'finder> Iterator for ReadEntry<'finder> {
 }
 
 pub trait ArxOperator {
-    fn on_start(&self, current_path: &dyn AsRef<Path>) -> jbk::Result<()>;
-    fn on_stop(&self, current_path: &dyn AsRef<Path>) -> jbk::Result<()>;
-    fn on_directory_enter(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
-    fn on_directory_exit(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
-    fn on_file(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
-    fn on_link(&self, current_path: &dyn AsRef<Path>, entry: &Entry) -> jbk::Result<()>;
+    fn on_start(&self, current_path: &mut PathBuf) -> jbk::Result<()>;
+    fn on_stop(&self, current_path: &mut PathBuf) -> jbk::Result<()>;
+    fn on_directory_enter(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()>;
+    fn on_directory_exit(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()>;
+    fn on_file(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()>;
+    fn on_link(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()>;
 }
 
 pub struct Arx(jbk::reader::Container);
@@ -200,20 +200,19 @@ impl<'a> ArxRunner<'a> {
     }
 
     pub fn run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
-        op.on_start(&self.current_path)?;
+        op.on_start(&mut self.current_path)?;
         self._run(finder, op)?;
-        op.on_stop(&self.current_path)
+        op.on_stop(&mut self.current_path)
     }
 
     fn _run(&mut self, finder: jbk::reader::Finder, op: &dyn ArxOperator) -> jbk::Result<()> {
         for entry in self.arx.walk(&finder) {
             let entry = entry?;
             match entry.get_type() {
-                EntryKind::File => op.on_file(&self.current_path, &entry)?,
-                EntryKind::Link => op.on_link(&self.current_path, &entry)?,
+                EntryKind::File => op.on_file(&mut self.current_path, &entry)?,
+                EntryKind::Link => op.on_link(&mut self.current_path, &entry)?,
                 EntryKind::Directory => {
-                    op.on_directory_enter(&self.current_path, &entry)?;
-                    self.current_path.push(entry.get_path()?);
+                    op.on_directory_enter(&mut self.current_path, &entry)?;
                     let finder = jbk::reader::Finder::new(
                         Rc::clone(finder.get_store()),
                         entry.get_first_child(),
@@ -221,8 +220,7 @@ impl<'a> ArxRunner<'a> {
                         finder.get_resolver().clone(),
                     );
                     self._run(finder, op)?;
-                    self.current_path.pop();
-                    op.on_directory_exit(&self.current_path, &entry)?;
+                    op.on_directory_exit(&mut self.current_path, &entry)?;
                 }
             }
         }
