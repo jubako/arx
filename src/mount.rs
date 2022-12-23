@@ -160,10 +160,7 @@ impl<'a> ArxFs<'a> {
     }
 
     pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
-        let resolver = jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage()));
-        let finder = self
-            .entry_index
-            .get_finder(self.arx.get_entry_storage(), resolver)?;
+        let finder = self.entry_index.get_finder(self.arx.get_entry_storage())?;
         let entry = finder.get_entry(idx)?;
         Ok(Entry::new(
             idx,
@@ -176,7 +173,7 @@ impl<'a> ArxFs<'a> {
         match ino.try_into() {
             Err(_) => {
                 let index = self.arx.get_index_for_name("root")?;
-                Ok(index.get_finder(self.arx.get_entry_storage(), self.resolver.clone())?)
+                Ok(index.get_finder(self.arx.get_entry_storage())?)
             }
             Ok(idx) => {
                 let entry = self.get_entry(idx)?;
@@ -189,12 +186,7 @@ impl<'a> ArxFs<'a> {
                         .arx
                         .get_entry_storage()
                         .get_entry_store(self.entry_index.get_store_id())?;
-                    Ok(jbk::reader::Finder::new(
-                        Rc::clone(store),
-                        offset,
-                        count,
-                        jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
-                    ))
+                    Ok(jbk::reader::Finder::new(Rc::clone(store), offset, count))
                 }
             }
         }
@@ -249,11 +241,13 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             Some(idx) => *idx,
             None => {
                 let finder = self.get_finder(parent).unwrap();
+                let comparator = jbk::reader::PropertyCompare::new(
+                    self.resolver.clone(),
+                    jbk::PropertyIdx::from(0),
+                    jbk::reader::Value::Array(name.to_os_string().into_vec()),
+                );
                 let idx = finder
-                    .find(
-                        jbk::PropertyIdx::from(0),
-                        jbk::reader::Value::Array(name.to_os_string().into_vec()),
-                    )
+                    .find(&comparator)
                     .unwrap()
                     .map(|idx| idx + finder.offset());
                 self.resolve_cache.push((parent, name.to_os_string()), idx);
@@ -269,10 +263,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     None => {
                         let finder = self
                             .entry_index
-                            .get_finder(
-                                self.arx.get_entry_storage(),
-                                jbk::reader::Resolver::new(Rc::clone(self.arx.get_value_storage())),
-                            )
+                            .get_finder(self.arx.get_entry_storage())
                             .unwrap();
                         let entry = finder.get_entry(idx).unwrap();
                         let entry = Entry::new(idx, entry, Rc::clone(self.arx.get_value_storage()));
