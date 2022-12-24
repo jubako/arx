@@ -24,7 +24,7 @@ impl<'a> ArxOperator for Extractor<'a> {
         Ok(())
     }
 
-    fn on_file(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()> {
+    fn on_file(&self, current_path: &mut PathBuf, entry: &FileEntry) -> jbk::Result<()> {
         current_path.push(entry.get_path()?);
         let content_address = entry.get_content_address();
         let reader = self.container.get_reader(&content_address)?;
@@ -34,7 +34,7 @@ impl<'a> ArxOperator for Extractor<'a> {
         Ok(())
     }
 
-    fn on_link(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()> {
+    fn on_link(&self, current_path: &mut PathBuf, entry: &LinkEntry) -> jbk::Result<()> {
         current_path.push(entry.get_path()?);
         let target = entry.get_target_link()?;
         symlink(target, &current_path)?;
@@ -42,13 +42,13 @@ impl<'a> ArxOperator for Extractor<'a> {
         Ok(())
     }
 
-    fn on_directory_enter(&self, current_path: &mut PathBuf, entry: &Entry) -> jbk::Result<()> {
+    fn on_directory_enter(&self, current_path: &mut PathBuf, entry: &DirEntry) -> jbk::Result<()> {
         current_path.push(entry.get_path()?);
         create_dir(&current_path)?;
         Ok(())
     }
 
-    fn on_directory_exit(&self, current_path: &mut PathBuf, _entry: &Entry) -> jbk::Result<()> {
+    fn on_directory_exit(&self, current_path: &mut PathBuf, _entry: &DirEntry) -> jbk::Result<()> {
         current_path.pop();
         Ok(())
     }
@@ -60,5 +60,5 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
 
     let index = arx.get_index_for_name("root")?;
     let op = Extractor::new(&arx);
-    runner.run(index.get_finder(arx.get_entry_storage())?, &op)
+    runner.run(index.get_finder(arx.get_entry_storage(), &arx.schema)?, &op)
 }
