@@ -247,6 +247,7 @@ impl LinkBuilder {
 
 pub struct Builder {
     value_storage: Rc<jbk::reader::ValueStorage>,
+    store: Rc<jbk::reader::EntryStore>,
     variant_id: jbk::reader::builder::Property<u8>,
     file_builder: FileBuilder,
     dir_builder: DirBuilder,
@@ -256,12 +257,13 @@ pub struct Builder {
 impl jbk::reader::builder::BuilderTrait for Builder {
     type Entry = Entry;
 
-    fn create_entry(&self, idx: jbk::EntryIdx, reader: &jbk::Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let resolver = jbk::reader::Resolver::new(Rc::clone(&self.value_storage));
-        Ok(match self.variant_id.create(reader)? {
-            0 => Entry::File(self.file_builder.create(idx, reader, resolver)?),
-            1 => Entry::Dir(self.dir_builder.create(idx, reader, resolver)?),
-            2 => Entry::Link(self.link_builder.create(idx, reader, resolver)?),
+        let reader = self.store.get_entry_reader(idx);
+        Ok(match self.variant_id.create(&reader)? {
+            0 => Entry::File(self.file_builder.create(idx, &reader, resolver)?),
+            1 => Entry::Dir(self.dir_builder.create(idx, &reader, resolver)?),
+            2 => Entry::Link(self.link_builder.create(idx, &reader, resolver)?),
             _ => unreachable!(),
         })
     }
@@ -281,13 +283,15 @@ impl Schema {
 
 impl jbk::reader::schema::SchemaTrait for Schema {
     type Builder = Builder;
-    fn check_layout(&self, layout: &jbk::reader::layout::Layout) -> jbk::Result<Self::Builder> {
+    fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Self::Builder> {
+        let layout = store.layout();
         assert_eq!(layout.variants.len(), 3);
         let file_builder = FileBuilder::new_from_layout(&layout.variants[0])?;
         let dir_builder = DirBuilder::new_from_layout(&layout.variants[1])?;
         let link_builder = LinkBuilder::new_from_layout(&layout.variants[2])?;
         Ok(Builder {
             value_storage: Rc::clone(&self.value_storage),
+            store,
             variant_id: jbk::reader::builder::Property::new(jbk::Offset::zero()),
             file_builder,
             dir_builder,
@@ -317,12 +321,13 @@ impl<'resolver, 'builder> EntryCompare<'resolver, 'builder> {
     }
 }
 
-impl jbk::reader::CompareTrait for EntryCompare<'_, '_> {
-    fn compare(&self, reader: &jbk::Reader) -> jbk::Result<std::cmp::Ordering> {
-        let entry_path = match self.builder.variant_id.create(reader)? {
-            0 => self.builder.file_builder.path.create(reader)?,
-            1 => self.builder.dir_builder.path.create(reader)?,
-            2 => self.builder.link_builder.path.create(reader)?,
+impl jbk::reader::CompareTrait<Schema> for EntryCompare<'_, '_> {
+    fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
+        let reader = self.builder.store.get_entry_reader(idx);
+        let entry_path = match self.builder.variant_id.create(&reader)? {
+            0 => self.builder.file_builder.path.create(&reader)?,
+            1 => self.builder.dir_builder.path.create(&reader)?,
+            2 => self.builder.link_builder.path.create(&reader)?,
             _ => unreachable!(),
         };
         self.resolver.compare_array(&entry_path, &self.path_value)
@@ -330,7 +335,7 @@ impl jbk::reader::CompareTrait for EntryCompare<'_, '_> {
 }
 
 pub struct ReadEntry<'finder> {
-    finder: &'finder jbk::reader::Finder<Schema>,
+    finder: &'finder jbk::reader::Finder<'finder, Schema>,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
@@ -432,7 +437,7 @@ impl<'a> ArxRunner<'a> {
                 Entry::Dir(e) => {
                     op.on_directory_enter(&mut self.current_path, &e)?;
                     let finder = jbk::reader::Finder::new(
-                        Rc::clone(finder.get_store()),
+                        finder.builder(),
                         e.get_first_child(),
                         e.get_nb_children(),
                     );

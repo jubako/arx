@@ -1,6 +1,6 @@
-use crate::common::{Arx, Entry, EntryCompare, ReadEntry, Schema};
+use crate::common::{Arx, Builder, Entry, EntryCompare, ReadEntry, Schema};
+use jbk::reader::schema::SchemaTrait;
 use jubako as jbk;
-//use jbk::reader::Finder;
 use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;
@@ -139,6 +139,7 @@ struct ArxFs<'a> {
     arx: Arx,
     resolver: jbk::reader::Resolver,
     entry_index: jbk::reader::Index,
+    builder: Builder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<jbk::EntryIdx, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
@@ -148,10 +149,14 @@ impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
         let entry_index = arx.get_index_for_name("entries")?;
+        let builder = arx
+            .schema
+            .create_builder(entry_index.get_store(arx.get_entry_storage())?)?;
         Ok(Self {
             arx,
             resolver,
             entry_index,
+            builder,
             resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             stats,
@@ -159,9 +164,7 @@ impl<'a> ArxFs<'a> {
     }
 
     pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
-        let finder = self
-            .entry_index
-            .get_finder(self.arx.get_entry_storage(), &self.arx.schema)?;
+        let finder: jbk::reader::Finder<Schema> = self.entry_index.get_finder(&self.builder)?;
         finder.get_entry(idx)
     }
 
@@ -169,17 +172,14 @@ impl<'a> ArxFs<'a> {
         match ino.try_into() {
             Err(_) => {
                 let index = self.arx.get_index_for_name("root")?;
-                Ok(index.get_finder(self.arx.get_entry_storage(), &self.arx.schema)?)
+                Ok(index.get_finder(&self.builder)?)
             }
             Ok(idx) => {
                 let entry = self.get_entry(idx)?;
                 if let Entry::Dir(e) = entry {
                     let offset = e.get_first_child();
                     let count = e.get_nb_children();
-                    let store = self
-                        .entry_index
-                        .get_store(self.arx.get_entry_storage(), &self.arx.schema)?;
-                    Ok(jbk::reader::Finder::new(Rc::clone(&store), offset, count))
+                    Ok(jbk::reader::Finder::new(&self.builder, offset, count))
                 } else {
                     Err("No at directory".to_string().into())
                 }
@@ -232,8 +232,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             Some(idx) => *idx,
             None => {
                 let finder = self.get_finder(parent).unwrap();
-                let comparator =
-                    EntryCompare::new(&self.resolver, &finder.get_store().builder, name);
+                let comparator = EntryCompare::new(&self.resolver, &self.builder, name);
                 let idx = finder
                     .find(&comparator)
                     .unwrap()
@@ -249,10 +248,8 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let finder = self
-                            .entry_index
-                            .get_finder(self.arx.get_entry_storage(), &self.arx.schema)
-                            .unwrap();
+                        let finder: jbk::reader::Finder<Schema> =
+                            self.entry_index.get_finder(&self.builder).unwrap();
                         let entry = finder.get_entry(idx).unwrap();
                         let attr = entry.to_fillattr(&self.arx).unwrap();
                         self.attr_cache.push(idx, attr);
