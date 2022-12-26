@@ -7,7 +7,6 @@ use std::cmp::min;
 use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
-use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -197,8 +196,7 @@ impl Entry {
                 fuse::FileType::Directory,
             ),
             Self::File(e) => {
-                let content_address = e.get_content_address();
-                let reader = container.get_reader(&content_address)?;
+                let reader = container.get_reader(e.get_content_address())?;
                 let size = reader.size();
                 (size.into_u64(), fuse::FileType::RegularFile)
             }
@@ -234,11 +232,8 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
             Some(idx) => *idx,
             None => {
                 let finder = self.get_finder(parent).unwrap();
-                let comparator = jbk::reader::PropertyCompare::new(
-                    self.resolver.clone(),
-                    jbk::PropertyIdx::from(0),
-                    jbk::reader::Value::Array(name.to_os_string().into_vec()),
-                );
+                let comparator =
+                    EntryCompare::new(&self.resolver, &finder.get_store().builder, name);
                 let idx = finder
                     .find(&comparator)
                     .unwrap()
@@ -359,8 +354,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let entry = self.get_entry(idx).unwrap();
                 match &entry {
                     Entry::File(e) => {
-                        let content_address = e.get_content_address();
-                        let reader = self.arx.get_reader(&content_address).unwrap();
+                        let reader = self.arx.get_reader(e.get_content_address()).unwrap();
                         let mut stream =
                             reader.create_stream_from(jbk::Offset::new(offset.try_into().unwrap()));
                         let size = min(size as u64, stream.size().into_u64());

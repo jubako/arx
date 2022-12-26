@@ -296,28 +296,36 @@ impl jbk::reader::schema::SchemaTrait for Schema {
     }
 }
 
-pub struct EntryCompare {
-    resolver: Rc<jbk::reader::Resolver>,
+pub struct EntryCompare<'resolver, 'builder> {
+    resolver: &'resolver jbk::reader::Resolver,
+    builder: &'builder Builder,
     path_value: Vec<u8>,
 }
 
-impl EntryCompare {
-    pub fn new(resolver: Rc<jbk::reader::Resolver>, component: &OsStr) -> Self {
+impl<'resolver, 'builder> EntryCompare<'resolver, 'builder> {
+    pub fn new(
+        resolver: &'resolver jbk::reader::Resolver,
+        builder: &'builder Builder,
+        component: &OsStr,
+    ) -> Self {
         let path_value = component.to_os_string().into_vec();
         Self {
             resolver,
+            builder,
             path_value,
         }
     }
 }
 
-impl jbk::reader::CompareTrait<Entry> for EntryCompare {
-    fn compare(&self, e: &Entry) -> jbk::Result<std::cmp::Ordering> {
-        match e {
-            Entry::Dir(e) => self.resolver.compare_array(&e.path, &self.path_value),
-            Entry::File(e) => self.resolver.compare_array(&e.path, &self.path_value),
-            Entry::Link(e) => self.resolver.compare_array(&e.path, &self.path_value),
-        }
+impl jbk::reader::CompareTrait for EntryCompare<'_, '_> {
+    fn compare(&self, reader: &jbk::Reader) -> jbk::Result<std::cmp::Ordering> {
+        let entry_path = match self.builder.variant_id.create(reader)? {
+            0 => self.builder.file_builder.path.create(reader)?,
+            1 => self.builder.dir_builder.path.create(reader)?,
+            2 => self.builder.link_builder.path.create(reader)?,
+            _ => unreachable!(),
+        };
+        self.resolver.compare_array(&entry_path, &self.path_value)
     }
 }
 
@@ -412,8 +420,8 @@ impl<'a> ArxRunner<'a> {
         op.on_stop(&mut self.current_path)
     }
 
-    fn _run<'s>(
-        &'s mut self,
+    fn _run(
+        &mut self,
         finder: jbk::reader::Finder<Schema>,
         op: &dyn ArxOperator,
     ) -> jbk::Result<()> {
@@ -424,7 +432,7 @@ impl<'a> ArxRunner<'a> {
                 Entry::Dir(e) => {
                     op.on_directory_enter(&mut self.current_path, &e)?;
                     let finder = jbk::reader::Finder::new(
-                        finder.get_store(),
+                        Rc::clone(finder.get_store()),
                         e.get_first_child(),
                         e.get_nb_children(),
                     );

@@ -1,9 +1,6 @@
 use crate::common::{Entry, EntryCompare, Schema};
 use jbk::reader::EntryStoreTrait;
 use jubako as jbk;
-//use jbk::reader::Finder;
-//use std::ffi::OsStr;
-use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -35,11 +32,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                 }
             }
         };
-        let comparator = jbk::reader::PropertyCompare::new(
-            resolver.clone(),
-            jbk::PropertyIdx::from(0),
-            jbk::reader::Value::Array(component.to_os_string().into_vec()),
-        );
+        let comparator = EntryCompare::new(&resolver, &store.builder, component);
         let found = finder.find(&comparator)?;
         match found {
             None => return Err("Cannot found entry".to_string().into()),
@@ -54,8 +47,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         match entry {
             Entry::Dir(_) => Err("Found directory".to_string().into()),
             Entry::File(e) => {
-                let content_address = e.get_content_address();
-                let reader = container.get_reader(&content_address)?;
+                let reader = container.get_reader(e.get_content_address())?;
                 std::io::copy(
                     &mut reader.create_stream_all(),
                     &mut std::io::stdout().lock(),
