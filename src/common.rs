@@ -203,15 +203,16 @@ impl jbk::reader::schema::SchemaTrait for Schema {
     type Builder = Builder;
     fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Self::Builder> {
         let layout = store.layout();
-        assert_eq!(layout.variants.len(), 3);
-        let path_property = (&layout.common_variant.properties[0]).try_into()?;
-        let parent_property = (&layout.common_variant.properties[1]).try_into()?;
+        let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
+        assert_eq!(variants.len(), 3);
+        let path_property = (&layout.common[0]).try_into()?;
+        let parent_property = (&layout.common[1]).try_into()?;
         let variant_id_property =
-            jbk::reader::builder::Property::new(layout.variant_id_offset.unwrap());
-        let file_content_address_property = (&layout.variants[0].properties[0]).try_into()?;
-        let dir_first_child_property = (&layout.variants[1].properties[0]).try_into()?;
-        let dir_nb_children_property = (&layout.variants[1].properties[1]).try_into()?;
-        let link_target_property = (&layout.variants[2].properties[0]).try_into()?;
+            jbk::reader::builder::Property::new(*variant_offset);
+        let file_content_address_property = (&variants[0][0]).try_into()?;
+        let dir_first_child_property = (&variants[1][0]).try_into()?;
+        let dir_nb_children_property = (&variants[1][1]).try_into()?;
+        let link_target_property = (&variants[2][0]).try_into()?;
         Ok(Builder {
             value_storage: Rc::clone(&self.value_storage),
             store,
