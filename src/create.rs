@@ -258,10 +258,10 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
-                        jbk::creator::Value::Content(jbk::creator::Content::from((
+                        jbk::creator::Value::Content(jbk::ContentAddress::new(
                             jbk::PackId::from(1),
                             content_id,
-                        ))),
+                        )),
                     ],
                 );
                 self.entry_count += 1;
