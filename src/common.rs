@@ -41,7 +41,7 @@ pub struct FileEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
-    content_address: jbk::reader::Content,
+    content_address: jbk::reader::ContentAddress,
     resolver: jbk::reader::Resolver,
 }
 
@@ -60,8 +60,8 @@ impl FileEntry {
         }
     }
 
-    pub fn get_content_address(&self) -> &jbk::reader::Content {
-        &self.content_address
+    pub fn get_content_address(&self) -> jbk::reader::ContentAddress {
+        self.content_address
     }
 }
 
@@ -207,8 +207,7 @@ impl jbk::reader::schema::SchemaTrait for Schema {
         assert_eq!(variants.len(), 3);
         let path_property = (&layout.common[0]).try_into()?;
         let parent_property = (&layout.common[1]).try_into()?;
-        let variant_id_property =
-            jbk::reader::builder::Property::new(*variant_offset);
+        let variant_id_property = jbk::reader::builder::Property::new(*variant_offset);
         let file_content_address_property = (&variants[0][0]).try_into()?;
         let dir_first_child_property = (&variants[1][0]).try_into()?;
         let dir_nb_children_property = (&variants[1][1]).try_into()?;
