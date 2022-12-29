@@ -65,43 +65,6 @@ impl FileEntry {
     }
 }
 
-struct FileBuilder {
-    path: jbk::reader::builder::ArrayProperty,
-    parent: jbk::reader::builder::IntProperty,
-    content_address: jbk::reader::builder::ContentProperty,
-}
-
-impl FileBuilder {
-    pub fn create(
-        &self,
-        idx: jbk::EntryIdx,
-        reader: &jbk::Reader,
-        resolver: jbk::reader::Resolver,
-    ) -> jbk::Result<FileEntry> {
-        let path = self.path.create(reader)?;
-        let parent = (self.parent.create(reader)? as u32).into();
-        let content_address = self.content_address.create(reader)?;
-        Ok(FileEntry {
-            idx,
-            path,
-            parent,
-            content_address,
-            resolver,
-        })
-    }
-
-    pub fn new_from_layout(layout: &jbk::reader::layout::Variant) -> jbk::Result<Self> {
-        let path = (&layout.properties[0]).try_into()?;
-        let parent = (&layout.properties[1]).try_into()?;
-        let content_address = (&layout.properties[2]).try_into()?;
-        Ok(Self {
-            path,
-            parent,
-            content_address,
-        })
-    }
-}
-
 pub struct DirEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
@@ -132,48 +95,6 @@ impl DirEntry {
 
     pub fn get_nb_children(&self) -> jbk::EntryCount {
         self.nb_children
-    }
-}
-
-struct DirBuilder {
-    path: jbk::reader::builder::ArrayProperty,
-    parent: jbk::reader::builder::IntProperty,
-    first_child: jbk::reader::builder::IntProperty,
-    nb_children: jbk::reader::builder::IntProperty,
-}
-
-impl DirBuilder {
-    pub fn create(
-        &self,
-        idx: jbk::EntryIdx,
-        reader: &jbk::Reader,
-        resolver: jbk::reader::Resolver,
-    ) -> jbk::Result<DirEntry> {
-        let path = self.path.create(reader)?;
-        let parent = (self.parent.create(reader)? as u32).into();
-        let first_child = (self.first_child.create(reader)? as u32).into();
-        let nb_children = (self.nb_children.create(reader)? as u32).into();
-        Ok(DirEntry {
-            idx,
-            path,
-            parent,
-            first_child,
-            nb_children,
-            resolver,
-        })
-    }
-
-    pub fn new_from_layout(layout: &jbk::reader::layout::Variant) -> jbk::Result<Self> {
-        let path = (&layout.properties[0]).try_into()?;
-        let parent = (&layout.properties[1]).try_into()?;
-        let first_child = (&layout.properties[2]).try_into()?;
-        let nb_children = (&layout.properties[3]).try_into()?;
-        Ok(Self {
-            path,
-            parent,
-            first_child,
-            nb_children,
-        })
     }
 }
 
@@ -208,50 +129,16 @@ impl LinkEntry {
     }
 }
 
-struct LinkBuilder {
-    path: jbk::reader::builder::ArrayProperty,
-    parent: jbk::reader::builder::IntProperty,
-    target_link: jbk::reader::builder::ArrayProperty,
-}
-
-impl LinkBuilder {
-    pub fn create(
-        &self,
-        idx: jbk::EntryIdx,
-        reader: &jbk::Reader,
-        resolver: jbk::reader::Resolver,
-    ) -> jbk::Result<LinkEntry> {
-        let path = self.path.create(reader)?;
-        let parent = (self.parent.create(reader)? as u32).into();
-        let target = self.target_link.create(reader)?;
-        Ok(LinkEntry {
-            idx,
-            path,
-            parent,
-            target,
-            resolver,
-        })
-    }
-
-    pub fn new_from_layout(layout: &jbk::reader::layout::Variant) -> jbk::Result<Self> {
-        let path = (&layout.properties[0]).try_into()?;
-        let parent = (&layout.properties[1]).try_into()?;
-        let target_link = (&layout.properties[2]).try_into()?;
-        Ok(Self {
-            path,
-            parent,
-            target_link,
-        })
-    }
-}
-
 pub struct Builder {
     value_storage: Rc<jbk::reader::ValueStorage>,
     store: Rc<jbk::reader::EntryStore>,
-    variant_id: jbk::reader::builder::Property<u8>,
-    file_builder: FileBuilder,
-    dir_builder: DirBuilder,
-    link_builder: LinkBuilder,
+    path_property: jbk::reader::builder::ArrayProperty,
+    parent_property: jbk::reader::builder::IntProperty,
+    variant_id_property: jbk::reader::builder::Property<u8>,
+    file_content_address_property: jbk::reader::builder::ContentProperty,
+    dir_first_child_property: jbk::reader::builder::IntProperty,
+    dir_nb_children_property: jbk::reader::builder::IntProperty,
+    link_target_property: jbk::reader::builder::ArrayProperty,
 }
 
 impl jbk::reader::builder::BuilderTrait for Builder {
@@ -260,10 +147,41 @@ impl jbk::reader::builder::BuilderTrait for Builder {
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let resolver = jbk::reader::Resolver::new(Rc::clone(&self.value_storage));
         let reader = self.store.get_entry_reader(idx);
-        Ok(match self.variant_id.create(&reader)? {
-            0 => Entry::File(self.file_builder.create(idx, &reader, resolver)?),
-            1 => Entry::Dir(self.dir_builder.create(idx, &reader, resolver)?),
-            2 => Entry::Link(self.link_builder.create(idx, &reader, resolver)?),
+        let path = self.path_property.create(&reader)?;
+        let parent = (self.parent_property.create(&reader)? as u32).into();
+        Ok(match self.variant_id_property.create(&reader)? {
+            0 => {
+                let content_address = self.file_content_address_property.create(&reader)?;
+                Entry::File(FileEntry {
+                    idx,
+                    path,
+                    parent,
+                    content_address,
+                    resolver,
+                })
+            }
+            1 => {
+                let first_child = (self.dir_first_child_property.create(&reader)? as u32).into();
+                let nb_children = (self.dir_nb_children_property.create(&reader)? as u32).into();
+                Entry::Dir(DirEntry {
+                    idx,
+                    path,
+                    parent,
+                    first_child,
+                    nb_children,
+                    resolver,
+                })
+            }
+            2 => {
+                let target = self.link_target_property.create(&reader)?;
+                Entry::Link(LinkEntry {
+                    idx,
+                    path,
+                    parent,
+                    target,
+                    resolver,
+                })
+            }
             _ => unreachable!(),
         })
     }
@@ -285,17 +203,26 @@ impl jbk::reader::schema::SchemaTrait for Schema {
     type Builder = Builder;
     fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Self::Builder> {
         let layout = store.layout();
-        assert_eq!(layout.variants.len(), 3);
-        let file_builder = FileBuilder::new_from_layout(&layout.variants[0])?;
-        let dir_builder = DirBuilder::new_from_layout(&layout.variants[1])?;
-        let link_builder = LinkBuilder::new_from_layout(&layout.variants[2])?;
+        let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
+        assert_eq!(variants.len(), 3);
+        let path_property = (&layout.common[0]).try_into()?;
+        let parent_property = (&layout.common[1]).try_into()?;
+        let variant_id_property =
+            jbk::reader::builder::Property::new(*variant_offset);
+        let file_content_address_property = (&variants[0][0]).try_into()?;
+        let dir_first_child_property = (&variants[1][0]).try_into()?;
+        let dir_nb_children_property = (&variants[1][1]).try_into()?;
+        let link_target_property = (&variants[2][0]).try_into()?;
         Ok(Builder {
             value_storage: Rc::clone(&self.value_storage),
             store,
-            variant_id: jbk::reader::builder::Property::new(jbk::Offset::zero()),
-            file_builder,
-            dir_builder,
-            link_builder,
+            path_property,
+            parent_property,
+            variant_id_property,
+            file_content_address_property,
+            dir_first_child_property,
+            dir_nb_children_property,
+            link_target_property,
         })
     }
 }
@@ -324,12 +251,7 @@ impl<'resolver, 'builder> EntryCompare<'resolver, 'builder> {
 impl jbk::reader::CompareTrait<Schema> for EntryCompare<'_, '_> {
     fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
         let reader = self.builder.store.get_entry_reader(idx);
-        let entry_path = match self.builder.variant_id.create(&reader)? {
-            0 => self.builder.file_builder.path.create(&reader)?,
-            1 => self.builder.dir_builder.path.create(&reader)?,
-            2 => self.builder.link_builder.path.create(&reader)?,
-            _ => unreachable!(),
-        };
+        let entry_path = self.builder.path_property.create(&reader)?;
         self.resolver.compare_array(&entry_path, &self.path_value)
     }
 }

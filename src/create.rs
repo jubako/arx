@@ -130,27 +130,26 @@ impl Creator {
 
         let path_store = directory_pack.create_value_store(jbk::creator::ValueStoreKind::Plain);
 
-        let entry_def = layout::Entry::new(vec![
-            // File
-            layout::Variant::new(vec![
-                layout::Property::VLArray(1, Rc::clone(&path_store)),
-                layout::Property::new_int(), // index of the parent entry
-                layout::Property::ContentAddress,
+        let entry_def = layout::Entry::new(
+            // Common part
+            layout::CommonProperties::new(vec![
+                layout::Property::VLArray(1, Rc::clone(&path_store)), // the path
+                layout::Property::new_int(),                          // index of the parent entry
             ]),
-            // Directory
-            layout::Variant::new(vec![
-                layout::Property::VLArray(1, Rc::clone(&path_store)),
-                layout::Property::new_int(), // index of the parent entry
-                layout::Property::new_int(), // index of the first entry
-                layout::Property::new_int(), // nb entries in the directory
-            ]),
-            // Link
-            layout::Variant::new(vec![
-                layout::Property::VLArray(1, Rc::clone(&path_store)),
-                layout::Property::new_int(), // index of the parent entry
-                layout::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
-            ]),
-        ]);
+            vec![
+                // File
+                layout::VariantProperties::new(vec![layout::Property::ContentAddress]),
+                // Directory
+                layout::VariantProperties::new(vec![
+                    layout::Property::new_int(), // index of the first entry
+                    layout::Property::new_int(), // nb entries in the directory
+                ]),
+                // Link
+                layout::VariantProperties::new(vec![
+                    layout::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
+                ]),
+            ],
+        );
 
         let entry_store_id = directory_pack.create_entry_store(entry_def);
 
@@ -238,7 +237,7 @@ impl Creator {
                 }
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
-                    1,
+                    Some(1),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
@@ -255,7 +254,7 @@ impl Creator {
                 let content_id = self.content_pack.add_content(&mut file)?;
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
-                    0,
+                    Some(0),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
@@ -271,7 +270,7 @@ impl Creator {
                 let target = fs::read_link(&entry.path)?;
                 let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
                 entry_store.add_entry(
-                    2,
+                    Some(2),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
