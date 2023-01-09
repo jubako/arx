@@ -439,9 +439,10 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                             Entry::Link(_) => fuse::FileType::Symlink,
                         };
                         // We remove "." and ".."
-                        let entry_idx = finder.offset().into_u64() + (i as u64 - 2);
+                        let entry_idx = finder.offset() + jbk::EntryIdx::from(i as u32 - 2);
+                        let ino = Ino::from(entry_idx);
                         if reply.add(
-                            entry_idx,
+                            ino.get(),
                             /* offset =*/ i,
                             kind,
                             entry.get_path().unwrap(),
