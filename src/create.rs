@@ -94,7 +94,7 @@ impl Entry {
 pub struct Creator {
     content_pack: jbk::creator::ContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
-    entry_store_id: jbk::EntryStoreIdx,
+    entry_store: jbk::creator::EntryStore,
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
     queue: VecDeque<Entry>,
@@ -151,12 +151,12 @@ impl Creator {
             ],
         );
 
-        let entry_store_id = directory_pack.create_entry_store(entry_def);
+        let entry_store = jbk::creator::EntryStore::new(entry_def);
 
         Self {
             content_pack,
             directory_pack,
-            entry_store_id,
+            entry_store,
             entry_count: 0.into(),
             root_count: 0.into(),
             queue: VecDeque::<Entry>::new(),
@@ -164,11 +164,12 @@ impl Creator {
     }
 
     fn finalize(mut self, outfile: PathBuf) -> jbk::Result<()> {
+        let entry_store_id = self.directory_pack.add_entry_store(self.entry_store);
         self.directory_pack.create_index(
             "entries",
             jubako::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
-            self.entry_store_id,
+            entry_store_id,
             self.entry_count,
             jubako::EntryIdx::from(0),
         );
@@ -176,7 +177,7 @@ impl Creator {
             "root",
             jubako::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
-            self.entry_store_id,
+            entry_store_id,
             self.root_count,
             jubako::EntryIdx::from(0),
         );
@@ -224,7 +225,7 @@ impl Creator {
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path =
             jbk::creator::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
-        match entry.kind {
+        let entry = match entry.kind {
             EntryKind::Dir => {
                 let mut nb_entries = 0;
                 let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
@@ -235,26 +236,23 @@ impl Creator {
                     ));
                     nb_entries += 1;
                 }
-                let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
-                entry_store.add_entry(
-                    Some(1),
+                Box::new(jbk::creator::BasicEntry::new(
+                    Some(1.into()),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
                         jbk::creator::Value::Unsigned(first_entry.into_u64()),
                         jbk::creator::Value::Unsigned(nb_entries),
                     ],
-                );
-                self.entry_count += 1;
+                ))
             }
             EntryKind::File => {
                 let file = fs::File::open(&entry.path)?;
                 let mut file =
                     jbk::creator::Stream::new(jbk::creator::FileSource::new(file), jbk::End::None);
                 let content_id = self.content_pack.add_content(&mut file)?;
-                let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
-                entry_store.add_entry(
-                    Some(0),
+                Box::new(jbk::creator::BasicEntry::new(
+                    Some(0.into()),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
@@ -263,24 +261,23 @@ impl Creator {
                             content_id,
                         )),
                     ],
-                );
-                self.entry_count += 1;
+                ))
             }
             EntryKind::Link => {
                 let target = fs::read_link(&entry.path)?;
-                let entry_store = self.directory_pack.get_entry_store(self.entry_store_id);
-                entry_store.add_entry(
-                    Some(2),
+                Box::new(jbk::creator::BasicEntry::new(
+                    Some(2.into()),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
                         jbk::creator::Value::Array(target.into_os_string().into_vec()),
                     ],
-                );
-                self.entry_count += 1;
+                ))
             }
             EntryKind::Other => unreachable!(),
-        }
+        };
+        self.entry_store.add_entry(entry);
+        self.entry_count += 1;
         Ok(())
     }
 }
