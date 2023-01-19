@@ -1,14 +1,7 @@
-mod common;
-mod create;
-mod dump;
-mod extract;
-mod list;
-mod mount;
-
 use jubako as jbk;
 
 use clap::{Args, Parser, Subcommand};
-use create::{Creator, Entry};
+use arx::{Creator, Entry};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -108,7 +101,7 @@ fn main() -> jbk::Result<()> {
                 println!("Listing entries in archive {:?}", list_cmd.infile);
             }
 
-            list::list(list_cmd.infile)
+            arx::list(list_cmd.infile)
         }
 
         Commands::Dump(dump_cmd) => {
@@ -119,7 +112,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            dump::dump(dump_cmd.infile, dump_cmd.path.into())
+            arx::dump(dump_cmd.infile, dump_cmd.path.into())
         }
 
         Commands::Extract(extract_cmd) => {
@@ -130,7 +123,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            extract::extract(extract_cmd.infile, extract_cmd.outdir)
+            arx::extract(extract_cmd.infile, extract_cmd.outdir)
         }
 
         Commands::Mount(mount_cmd) => {
@@ -141,7 +134,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            mount::mount(mount_cmd.infile, mount_cmd.mountdir)
+            arx::mount(mount_cmd.infile, mount_cmd.mountdir)
         }
     }
 }
