@@ -1,6 +1,6 @@
 use jubako as jbk;
 
-use jbk::creator::layout;
+use jbk::creator::schema;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
@@ -94,7 +94,7 @@ impl Entry {
 pub struct Creator {
     content_pack: jbk::creator::ContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
-    entry_store: jbk::creator::EntryStore,
+    entry_store: Box<jbk::creator::EntryStore<jbk::creator::BasicEntry>>,
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
     queue: VecDeque<Entry>,
@@ -130,28 +130,28 @@ impl Creator {
 
         let path_store = directory_pack.create_value_store(jbk::creator::ValueStoreKind::Plain);
 
-        let entry_def = layout::Entry::new(
+        let entry_def = schema::Schema::new(
             // Common part
-            layout::CommonProperties::new(vec![
-                layout::Property::VLArray(1, Rc::clone(&path_store)), // the path
-                layout::Property::new_int(),                          // index of the parent entry
+            schema::CommonProperties::new(vec![
+                schema::Property::VLArray(1, Rc::clone(&path_store)), // the path
+                schema::Property::new_int(),                          // index of the parent entry
             ]),
             vec![
                 // File
-                layout::VariantProperties::new(vec![layout::Property::ContentAddress]),
+                schema::VariantProperties::new(vec![schema::Property::ContentAddress]),
                 // Directory
-                layout::VariantProperties::new(vec![
-                    layout::Property::new_int(), // index of the first entry
-                    layout::Property::new_int(), // nb entries in the directory
+                schema::VariantProperties::new(vec![
+                    schema::Property::new_int(), // index of the first entry
+                    schema::Property::new_int(), // nb entries in the directory
                 ]),
                 // Link
-                layout::VariantProperties::new(vec![
-                    layout::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
+                schema::VariantProperties::new(vec![
+                    schema::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
                 ]),
             ],
         );
 
-        let entry_store = jbk::creator::EntryStore::new(entry_def);
+        let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
 
         Self {
             content_pack,
@@ -236,7 +236,8 @@ impl Creator {
                     ));
                     nb_entries += 1;
                 }
-                Box::new(jbk::creator::BasicEntry::new(
+                jbk::creator::BasicEntry::new(
+                    &self.entry_store.schema,
                     Some(1.into()),
                     vec![
                         entry_path,
@@ -244,14 +245,15 @@ impl Creator {
                         jbk::creator::Value::Unsigned(first_entry.into_u64()),
                         jbk::creator::Value::Unsigned(nb_entries),
                     ],
-                ))
+                )
             }
             EntryKind::File => {
                 let file = fs::File::open(&entry.path)?;
                 let mut file =
                     jbk::creator::Stream::new(jbk::creator::FileSource::new(file), jbk::End::None);
                 let content_id = self.content_pack.add_content(&mut file)?;
-                Box::new(jbk::creator::BasicEntry::new(
+                jbk::creator::BasicEntry::new(
+                    &self.entry_store.schema,
                     Some(0.into()),
                     vec![
                         entry_path,
@@ -261,18 +263,19 @@ impl Creator {
                             content_id,
                         )),
                     ],
-                ))
+                )
             }
             EntryKind::Link => {
                 let target = fs::read_link(&entry.path)?;
-                Box::new(jbk::creator::BasicEntry::new(
+                jbk::creator::BasicEntry::new(
+                    &self.entry_store.schema,
                     Some(2.into()),
                     vec![
                         entry_path,
                         jbk::creator::Value::Unsigned(entry.parent.into_u64()),
                         jbk::creator::Value::Array(target.into_os_string().into_vec()),
                     ],
-                ))
+                )
             }
             EntryKind::Other => unreachable!(),
         };
