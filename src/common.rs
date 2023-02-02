@@ -318,8 +318,8 @@ impl Arx {
         Ok(Self { container, schema })
     }
 
-    pub fn walk<'s, 'finder>(
-        &'s self,
+    pub fn walk<'finder>(
+        &self,
         finder: &'finder jbk::reader::Finder<Schema>,
     ) -> ReadEntry<'finder> {
         ReadEntry::new(finder)
