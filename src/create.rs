@@ -1,6 +1,6 @@
 use jubako as jbk;
 
-use jbk::creator::schema;
+use jbk::creator::{schema, EntryTrait};
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
@@ -20,11 +20,11 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
-    parent: jbk::EntryIdx,
+    parent: jbk::Bound<jbk::EntryIdx>,
 }
 
 impl Entry {
-    pub fn new(path: PathBuf, parent: jbk::EntryIdx) -> jbk::Result<Self> {
+    pub fn new(path: PathBuf, parent: jbk::Bound<jbk::EntryIdx>) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
@@ -53,7 +53,7 @@ impl Entry {
         })
     }
 
-    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::EntryIdx) -> Self {
+    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Bound<jbk::EntryIdx>) -> Self {
         let path = dir_entry.path();
         if let Ok(file_type) = dir_entry.file_type() {
             if file_type.is_dir() {
@@ -94,7 +94,7 @@ impl Entry {
 pub struct Creator {
     content_pack: jbk::creator::ContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
-    entry_store: Box<jbk::creator::EntryStore<jbk::creator::BasicEntry>>,
+    entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
     queue: VecDeque<Entry>,
@@ -225,39 +225,38 @@ impl Creator {
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path =
             jbk::creator::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
-        let entry = match entry.kind {
+        let entry = Box::new(match entry.kind {
             EntryKind::Dir => {
-                let mut nb_entries = 0;
+                let nb_entries = jbk::Vow::new(0_u64);
                 let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
-                for sub_entry in fs::read_dir(&entry.path)? {
-                    self.push_back(Entry::new_from_fs(
-                        sub_entry?,
-                        jbk::EntryIdx::from(self.entry_count.into_u32() + 1),
-                    ));
-                    nb_entries += 1;
-                }
-                jbk::creator::BasicEntry::new(
+                let jbk_entry = jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
                     Some(1.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
-                        jbk::creator::Value::Unsigned(first_entry.into_u64()),
-                        jbk::creator::Value::Unsigned(nb_entries),
+                        jbk::creator::Value::Unsigned(entry.parent.into()),
+                        jbk::creator::Value::Unsigned(first_entry.into_u64().into()),
+                        jbk::creator::Value::Unsigned(nb_entries.bind().into()),
                     ],
-                )
+                );
+                let mut entry_count = 0;
+                for sub_entry in fs::read_dir(&entry.path)? {
+                    self.push_back(Entry::new_from_fs(sub_entry?, jbk_entry.get_idx()));
+                    entry_count += 1;
+                }
+                nb_entries.fulfil(entry_count);
+                jbk_entry
             }
             EntryKind::File => {
-                let file = fs::File::open(&entry.path)?;
-                let mut file =
-                    jbk::creator::Stream::new(jbk::creator::FileSource::new(file), jbk::End::None);
-                let content_id = self.content_pack.add_content(&mut file)?;
-                jbk::creator::BasicEntry::new(
+                let content_id = self
+                    .content_pack
+                    .add_content(jbk::creator::FileSource::open(&entry.path)?.into())?;
+                jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
                     Some(0.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
+                        jbk::creator::Value::Unsigned(entry.parent.into()),
                         jbk::creator::Value::Content(jbk::ContentAddress::new(
                             jbk::PackId::from(1),
                             content_id,
@@ -267,18 +266,18 @@ impl Creator {
             }
             EntryKind::Link => {
                 let target = fs::read_link(&entry.path)?;
-                jbk::creator::BasicEntry::new(
+                jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
                     Some(2.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into_u64()),
+                        jbk::creator::Value::Unsigned(entry.parent.into()),
                         jbk::creator::Value::Array(target.into_os_string().into_vec()),
                     ],
                 )
             }
             EntryKind::Other => unreachable!(),
-        };
+        });
         self.entry_store.add_entry(entry);
         self.entry_count += 1;
         Ok(())

@@ -1,7 +1,7 @@
 use jubako as jbk;
 
-use clap::{Args, Parser, Subcommand};
 use arx::{Creator, Entry};
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -89,8 +89,9 @@ fn main() -> jbk::Result<()> {
 
             let mut creator = Creator::new(&create_cmd.outfile);
 
+            let root_parent = jbk::Vow::new(0.into());
             for infile in create_cmd.infiles {
-                creator.push_back(Entry::new(infile, jbk::EntryIdx::from(0))?);
+                creator.push_back(Entry::new(infile, root_parent.bind())?);
             }
 
             creator.run(create_cmd.outfile)
