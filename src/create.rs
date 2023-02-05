@@ -101,7 +101,7 @@ pub struct Creator {
 }
 
 impl Creator {
-    pub fn new<P: AsRef<Path>>(outfile: P) -> Self {
+    pub fn new<P: AsRef<Path>>(outfile: P) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let mut outfilename: OsString = outfile.file_name().unwrap().to_os_string();
         outfilename.push(".jbkc");
@@ -114,7 +114,7 @@ impl Creator {
             VENDOR_ID,
             jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
-        );
+        )?;
 
         outfilename = outfile.file_name().unwrap().to_os_string();
         outfilename.push(".jbkd");
@@ -153,14 +153,14 @@ impl Creator {
 
         let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
 
-        Self {
+        Ok(Self {
             content_pack,
             directory_pack,
             entry_store,
             entry_count: 0.into(),
             root_count: 0.into(),
             queue: VecDeque::<Entry>::new(),
-        }
+        })
     }
 
     fn finalize(mut self, outfile: PathBuf) -> jbk::Result<()> {
@@ -210,7 +210,6 @@ impl Creator {
     }
 
     pub fn run(mut self, outfile: PathBuf) -> jbk::Result<()> {
-        self.content_pack.start()?;
         self.root_count = (self.queue.len() as u32).into();
         while !self.queue.is_empty() {
             let entry = self.queue.pop_front().unwrap();

@@ -87,7 +87,7 @@ fn main() -> jbk::Result<()> {
                 println!("With files {:?}", create_cmd.infiles);
             }
 
-            let mut creator = Creator::new(&create_cmd.outfile);
+            let mut creator = Creator::new(&create_cmd.outfile)?;
 
             let root_parent = jbk::Vow::new(0.into());
             for infile in create_cmd.infiles {
