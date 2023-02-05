@@ -223,7 +223,7 @@ impl Creator {
 
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path =
-            jbk::creator::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
+            jbk::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
         let entry = Box::new(match entry.kind {
             EntryKind::Dir => {
                 let nb_entries = jbk::Vow::new(0_u64);
@@ -233,9 +233,9 @@ impl Creator {
                     Some(1.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into()),
-                        jbk::creator::Value::Unsigned(first_entry.into_u64().into()),
-                        jbk::creator::Value::Unsigned(nb_entries.bind().into()),
+                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned(first_entry.into_u64().into()),
+                        jbk::Value::Unsigned(nb_entries.bind().into()),
                     ],
                 );
                 let mut entry_count = 0;
@@ -255,8 +255,8 @@ impl Creator {
                     Some(0.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into()),
-                        jbk::creator::Value::Content(jbk::ContentAddress::new(
+                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Content(jbk::ContentAddress::new(
                             jbk::PackId::from(1),
                             content_id,
                         )),
@@ -270,8 +270,8 @@ impl Creator {
                     Some(2.into()),
                     vec![
                         entry_path,
-                        jbk::creator::Value::Unsigned(entry.parent.into()),
-                        jbk::creator::Value::Array(target.into_os_string().into_vec()),
+                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Array(target.into_os_string().into_vec()),
                     ],
                 )
             }
