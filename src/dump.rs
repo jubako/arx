@@ -25,7 +25,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let directory = container.get_directory_pack();
     let value_storage = directory.create_value_storage();
     let entry_storage = directory.create_entry_storage();
-    let index = directory.get_index_from_name("root")?;
+    let index = directory.get_index_from_name("arx_root")?;
     let builder = schema.create_builder(index.get_store(&entry_storage)?)?;
     let resolver = jbk::reader::Resolver::new(Rc::clone(&value_storage));
     let mut current_finder: jbk::reader::Finder<Schema> = index.get_finder(&builder)?;

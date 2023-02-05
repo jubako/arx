@@ -44,7 +44,7 @@ pub fn list<P: AsRef<Path>>(infile: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let mut runner = ArxRunner::new(&arx, PathBuf::with_capacity(2048));
 
-    let index = arx.get_index_for_name("root")?;
+    let index = arx.get_index_for_name("arx_root")?;
     let builder = arx
         .schema
         .create_builder(index.get_store(arx.get_entry_storage())?)?;
