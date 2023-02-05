@@ -33,7 +33,7 @@ fn main() -> ExitCode {
                         ExitCode::FAILURE
                     }
                     _ => {
-                        eprintln!("Error: {}", e);
+                        eprintln!("Error: {e}");
                         ExitCode::FAILURE
                     }
                 },

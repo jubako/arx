@@ -148,7 +148,7 @@ struct ArxFs<'a> {
 impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
-        let entry_index = arx.get_index_for_name("entries")?;
+        let entry_index = arx.get_index_for_name("arx_entries")?;
         let builder = arx
             .schema
             .create_builder(entry_index.get_store(arx.get_entry_storage())?)?;
@@ -171,7 +171,7 @@ impl<'a> ArxFs<'a> {
     pub fn get_finder(&self, ino: Ino) -> jbk::Result<jbk::reader::Finder<Schema>> {
         match ino.try_into() {
             Err(_) => {
-                let index = self.arx.get_index_for_name("root")?;
+                let index = self.arx.get_index_for_name("arx_root")?;
                 Ok(index.get_finder(&self.builder)?)
             }
             Ok(idx) => {
@@ -415,7 +415,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
         for i in offset..nb_entry {
             if i == 0 {
-                reply.add(ino.get(), i as i64, fuse::FileType::Directory, ".");
+                reply.add(ino.get(), i, fuse::FileType::Directory, ".");
             } else if i == 1 {
                 let parent_ino = match ino.try_into() {
                     Err(_) => ino,
@@ -427,7 +427,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                         }
                     }
                 };
-                reply.add(parent_ino.get(), i as i64, fuse::FileType::Directory, "..");
+                reply.add(parent_ino.get(), i, fuse::FileType::Directory, "..");
             } else {
                 match readentry.next() {
                     None => break,
@@ -480,6 +480,6 @@ pub fn mount<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
         .collect::<Vec<&OsStr>>();
     fuse::mount(arxfs, &outdir, &options)?;
 
-    println!("Stats:\n {}", stats);
+    println!("Stats:\n {stats}");
     Ok(())
 }
