@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -142,10 +143,17 @@ impl Creator {
             schema::CommonProperties::new(vec![
                 schema::Property::new_array(1, Rc::clone(&path_store)), // the path
                 schema::Property::new_uint(),                           // index of the parent entry
+                schema::Property::new_uint(),                           // owner
+                schema::Property::new_uint(),                           // group
+                schema::Property::new_uint(),                           // rights
+                schema::Property::new_uint(),                           // modification time
             ]),
             vec![
                 // File
-                schema::VariantProperties::new(vec![schema::Property::new_content_address()]),
+                schema::VariantProperties::new(vec![
+                    schema::Property::new_content_address(),
+                    schema::Property::new_uint(), // Size
+                ]),
                 // Directory
                 schema::VariantProperties::new(vec![
                     schema::Property::new_uint(), // index of the first entry
@@ -231,6 +239,7 @@ impl Creator {
     fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path =
             jbk::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
+        let metadata = fs::symlink_metadata(&entry.path)?;
         let entry = Box::new(match entry.kind {
             EntryKind::Dir => {
                 let nb_entries = jbk::Vow::new(0_u64);
@@ -241,6 +250,10 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
                         jbk::Value::Unsigned(first_entry.into_u64().into()),
                         jbk::Value::Unsigned(nb_entries.bind().into()),
                     ],
@@ -270,10 +283,15 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
                         jbk::Value::Content(jbk::ContentAddress::new(
                             jbk::PackId::from(1),
                             content_id,
                         )),
+                        jbk::Value::Unsigned(metadata.size().into()),
                     ],
                 )
             }
@@ -285,6 +303,10 @@ impl Creator {
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
+                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
                         jbk::Value::Array(target.into_os_string().into_vec()),
                     ],
                 )

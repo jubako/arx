@@ -169,32 +169,32 @@ impl<'a> ArxFs<'a> {
 }
 
 impl Entry {
-    fn to_fillattr(&self, container: &jbk::reader::Container) -> jbk::Result<fuse::FileAttr> {
+    fn to_fillattr(&self) -> jbk::Result<fuse::FileAttr> {
         let (size, kind) = match &self {
             Self::Dir(e) => (
                 (e.get_nb_children() + 1).into_u64() * 10,
                 fuse::FileType::Directory,
             ),
-            Self::File(e) => {
-                let reader = container.get_reader(e.get_content_address())?;
-                let size = reader.size();
-                (size.into_u64(), fuse::FileType::RegularFile)
-            }
+            Self::File(e) => (e.size().into_u64(), fuse::FileType::RegularFile),
             Self::Link(e) => (e.get_target_link()?.len() as u64, fuse::FileType::Symlink),
         };
+        let rigths = (self.rigths() as u16) & 0b1111_1111_0110_1101;
         Ok(fuse::FileAttr {
             ino: Ino::from(self.idx()).get(),
             size,
             kind,
             blocks: 1,
             atime: UNIX_EPOCH,
-            mtime: UNIX_EPOCH,
+            mtime: time::Timespec {
+                sec: self.mtime() as i64,
+                nsec: 0,
+            },
             ctime: UNIX_EPOCH,
             crtime: UNIX_EPOCH,
-            perm: 0o555,
+            perm: rigths,
             nlink: 2,
-            uid: 1000,
-            gid: 1000,
+            uid: self.owner(),
+            gid: self.group(),
             rdev: 0,
             flags: 0,
         })
@@ -229,7 +229,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     Some(attr) => attr,
                     None => {
                         let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                        let attr = entry.to_fillattr(&self.arx).unwrap();
+                        let attr = entry.to_fillattr().unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
                     }
@@ -268,7 +268,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     Some(attr) => attr,
                     None => {
                         let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                        let attr = entry.to_fillattr(&self.arx).unwrap();
+                        let attr = entry.to_fillattr().unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
                     }
