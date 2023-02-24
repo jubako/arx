@@ -141,15 +141,15 @@ impl Creator {
             // Common part
             schema::CommonProperties::new(vec![
                 schema::Property::new_array(1, Rc::clone(&path_store)), // the path
-                schema::Property::new_int(),                            // index of the parent entry
+                schema::Property::new_uint(),                           // index of the parent entry
             ]),
             vec![
                 // File
-                schema::VariantProperties::new(vec![schema::Property::ContentAddress]),
+                schema::VariantProperties::new(vec![schema::Property::new_content_address()]),
                 // Directory
                 schema::VariantProperties::new(vec![
-                    schema::Property::new_int(), // index of the first entry
-                    schema::Property::new_int(), // nb entries in the directory
+                    schema::Property::new_uint(), // index of the first entry
+                    schema::Property::new_uint(), // nb entries in the directory
                 ]),
                 // Link
                 schema::VariantProperties::new(vec![

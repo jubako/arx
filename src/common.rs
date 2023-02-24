@@ -1,4 +1,5 @@
-use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
+use jbk::reader::Range;
 use jubako as jbk;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStringExt;
@@ -42,13 +43,12 @@ pub struct FileEntry {
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
     content_address: jbk::reader::ContentAddress,
-    resolver: jbk::reader::Resolver,
 }
 
 impl FileEntry {
     pub fn get_path(&self) -> jbk::Result<String> {
         let mut path = Vec::with_capacity(125);
-        self.resolver.resolve_array_to_vec(&self.path, &mut path)?;
+        self.path.resolve_to_vec(&mut path)?;
         Ok(String::from_utf8(path)?)
     }
 
@@ -71,13 +71,12 @@ pub struct DirEntry {
     parent: jbk::EntryIdx,
     first_child: jbk::EntryIdx,
     nb_children: jbk::EntryCount,
-    resolver: jbk::reader::Resolver,
 }
 
 impl DirEntry {
     pub fn get_path(&self) -> jbk::Result<String> {
         let mut path = Vec::with_capacity(125);
-        self.resolver.resolve_array_to_vec(&self.path, &mut path)?;
+        self.path.resolve_to_vec(&mut path)?;
         Ok(String::from_utf8(path)?)
     }
 
@@ -98,18 +97,33 @@ impl DirEntry {
     }
 }
 
+impl From<&DirEntry> for jbk::EntryRange {
+    fn from(entry: &DirEntry) -> Self {
+        Self::new(entry.get_first_child(), entry.get_nb_children())
+    }
+}
+
+impl Range for DirEntry {
+    fn offset(&self) -> jbk::EntryIdx {
+        self.get_first_child()
+    }
+
+    fn count(&self) -> jbk::EntryCount {
+        self.get_nb_children()
+    }
+}
+
 pub struct LinkEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
     target: jbk::reader::Array,
-    resolver: jbk::reader::Resolver,
 }
 
 impl LinkEntry {
     pub fn get_path(&self) -> jbk::Result<String> {
         let mut path = Vec::with_capacity(125);
-        self.resolver.resolve_array_to_vec(&self.path, &mut path)?;
+        self.path.resolve_to_vec(&mut path)?;
         Ok(String::from_utf8(path)?)
     }
 
@@ -123,14 +137,12 @@ impl LinkEntry {
 
     pub fn get_target_link(&self) -> jbk::Result<String> {
         let mut path = Vec::with_capacity(125);
-        self.resolver
-            .resolve_array_to_vec(&self.target, &mut path)?;
+        self.target.resolve_to_vec(&mut path)?;
         Ok(String::from_utf8(path)?)
     }
 }
 
 pub struct Builder {
-    value_storage: Rc<jbk::reader::ValueStorage>,
     store: Rc<jbk::reader::EntryStore>,
     path_property: jbk::reader::builder::ArrayProperty,
     parent_property: jbk::reader::builder::IntProperty,
@@ -145,7 +157,6 @@ impl jbk::reader::builder::BuilderTrait for Builder {
     type Entry = Entry;
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let resolver = jbk::reader::Resolver::new(Rc::clone(&self.value_storage));
         let reader = self.store.get_entry_reader(idx);
         let path = self.path_property.create(&reader)?;
         let parent = (self.parent_property.create(&reader)? as u32).into();
@@ -157,7 +168,6 @@ impl jbk::reader::builder::BuilderTrait for Builder {
                     path,
                     parent,
                     content_address,
-                    resolver,
                 })
             }
             1 => {
@@ -169,7 +179,6 @@ impl jbk::reader::builder::BuilderTrait for Builder {
                     parent,
                     first_child,
                     nb_children,
-                    resolver,
                 })
             }
             2 => {
@@ -179,7 +188,6 @@ impl jbk::reader::builder::BuilderTrait for Builder {
                     path,
                     parent,
                     target,
-                    resolver,
                 })
             }
             _ => unreachable!(),
@@ -187,86 +195,70 @@ impl jbk::reader::builder::BuilderTrait for Builder {
     }
 }
 
-pub struct Schema {
-    value_storage: Rc<jbk::reader::ValueStorage>,
+fn create_builder(
+    store: Rc<jbk::reader::EntryStore>,
+    value_storage: &jbk::reader::ValueStorage,
+) -> jbk::Result<Builder> {
+    let layout = store.layout();
+    let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
+    assert_eq!(variants.len(), 3);
+    let path_property = (&layout.common[0], value_storage).try_into()?;
+    let parent_property = (&layout.common[1], value_storage).try_into()?;
+    let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_offset);
+    let file_content_address_property = (&variants[0][0]).try_into()?;
+    let dir_first_child_property = (&variants[1][0], value_storage).try_into()?;
+    let dir_nb_children_property = (&variants[1][1], value_storage).try_into()?;
+    let link_target_property = (&variants[2][0], value_storage).try_into()?;
+    Ok(Builder {
+        store,
+        path_property,
+        parent_property,
+        variant_id_property,
+        file_content_address_property,
+        dir_first_child_property,
+        dir_nb_children_property,
+        link_target_property,
+    })
 }
 
-impl Schema {
-    pub fn new(container: &jbk::reader::Container) -> Self {
-        Self {
-            value_storage: Rc::clone(container.get_value_storage()),
-        }
-    }
-}
-
-impl jbk::reader::schema::SchemaTrait for Schema {
-    type Builder = Builder;
-    fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Rc<Self::Builder>> {
-        let layout = store.layout();
-        let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
-        assert_eq!(variants.len(), 3);
-        let path_property = (&layout.common[0]).try_into()?;
-        let parent_property = (&layout.common[1]).try_into()?;
-        let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_offset);
-        let file_content_address_property = (&variants[0][0]).try_into()?;
-        let dir_first_child_property = (&variants[1][0]).try_into()?;
-        let dir_nb_children_property = (&variants[1][1]).try_into()?;
-        let link_target_property = (&variants[2][0]).try_into()?;
-        Ok(Rc::new(Builder {
-            value_storage: Rc::clone(&self.value_storage),
-            store,
-            path_property,
-            parent_property,
-            variant_id_property,
-            file_content_address_property,
-            dir_first_child_property,
-            dir_nb_children_property,
-            link_target_property,
-        }))
-    }
-}
-
-pub struct EntryCompare<'resolver, 'builder> {
-    resolver: &'resolver jbk::reader::Resolver,
+pub struct EntryCompare<'builder> {
     builder: &'builder Builder,
     path_value: Vec<u8>,
 }
 
-impl<'resolver, 'builder> EntryCompare<'resolver, 'builder> {
-    pub fn new(
-        resolver: &'resolver jbk::reader::Resolver,
-        builder: &'builder Builder,
-        component: &OsStr,
-    ) -> Self {
+impl<'builder> EntryCompare<'builder> {
+    pub fn new(builder: &'builder Builder, component: &OsStr) -> Self {
         let path_value = component.to_os_string().into_vec();
         Self {
-            resolver,
             builder,
             path_value,
         }
     }
 }
 
-impl jbk::reader::CompareTrait<Schema> for EntryCompare<'_, '_> {
+impl jbk::reader::CompareTrait for EntryCompare<'_> {
     fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
         let reader = self.builder.store.get_entry_reader(idx);
         let entry_path = self.builder.path_property.create(&reader)?;
-        self.resolver.compare_array(&entry_path, &self.path_value)
+        match entry_path.partial_cmp(&self.path_value) {
+            Some(c) => Ok(c),
+            None => Err("Cannot compare".into()),
+        }
     }
 }
 
-pub struct ReadEntry<'finder> {
-    finder: &'finder jbk::reader::Finder<Schema>,
+pub struct ReadEntry<'builder> {
+    builder: &'builder Builder,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
 
-impl<'finder> ReadEntry<'finder> {
-    pub fn new(finder: &'finder jbk::reader::Finder<Schema>) -> Self {
-        let end = jbk::EntryIdx::from(0) + finder.count();
+impl<'builder> ReadEntry<'builder> {
+    pub fn new<R: Range>(range: &R, builder: &'builder Builder) -> Self {
+        let end = range.offset() + range.count();
         Self {
-            finder,
-            current: jbk::EntryIdx::from(0),
+            builder,
+            current: range.offset(),
             end,
         }
     }
@@ -276,14 +268,14 @@ impl<'finder> ReadEntry<'finder> {
     }
 }
 
-impl<'finder> Iterator for ReadEntry<'finder> {
+impl<'builder> Iterator for ReadEntry<'builder> {
     type Item = jbk::Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
             None
         } else {
-            let entry = self.finder.get_entry(self.current);
+            let entry = self.builder.create_entry(self.current);
             self.current += 1;
             Some(entry)
         }
@@ -300,8 +292,7 @@ pub trait ArxOperator {
 }
 
 pub struct Arx {
-    container: jbk::reader::Container,
-    pub schema: Schema,
+    pub container: jbk::reader::Container,
 }
 
 impl std::ops::Deref for Arx {
@@ -314,15 +305,19 @@ impl std::ops::Deref for Arx {
 impl Arx {
     pub fn new<P: AsRef<Path>>(file: P) -> jbk::Result<Self> {
         let container = jbk::reader::Container::new(&file)?;
-        let schema = Schema::new(&container);
-        Ok(Self { container, schema })
+        Ok(Self { container })
     }
 
-    pub fn walk<'finder>(
-        &self,
-        finder: &'finder jbk::reader::Finder<Schema>,
-    ) -> ReadEntry<'finder> {
-        ReadEntry::new(finder)
+    pub fn create_builder(&self, index: &jbk::reader::Index) -> jbk::Result<Builder> {
+        create_builder(
+            index.get_store(self.get_entry_storage())?,
+            self.get_value_storage(),
+        )
+    }
+
+    pub fn root_index(&self) -> jbk::Result<jbk::reader::Index> {
+        let directory = self.container.get_directory_pack();
+        directory.get_index_from_name("arx_root")
     }
 }
 
@@ -336,33 +331,27 @@ impl<'a> ArxRunner<'a> {
         Self { arx, current_path }
     }
 
-    pub fn run(
-        &mut self,
-        finder: jbk::reader::Finder<Schema>,
-        op: &dyn ArxOperator,
-    ) -> jbk::Result<()> {
+    pub fn run(&mut self, index: jbk::reader::Index, op: &dyn ArxOperator) -> jbk::Result<()> {
+        let builder = self.arx.create_builder(&index)?;
         op.on_start(&mut self.current_path)?;
-        self._run(finder, op)?;
+        self._run(&index, &builder, op)?;
         op.on_stop(&mut self.current_path)
     }
 
-    fn _run(
+    fn _run<R: Range>(
         &mut self,
-        finder: jbk::reader::Finder<Schema>,
+        range: &R,
+        builder: &Builder,
         op: &dyn ArxOperator,
     ) -> jbk::Result<()> {
-        for entry in self.arx.walk(&finder) {
+        let read_entry = ReadEntry::new(range, builder);
+        for entry in read_entry {
             match entry? {
                 Entry::File(e) => op.on_file(&mut self.current_path, &e)?,
                 Entry::Link(e) => op.on_link(&mut self.current_path, &e)?,
                 Entry::Dir(e) => {
                     op.on_directory_enter(&mut self.current_path, &e)?;
-                    let finder = jbk::reader::Finder::new(
-                        Rc::clone(finder.builder()),
-                        e.get_first_child(),
-                        e.get_nb_children(),
-                    );
-                    self._run(finder, op)?;
+                    self._run(&e, builder, op)?;
                     op.on_directory_exit(&mut self.current_path, &e)?;
                 }
             }

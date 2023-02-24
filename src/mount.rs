@@ -1,5 +1,5 @@
-use crate::common::{Arx, Builder, Entry, EntryCompare, ReadEntry, Schema};
-use jbk::reader::schema::SchemaTrait;
+use crate::common::{Arx, Builder, Entry, EntryCompare, ReadEntry};
+use jbk::reader::Range;
 use jubako as jbk;
 use libc::ENOENT;
 use lru::LruCache;
@@ -8,7 +8,6 @@ use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
 use std::path::Path;
-use std::rc::Rc;
 
 const TTL: time::Timespec = time::Timespec { sec: 1000, nsec: 0 }; // Nothing change on oar side, TTL is long
 const UNIX_EPOCH: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
@@ -137,9 +136,8 @@ impl TryInto<jbk::EntryIdx> for Ino {
 
 struct ArxFs<'a> {
     arx: Arx,
-    resolver: jbk::reader::Resolver,
     entry_index: jbk::reader::Index,
-    builder: Rc<Builder>,
+    builder: Builder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<jbk::EntryIdx, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
@@ -147,14 +145,10 @@ struct ArxFs<'a> {
 
 impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
-        let resolver = jbk::reader::Resolver::new(Rc::clone(arx.get_value_storage()));
         let entry_index = arx.get_index_for_name("arx_entries")?;
-        let builder = arx
-            .schema
-            .create_builder(entry_index.get_store(arx.get_entry_storage())?)?;
+        let builder = arx.create_builder(&entry_index)?;
         Ok(Self {
             arx,
-            resolver,
             entry_index,
             builder,
             resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
@@ -163,32 +157,13 @@ impl<'a> ArxFs<'a> {
         })
     }
 
-    pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
-        let finder: jbk::reader::Finder<Schema> =
-            self.entry_index.get_finder(Rc::clone(&self.builder))?;
-        finder.get_entry(idx)
-    }
-
-    pub fn get_finder(&self, ino: Ino) -> jbk::Result<jbk::reader::Finder<Schema>> {
+    pub fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
         match ino.try_into() {
-            Err(_) => {
-                let index = self.arx.get_index_for_name("arx_root")?;
-                Ok(index.get_finder(Rc::clone(&self.builder))?)
-            }
-            Ok(idx) => {
-                let entry = self.get_entry(idx)?;
-                if let Entry::Dir(e) = entry {
-                    let offset = e.get_first_child();
-                    let count = e.get_nb_children();
-                    Ok(jbk::reader::Finder::new(
-                        Rc::clone(&self.builder),
-                        offset,
-                        count,
-                    ))
-                } else {
-                    Err("No at directory".to_string().into())
-                }
-            }
+            Err(_) => Ok((&self.arx.root_index()?).into()),
+            Ok(idx) => match self.entry_index.get_entry(&self.builder, idx)? {
+                Entry::Dir(e) => Ok((&e).into()),
+                _ => Err("No at directory".to_string().into()),
+            },
         }
     }
 }
@@ -236,12 +211,12 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         let idx = match idx {
             Some(idx) => *idx,
             None => {
-                let finder = self.get_finder(parent).unwrap();
-                let comparator = EntryCompare::new(&self.resolver, &self.builder, name);
-                let idx = finder
+                let range = self.get_entry_range(parent).unwrap();
+                let comparator = EntryCompare::new(&self.builder, name);
+                let idx = range
                     .find(&comparator)
                     .unwrap()
-                    .map(|idx| idx + finder.offset());
+                    .map(|idx| idx + range.offset());
                 self.resolve_cache.push((parent, name.to_os_string()), idx);
                 idx
             }
@@ -253,11 +228,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let finder: jbk::reader::Finder<Schema> = self
-                            .entry_index
-                            .get_finder(Rc::clone(&self.builder))
-                            .unwrap();
-                        let entry = finder.get_entry(idx).unwrap();
+                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                         let attr = entry.to_fillattr(&self.arx).unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
@@ -296,7 +267,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let entry = self.get_entry(idx).unwrap();
+                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                         let attr = entry.to_fillattr(&self.arx).unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
@@ -313,7 +284,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.error(libc::ENOLINK),
             Ok(idx) => {
-                let entry = self.get_entry(idx).unwrap();
+                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                 match &entry {
                     Entry::Link(e) => {
                         let target_link = e.get_target_link().unwrap();
@@ -331,7 +302,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.error(libc::EISDIR),
             Ok(idx) => {
-                let entry = self.get_entry(idx).unwrap();
+                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                 match &entry {
                     Entry::File(_) => reply.opened(0, 0),
                     Entry::Dir(_) => reply.error(libc::EISDIR),
@@ -355,7 +326,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.error(libc::EISDIR),
             Ok(idx) => {
-                let entry = self.get_entry(idx).unwrap();
+                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                 match &entry {
                     Entry::File(e) => {
                         let reader = self.arx.get_reader(e.get_content_address()).unwrap();
@@ -392,7 +363,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.opened(0, 0),
             Ok(idx) => {
-                let entry = self.get_entry(idx).unwrap();
+                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                 match &entry {
                     Entry::Dir(_) => reply.opened(0, 0),
                     _ => reply.error(libc::ENOTDIR),
@@ -411,9 +382,9 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
     ) {
         self.stats.readdir();
         let ino = Ino::from(ino);
-        let finder = self.get_finder(ino).unwrap();
-        let nb_entry = (finder.count().into_u32() + 2) as i64; // we include "." and ".."
-        let mut readentry = ReadEntry::new(&finder);
+        let range = self.get_entry_range(ino).unwrap();
+        let nb_entry = (range.count().into_u32() + 2) as i64; // we include "." and ".."
+        let mut readentry = ReadEntry::new(&range, &self.builder);
         // If offset != 0, offset corresponds to what has already been seen. So we must start after.
         let offset = if offset == 0 { 0 } else { offset + 1 };
         if offset > 2 {
@@ -427,7 +398,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                 let parent_ino = match ino.try_into() {
                     Err(_) => ino,
                     Ok(idx) => {
-                        let entry = self.get_entry(idx).unwrap();
+                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                         match entry.get_parent() {
                             None => Ino::from(1),
                             Some(parent_id) => parent_id.into(),
@@ -446,7 +417,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                             Entry::Link(_) => fuse::FileType::Symlink,
                         };
                         // We remove "." and ".."
-                        let entry_idx = finder.offset() + jbk::EntryIdx::from(i as u32 - 2);
+                        let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
                         let ino = Ino::from(entry_idx);
                         if reply.add(
                             ino.get(),

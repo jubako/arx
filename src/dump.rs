@@ -1,8 +1,7 @@
-use crate::common::{Entry, EntryCompare, Schema};
-use jbk::reader::schema::SchemaTrait;
+use crate::common::{Arx, Entry, EntryCompare};
 use jubako as jbk;
+use jubako::reader::Range;
 use std::path::Path;
-use std::rc::Rc;
 
 fn dump_entry(container: &jbk::reader::Container, entry: &Entry) -> jbk::Result<()> {
     match entry {
@@ -17,44 +16,32 @@ fn dump_entry(container: &jbk::reader::Container, entry: &Entry) -> jbk::Result<
 }
 
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
-    let container = jbk::reader::Container::new(&infile)?;
-    let schema = Schema::new(&container);
-    let directory = container.get_directory_pack();
-    let value_storage = directory.create_value_storage();
-    let entry_storage = directory.create_entry_storage();
-    let index = directory.get_index_from_name("arx_root")?;
-    let builder = schema.create_builder(index.get_store(&entry_storage)?)?;
-    let resolver = jbk::reader::Resolver::new(Rc::clone(&value_storage));
-    let mut current_finder: jbk::reader::Finder<Schema> = index.get_finder(Rc::clone(&builder))?;
+    let arx = Arx::new(infile)?;
+    let root_index = arx.root_index()?;
+    let builder = arx.create_builder(&root_index)?;
+    let mut current_range: jbk::EntryRange = (&root_index).into();
     let mut components = path.as_ref().iter().peekable();
     while let Some(component) = components.next() {
         // Search for the current component.
         // All children of a parent are stored concatened.
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
-        let comparator = EntryCompare::new(&resolver, &builder, component);
-        let found = current_finder.find(&comparator)?;
+        let comparator = EntryCompare::new(&builder, component);
+        let found = current_range.find(&comparator)?;
         match found {
             None => return Err("Cannot found entry".to_string().into()),
             Some(idx) => {
-                let entry = current_finder.get_entry(idx)?;
+                let entry = current_range.get_entry(&builder, idx)?;
                 if components.peek().is_none() {
                     // We have the last component
-                    return dump_entry(&container, &entry);
+                    return dump_entry(&arx.container, &entry);
                 } else if let Entry::Dir(e) = entry {
-                    let offset = e.get_first_child();
-                    let count = e.get_nb_children();
-                    current_finder = jbk::reader::Finder::new(
-                        Rc::clone(current_finder.builder()),
-                        offset,
-                        count,
-                    );
+                    current_range = (&e).into();
                 } else {
                     return Err("Cannot found entry".to_string().into());
                 }
             }
         }
     }
-
     unreachable!();
 }
