@@ -339,11 +339,20 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                 match &entry {
                     Entry::File(e) => {
                         let reader = self.arx.get_reader(e.get_content_address()).unwrap();
-                        let mut stream =
-                            reader.create_flux_from(jbk::Offset::new(offset.try_into().unwrap()));
-                        let size = min(size as u64, stream.size().into_u64());
-                        let data = stream.read_vec(size as usize).unwrap();
-                        reply.data(&data)
+                        let reader = reader.create_sub_reader(
+                            jbk::Offset::new(offset.try_into().unwrap()),
+                            jbk::End::None,
+                        );
+                        let size = min(size as u64, reader.size().into_u64());
+                        let reader = reader
+                            .create_sub_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
+                            .unwrap()
+                            .into_memory_reader()
+                            .unwrap();
+                        let data = reader
+                            .get_slice(jbk::Offset::zero(), jbk::End::None)
+                            .unwrap();
+                        reply.data(data)
                     }
                     Entry::Dir(_) => reply.error(libc::EISDIR),
                     Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
