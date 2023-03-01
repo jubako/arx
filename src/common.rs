@@ -134,7 +134,7 @@ pub struct Builder {
     store: Rc<jbk::reader::EntryStore>,
     path_property: jbk::reader::builder::ArrayProperty,
     parent_property: jbk::reader::builder::IntProperty,
-    variant_id_property: jbk::reader::builder::Property<u8>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
     file_content_address_property: jbk::reader::builder::ContentProperty,
     dir_first_child_property: jbk::reader::builder::IntProperty,
     dir_nb_children_property: jbk::reader::builder::IntProperty,
@@ -149,7 +149,7 @@ impl jbk::reader::builder::BuilderTrait for Builder {
         let reader = self.store.get_entry_reader(idx);
         let path = self.path_property.create(&reader)?;
         let parent = (self.parent_property.create(&reader)? as u32).into();
-        Ok(match self.variant_id_property.create(&reader)? {
+        Ok(match self.variant_id_property.create(&reader)?.into_u8() {
             0 => {
                 let content_address = self.file_content_address_property.create(&reader)?;
                 Entry::File(FileEntry {
@@ -207,7 +207,7 @@ impl jbk::reader::schema::SchemaTrait for Schema {
         assert_eq!(variants.len(), 3);
         let path_property = (&layout.common[0]).try_into()?;
         let parent_property = (&layout.common[1]).try_into()?;
-        let variant_id_property = jbk::reader::builder::Property::new(*variant_offset);
+        let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_offset);
         let file_content_address_property = (&variants[0][0]).try_into()?;
         let dir_first_child_property = (&variants[1][0]).try_into()?;
         let dir_nb_children_property = (&variants[1][1]).try_into()?;
