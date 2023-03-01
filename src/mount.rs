@@ -4,6 +4,7 @@ use jubako as jbk;
 use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
@@ -139,6 +140,7 @@ struct ArxFs<'a> {
     builder: Builder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr>,
+    reader_cache: HashMap<Ino, (jbk::Reader, u64)>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -152,6 +154,7 @@ impl<'a> ArxFs<'a> {
             builder,
             resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
+            reader_cache: HashMap::new(),
             stats,
         })
     }
@@ -303,19 +306,26 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
     fn open(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
         self.stats.open();
         let ino = Ino::from(ino);
-        match ino.try_into() {
-            Err(_) => reply.error(libc::EISDIR),
-            Ok(idx) => {
-                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                match &entry {
-                    Entry::File(e) => {
-                        self.arx.get_reader(e.get_content_address()).unwrap();
-                        reply.opened(0, 0);
-                    }
-                    Entry::Dir(_) => reply.error(libc::EISDIR),
-                    Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
-                }
+        match self.reader_cache.get_mut(&ino) {
+            Some((_r, c)) => {
+                *c += 1;
+                reply.opened(0, 0);
             }
+            None => match ino.try_into() {
+                Err(_) => reply.error(libc::EISDIR),
+                Ok(idx) => {
+                    let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
+                    match &entry {
+                        Entry::File(e) => {
+                            let reader = self.arx.get_reader(e.get_content_address()).unwrap();
+                            self.reader_cache.insert(ino, (reader, 1));
+                            reply.opened(0, 0);
+                        }
+                        Entry::Dir(_) => reply.error(libc::EISDIR),
+                        Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
+                    }
+                }
+            },
         }
     }
 
@@ -332,39 +342,25 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
     ) {
         self.stats.read();
         let ino = Ino::from(ino);
-        match ino.try_into() {
-            Err(_) => reply.error(libc::EISDIR),
-            Ok(idx) => {
-                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                match &entry {
-                    Entry::File(e) => {
-                        let reader = self.arx.get_reader(e.get_content_address()).unwrap();
-                        let reader = reader.create_sub_reader(
-                            jbk::Offset::new(offset.try_into().unwrap()),
-                            jbk::End::None,
-                        );
-                        let size = min(size as u64, reader.size().into_u64());
-                        let reader = reader
-                            .create_sub_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
-                            .unwrap()
-                            .into_memory_reader()
-                            .unwrap();
-                        let data = reader
-                            .get_slice(jbk::Offset::zero(), jbk::End::None)
-                            .unwrap();
-                        reply.data(data)
-                    }
-                    Entry::Dir(_) => reply.error(libc::EISDIR),
-                    Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
-                }
-            }
-        }
+        let reader = &self.reader_cache.get(&ino).unwrap().0;
+        let reader =
+            reader.create_sub_reader(jbk::Offset::new(offset.try_into().unwrap()), jbk::End::None);
+        let size = min(size as u64, reader.size().into_u64());
+        let reader = reader
+            .create_sub_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
+            .unwrap()
+            .into_memory_reader()
+            .unwrap();
+        let data = reader
+            .get_slice(jbk::Offset::zero(), jbk::End::None)
+            .unwrap();
+        reply.data(data)
     }
 
     fn release(
         &mut self,
         _req: &fuser::Request,
-        _ino: u64,
+        ino: u64,
         _fh: u64,
         _flags: i32,
         _lock_owner: Option<u64>,
@@ -372,7 +368,17 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         reply: fuser::ReplyEmpty,
     ) {
         self.stats.release();
-        reply.ok()
+        let ino = Ino::from(ino);
+        match self.reader_cache.get_mut(&ino) {
+            Some((_r, c)) => {
+                *c -= 1;
+                if *c == 0 {
+                    self.reader_cache.remove(&ino);
+                }
+                reply.ok()
+            }
+            None => reply.error(libc::ENOENT),
+        }
     }
 
     fn opendir(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
