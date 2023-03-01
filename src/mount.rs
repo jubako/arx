@@ -308,7 +308,10 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
             Ok(idx) => {
                 let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
                 match &entry {
-                    Entry::File(_) => reply.opened(0, 0),
+                    Entry::File(e) => {
+                        self.arx.get_reader(e.get_content_address()).unwrap();
+                        reply.opened(0, 0);
+                    }
                     Entry::Dir(_) => reply.error(libc::EISDIR),
                     Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
                 }
