@@ -152,7 +152,7 @@ impl<'a> ArxFs<'a> {
             arx,
             entry_index,
             builder,
-            resolve_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
+            resolve_cache: LruCache::new(NonZeroUsize::new(4 * 1024).unwrap()),
             attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             reader_cache: HashMap::new(),
             stats,
@@ -223,7 +223,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                     .find(&comparator)
                     .unwrap()
                     .map(|idx| idx + range.offset());
-                self.resolve_cache.push((parent, name.to_os_string()), idx);
+                self.resolve_cache.put((parent, name.to_os_string()), idx);
                 idx
             }
         };
@@ -446,13 +446,13 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                         };
                         // We remove "." and ".."
                         let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
-                        let ino = Ino::from(entry_idx);
-                        if reply.add(
-                            ino.get(),
-                            /* offset =*/ i,
-                            kind,
-                            entry.get_path().unwrap(),
-                        ) {
+                        let entry_ino = Ino::from(entry_idx);
+                        let entry_path = entry.get_path().unwrap();
+                        let should_break =
+                            reply.add(entry_ino.get(), /* offset =*/ i, kind, &entry_path);
+                        self.resolve_cache
+                            .put((ino, entry_path.into()), Some(entry_idx));
+                        if should_break {
                             break;
                         }
                     }
