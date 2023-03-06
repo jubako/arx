@@ -9,8 +9,7 @@ use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
 use std::path::Path;
 
-const TTL: time::Timespec = time::Timespec { sec: 1000, nsec: 0 }; // Nothing change on oar side, TTL is long
-const UNIX_EPOCH: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
+const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 
 struct StatCounter {
     nb_lookup: u64,
@@ -139,7 +138,7 @@ struct ArxFs<'a> {
     entry_index: jbk::reader::Index,
     builder: Builder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
-    attr_cache: LruCache<jbk::EntryIdx, fuse::FileAttr>,
+    attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -169,40 +168,44 @@ impl<'a> ArxFs<'a> {
 }
 
 impl Entry {
-    fn to_fillattr(&self) -> jbk::Result<fuse::FileAttr> {
+    fn to_fillattr(&self) -> jbk::Result<fuser::FileAttr> {
         let (size, kind) = match &self {
             Self::Dir(e) => (
                 (e.get_nb_children() + 1).into_u64() * 10,
-                fuse::FileType::Directory,
+                fuser::FileType::Directory,
             ),
-            Self::File(e) => (e.size().into_u64(), fuse::FileType::RegularFile),
-            Self::Link(e) => (e.get_target_link()?.len() as u64, fuse::FileType::Symlink),
+            Self::File(e) => (e.size().into_u64(), fuser::FileType::RegularFile),
+            Self::Link(e) => (e.get_target_link()?.len() as u64, fuser::FileType::Symlink),
         };
         let rigths = (self.rigths() as u16) & 0b1111_1111_0110_1101;
-        Ok(fuse::FileAttr {
+        Ok(fuser::FileAttr {
             ino: Ino::from(self.idx()).get(),
             size,
             kind,
             blocks: 1,
-            atime: UNIX_EPOCH,
-            mtime: time::Timespec {
-                sec: self.mtime() as i64,
-                nsec: 0,
-            },
-            ctime: UNIX_EPOCH,
-            crtime: UNIX_EPOCH,
+            atime: std::time::UNIX_EPOCH,
+            mtime: std::time::UNIX_EPOCH + std::time::Duration::from_secs(self.mtime()),
+            ctime: std::time::UNIX_EPOCH,
+            crtime: std::time::UNIX_EPOCH,
             perm: rigths,
             nlink: 2,
             uid: self.owner(),
             gid: self.group(),
             rdev: 0,
+            blksize: 0,
             flags: 0,
         })
     }
 }
 
-impl<'a> fuse::Filesystem for ArxFs<'a> {
-    fn lookup(&mut self, _req: &fuse::Request, parent: u64, name: &OsStr, reply: fuse::ReplyEntry) {
+impl<'a> fuser::Filesystem for ArxFs<'a> {
+    fn lookup(
+        &mut self,
+        _req: &fuser::Request,
+        parent: u64,
+        name: &OsStr,
+        reply: fuser::ReplyEntry,
+    ) {
         self.stats.lookup();
         let parent = Ino::from(parent);
         // Lookup for entry `name` in directory `parent`
@@ -239,25 +242,26 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
     }
 
-    fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
+    fn getattr(&mut self, _req: &fuser::Request, ino: u64, reply: fuser::ReplyAttr) {
         self.stats.getattr();
         let ino = Ino::from(ino);
         match ino.try_into() {
             Err(_) => {
-                let attr = fuse::FileAttr {
+                let attr = fuser::FileAttr {
                     ino: ino.get(),
                     size: 0,
-                    kind: fuse::FileType::Directory,
+                    kind: fuser::FileType::Directory,
                     blocks: 1,
-                    atime: UNIX_EPOCH,
-                    mtime: UNIX_EPOCH,
-                    ctime: UNIX_EPOCH,
-                    crtime: UNIX_EPOCH,
+                    atime: std::time::UNIX_EPOCH,
+                    mtime: std::time::UNIX_EPOCH,
+                    ctime: std::time::UNIX_EPOCH,
+                    crtime: std::time::UNIX_EPOCH,
                     perm: 0o555,
                     nlink: 2,
                     uid: 1000,
                     gid: 1000,
                     rdev: 0,
+                    blksize: 0,
                     flags: 0,
                 };
                 reply.attr(&TTL, &attr);
@@ -278,7 +282,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
     }
 
-    fn readlink(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyData) {
+    fn readlink(&mut self, _req: &fuser::Request, ino: u64, reply: fuser::ReplyData) {
         self.stats.readlink();
         let ino = Ino::from(ino);
         match ino.try_into() {
@@ -296,7 +300,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
     }
 
-    fn open(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
+    fn open(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
         self.stats.open();
         let ino = Ino::from(ino);
         match ino.try_into() {
@@ -314,12 +318,14 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn read(
         &mut self,
-        _req: &fuse::Request,
+        _req: &fuser::Request,
         ino: u64,
         _fh: u64,
         offset: i64,
         size: u32,
-        reply: fuse::ReplyData,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: fuser::ReplyData,
     ) {
         self.stats.read();
         let ino = Ino::from(ino);
@@ -345,19 +351,19 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn release(
         &mut self,
-        _req: &fuse::Request,
+        _req: &fuser::Request,
         _ino: u64,
         _fh: u64,
-        _flags: u32,
-        _lock_owner: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
         _flush: bool,
-        reply: fuse::ReplyEmpty,
+        reply: fuser::ReplyEmpty,
     ) {
         self.stats.release();
         reply.ok()
     }
 
-    fn opendir(&mut self, _req: &fuse::Request, ino: u64, _flags: u32, reply: fuse::ReplyOpen) {
+    fn opendir(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
         self.stats.opendir();
         let ino = Ino::from(ino);
         match ino.try_into() {
@@ -374,11 +380,11 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn readdir(
         &mut self,
-        _req: &fuse::Request,
+        _req: &fuser::Request,
         ino: u64,
         _fh: u64,
         offset: i64,
-        mut reply: fuse::ReplyDirectory,
+        mut reply: fuser::ReplyDirectory,
     ) {
         self.stats.readdir();
         let ino = Ino::from(ino);
@@ -393,7 +399,9 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
         }
         for i in offset..nb_entry {
             if i == 0 {
-                reply.add(ino.get(), i, fuse::FileType::Directory, ".");
+                if reply.add(ino.get(), i, fuser::FileType::Directory, ".") {
+                    break;
+                }
             } else if i == 1 {
                 let parent_ino = match ino.try_into() {
                     Err(_) => ino,
@@ -405,16 +413,18 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                         }
                     }
                 };
-                reply.add(parent_ino.get(), i, fuse::FileType::Directory, "..");
+                if reply.add(parent_ino.get(), i, fuser::FileType::Directory, "..") {
+                    break;
+                }
             } else {
                 match readentry.next() {
                     None => break,
                     Some(entry) => {
                         let entry = entry.unwrap();
                         let kind = match &entry {
-                            Entry::File(_) => fuse::FileType::RegularFile,
-                            Entry::Dir(_) => fuse::FileType::Directory,
-                            Entry::Link(_) => fuse::FileType::Symlink,
+                            Entry::File(_) => fuser::FileType::RegularFile,
+                            Entry::Dir(_) => fuser::FileType::Directory,
+                            Entry::Link(_) => fuser::FileType::Symlink,
                         };
                         // We remove "." and ".."
                         let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
@@ -436,11 +446,11 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
 
     fn releasedir(
         &mut self,
-        _req: &fuse::Request,
+        _req: &fuser::Request,
         _ino: u64,
         _fh: u64,
-        _flags: u32,
-        reply: fuse::ReplyEmpty,
+        _flags: i32,
+        reply: fuser::ReplyEmpty,
     ) {
         self.stats.releasedir();
         reply.ok()
@@ -452,11 +462,11 @@ pub fn mount<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let arxfs = ArxFs::new(arx, &mut stats)?;
 
-    let options = ["-o", "-ro", "-o", "fsname=arx"]
-        .iter()
-        .map(|o| o.as_ref())
-        .collect::<Vec<&OsStr>>();
-    fuse::mount(arxfs, &outdir, &options)?;
+    let options = vec![
+        fuser::MountOption::RO,
+        fuser::MountOption::FSName("arx".into()),
+    ];
+    fuser::mount2(arxfs, &outdir, &options)?;
 
     println!("Stats:\n {stats}");
     Ok(())
