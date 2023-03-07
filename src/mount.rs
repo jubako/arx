@@ -1,4 +1,5 @@
-use crate::common::{Arx, Builder, Entry, EntryCompare, ReadEntry};
+use crate::common::{Arx, Builder, EntryCompare, ReadEntry};
+use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
 use libc::ENOENT;
@@ -8,8 +9,9 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
-use std::os::unix::ffi::OsStrExt;
+use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
+use std::rc::Rc;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 
@@ -135,10 +137,273 @@ impl TryInto<jbk::EntryIdx> for Ino {
     }
 }
 
+struct LightLinkBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    link_property: jbk::reader::builder::ArrayProperty,
+}
+
+impl LightLinkBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            link_property: builder.link_target_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
+    type Entry = Option<Vec<u8>>;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        match self.variant_id_property.create(&reader)?.into_u8() {
+            2 => {
+                let target = self.link_property.create(&reader)?;
+                let mut vec = vec![];
+                target.resolve_to_vec(&mut vec)?;
+                Ok(Some(vec))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
+enum LightFile {
+    Some(jbk::reader::ContentAddress),
+    Dir,
+    Link,
+}
+
+struct LightFileBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    content_address_property: jbk::reader::builder::ContentProperty,
+}
+
+impl LightFileBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            content_address_property: builder.file_content_address_property,
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for LightFileBuilder {
+    type Entry = LightFile;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        match self.variant_id_property.create(&reader)?.into_u8() {
+            0 => {
+                let content_address = self.content_address_property.create(&reader)?;
+                Ok(LightFile::Some(content_address))
+            }
+            1 => Ok(LightFile::Dir),
+            2 => Ok(LightFile::Link),
+            _ => Err("Invalid variant_id".into()),
+        }
+    }
+}
+
+struct LightDirBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    first_child_property: jbk::reader::builder::IntProperty,
+    nb_children_property: jbk::reader::builder::IntProperty,
+}
+
+impl LightDirBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            first_child_property: builder.dir_first_child_property.clone(),
+            nb_children_property: builder.dir_nb_children_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
+    type Entry = Option<jbk::EntryRange>;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        match self.variant_id_property.create(&reader)?.into_u8() {
+            1 => {
+                let first_child: jbk::EntryIdx =
+                    (self.first_child_property.create(&reader)? as u32).into();
+                let nb_children: jbk::EntryCount =
+                    (self.nb_children_property.create(&reader)? as u32).into();
+                Ok(Some(jbk::EntryRange::new(first_child, nb_children)))
+            }
+            0 | 2 => Ok(None),
+            _ => Err("Invalid variant_id".into()),
+        }
+    }
+}
+
+struct LightCommonPath {
+    file_type: fuser::FileType,
+    path: Vec<u8>,
+}
+
+struct LightCommonPathBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    path_property: jbk::reader::builder::ArrayProperty,
+}
+
+impl LightCommonPathBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            path_property: builder.path_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for LightCommonPathBuilder {
+    type Entry = LightCommonPath;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        let path_prop = self.path_property.create(&reader)?;
+        let mut path = vec![];
+        path_prop.resolve_to_vec(&mut path)?;
+        let file_type = match self.variant_id_property.create(&reader)?.into_u8() {
+            0 => fuser::FileType::RegularFile,
+            1 => fuser::FileType::Directory,
+            2 => fuser::FileType::Symlink,
+            _ => return Err("Invalid variant_id".into()),
+        };
+        Ok(LightCommonPath { file_type, path })
+    }
+}
+
+struct LightCommonParentBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    parent_property: jbk::reader::builder::IntProperty,
+}
+
+impl LightCommonParentBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            parent_property: builder.parent_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for LightCommonParentBuilder {
+    type Entry = Option<jbk::EntryIdx>;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        let parent = self.parent_property.create(&reader)?;
+        let parent = if parent != 0 {
+            None
+        } else {
+            Some((parent as u32).into())
+        };
+        Ok(parent)
+    }
+}
+
+struct AttrBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    owner_property: jbk::reader::builder::IntProperty,
+    group_property: jbk::reader::builder::IntProperty,
+    rights_property: jbk::reader::builder::IntProperty,
+    mtime_property: jbk::reader::builder::IntProperty,
+    file_size_property: jbk::reader::builder::IntProperty,
+    dir_nb_children_property: jbk::reader::builder::IntProperty,
+    link_target_property: jbk::reader::builder::ArrayProperty,
+}
+
+impl AttrBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            owner_property: builder.owner_property.clone(),
+            group_property: builder.group_property.clone(),
+            rights_property: builder.rigths_property.clone(),
+            mtime_property: builder.mtime_property.clone(),
+            file_size_property: builder.file_size_property.clone(),
+            dir_nb_children_property: builder.dir_nb_children_property.clone(),
+            link_target_property: builder.link_target_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for AttrBuilder {
+    type Entry = fuser::FileAttr;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        let (size, kind) = match &self.variant_id_property.create(&reader)?.into_u8() {
+            0 => (
+                self.file_size_property.create(&reader)?,
+                fuser::FileType::RegularFile,
+            ),
+            1 => (
+                (self.dir_nb_children_property.create(&reader)? + 1) * 10,
+                fuser::FileType::Directory,
+            ),
+            2 => (
+                {
+                    let link = self.link_target_property.create(&reader)?;
+                    match link.size {
+                        Some(s) => s.into_u64(),
+                        None => {
+                            let mut vec = vec![];
+                            link.resolve_to_vec(&mut vec)?;
+                            vec.len() as u64
+                        }
+                    }
+                },
+                fuser::FileType::Symlink,
+            ),
+            _ => return Err("Invalid variant_id".into()),
+        };
+        let rigths = (self.rights_property.create(&reader)? as u16) & 0b1111_1111_0110_1101;
+        Ok(fuser::FileAttr {
+            ino: Ino::from(idx).get(),
+            size,
+            kind,
+            blocks: 1,
+            atime: std::time::UNIX_EPOCH,
+            mtime: std::time::UNIX_EPOCH
+                + std::time::Duration::from_secs(self.mtime_property.create(&reader)?),
+            ctime: std::time::UNIX_EPOCH,
+            crtime: std::time::UNIX_EPOCH,
+            perm: rigths,
+            nlink: 2,
+            uid: self.owner_property.create(&reader)? as u32,
+            gid: self.group_property.create(&reader)? as u32,
+            rdev: 0,
+            blksize: 0,
+            flags: 0,
+        })
+    }
+}
+
 struct ArxFs<'a> {
     arx: Arx,
     entry_index: jbk::reader::Index,
     builder: Builder,
+    light_file_builder: LightFileBuilder,
+    light_dir_builder: LightDirBuilder,
+    light_link_builder: LightLinkBuilder,
+    light_common_path_builder: LightCommonPathBuilder,
+    light_common_parent_builder: LightCommonParentBuilder,
+    attr_builder: AttrBuilder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr>,
     reader_cache: HashMap<Ino, (jbk::Reader, u64)>,
@@ -149,10 +414,22 @@ impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let entry_index = arx.get_index_for_name("arx_entries")?;
         let builder = arx.create_builder(&entry_index)?;
+        let light_file_builder = LightFileBuilder::new(&builder);
+        let light_dir_builder = LightDirBuilder::new(&builder);
+        let light_link_builder = LightLinkBuilder::new(&builder);
+        let light_common_path_builder = LightCommonPathBuilder::new(&builder);
+        let light_common_parent_builder = LightCommonParentBuilder::new(&builder);
+        let attr_builder = AttrBuilder::new(&builder);
         Ok(Self {
             arx,
             entry_index,
             builder,
+            light_file_builder,
+            light_dir_builder,
+            light_link_builder,
+            light_common_path_builder,
+            light_common_parent_builder,
+            attr_builder,
             resolve_cache: LruCache::new(NonZeroUsize::new(4 * 1024).unwrap()),
             attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
             reader_cache: HashMap::new(),
@@ -163,42 +440,11 @@ impl<'a> ArxFs<'a> {
     pub fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
         match ino.try_into() {
             Err(_) => Ok((&self.arx.root_index()?).into()),
-            Ok(idx) => match self.entry_index.get_entry(&self.builder, idx)? {
-                Entry::Dir(e) => Ok((&e).into()),
-                _ => Err("No at directory".to_string().into()),
+            Ok(idx) => match self.entry_index.get_entry(&self.light_dir_builder, idx)? {
+                Some(r) => Ok(r),
+                None => Err("No at directory".to_string().into()),
             },
         }
-    }
-}
-
-impl Entry {
-    fn to_fillattr(&self) -> jbk::Result<fuser::FileAttr> {
-        let (size, kind) = match &self {
-            Self::Dir(e) => (
-                (e.get_nb_children() + 1).into_u64() * 10,
-                fuser::FileType::Directory,
-            ),
-            Self::File(e) => (e.size().into_u64(), fuser::FileType::RegularFile),
-            Self::Link(e) => (e.get_target_link()?.len() as u64, fuser::FileType::Symlink),
-        };
-        let rigths = (self.rigths() as u16) & 0b1111_1111_0110_1101;
-        Ok(fuser::FileAttr {
-            ino: Ino::from(self.idx()).get(),
-            size,
-            kind,
-            blocks: 1,
-            atime: std::time::UNIX_EPOCH,
-            mtime: std::time::UNIX_EPOCH + std::time::Duration::from_secs(self.mtime()),
-            ctime: std::time::UNIX_EPOCH,
-            crtime: std::time::UNIX_EPOCH,
-            perm: rigths,
-            nlink: 2,
-            uid: self.owner(),
-            gid: self.group(),
-            rdev: 0,
-            blksize: 0,
-            flags: 0,
-        })
     }
 }
 
@@ -235,8 +481,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                        let attr = entry.to_fillattr().unwrap();
+                        let attr = self.entry_index.get_entry(&self.attr_builder, idx).unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
                     }
@@ -275,8 +520,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                 let attr = match attr {
                     Some(attr) => attr,
                     None => {
-                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                        let attr = entry.to_fillattr().unwrap();
+                        let attr = self.entry_index.get_entry(&self.attr_builder, idx).unwrap();
                         self.attr_cache.push(idx, attr);
                         self.attr_cache.get(&idx).unwrap()
                     }
@@ -292,13 +536,13 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.error(libc::ENOLINK),
             Ok(idx) => {
-                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
+                let entry = self
+                    .entry_index
+                    .get_entry(&self.light_link_builder, idx)
+                    .unwrap();
                 match &entry {
-                    Entry::Link(e) => {
-                        let target_link = e.get_target_link().unwrap();
-                        reply.data(target_link.as_bytes())
-                    }
-                    _ => reply.error(libc::ENOLINK),
+                    Some(link) => reply.data(link),
+                    None => reply.error(libc::ENOLINK),
                 }
             }
         }
@@ -315,15 +559,18 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
             None => match ino.try_into() {
                 Err(_) => reply.error(libc::EISDIR),
                 Ok(idx) => {
-                    let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
+                    let entry = self
+                        .entry_index
+                        .get_entry(&self.light_file_builder, idx)
+                        .unwrap();
                     match &entry {
-                        Entry::File(e) => {
-                            let reader = self.arx.get_reader(e.get_content_address()).unwrap();
+                        LightFile::Some(content_address) => {
+                            let reader = self.arx.get_reader(*content_address).unwrap();
                             self.reader_cache.insert(ino, (reader, 1));
                             reply.opened(0, 0);
                         }
-                        Entry::Dir(_) => reply.error(libc::EISDIR),
-                        Entry::Link(_) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
+                        LightFile::Dir => reply.error(libc::EISDIR),
+                        LightFile::Link => reply.error(libc::ENOENT), // [FIXME] What to return here ?
                     }
                 }
             },
@@ -388,10 +635,13 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         match ino.try_into() {
             Err(_) => reply.opened(0, 0),
             Ok(idx) => {
-                let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
+                let entry = self
+                    .entry_index
+                    .get_entry(&self.light_dir_builder, idx)
+                    .unwrap();
                 match &entry {
-                    Entry::Dir(_) => reply.opened(0, 0),
-                    _ => reply.error(libc::ENOTDIR),
+                    Some(_) => reply.opened(0, 0),
+                    None => reply.error(libc::ENOTDIR),
                 }
             }
         }
@@ -409,7 +659,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         let ino = Ino::from(ino);
         let range = self.get_entry_range(ino).unwrap();
         let nb_entry = (range.count().into_u32() + 2) as i64; // we include "." and ".."
-        let mut readentry = ReadEntry::new(&range, &self.builder);
+        let mut readentry = ReadEntry::new(&range, &self.light_common_path_builder);
         // If offset != 0, offset corresponds to what has already been seen. So we must start after.
         let offset = if offset == 0 { 0 } else { offset + 1 };
         if offset > 2 {
@@ -425,8 +675,11 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                 let parent_ino = match ino.try_into() {
                     Err(_) => ino,
                     Ok(idx) => {
-                        let entry = self.entry_index.get_entry(&self.builder, idx).unwrap();
-                        match entry.get_parent() {
+                        let parent = self
+                            .entry_index
+                            .get_entry(&self.light_common_parent_builder, idx)
+                            .unwrap();
+                        match parent {
                             None => Ino::from(1),
                             Some(parent_id) => parent_id.into(),
                         }
@@ -440,17 +693,18 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                     None => break,
                     Some(entry) => {
                         let entry = entry.unwrap();
-                        let kind = match &entry {
-                            Entry::File(_) => fuser::FileType::RegularFile,
-                            Entry::Dir(_) => fuser::FileType::Directory,
-                            Entry::Link(_) => fuser::FileType::Symlink,
-                        };
                         // We remove "." and ".."
                         let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
                         let entry_ino = Ino::from(entry_idx);
-                        let entry_path = entry.get_path().unwrap();
-                        let should_break =
-                            reply.add(entry_ino.get(), /* offset =*/ i, kind, &entry_path);
+                        let entry_path = OsString::from_vec(entry.path);
+                        //println!("=> reply {entry_ino:?}, {i}, {kind:?} {:?}", entry.get_path());
+                        //println!("Put in cache for {ino:?}/{entry_path:?} => {entry_idx:?}");
+                        let should_break = reply.add(
+                            entry_ino.get(),
+                            /* offset =*/ i,
+                            entry.file_type,
+                            &entry_path,
+                        );
                         self.resolve_cache.put((ino, entry_path), Some(entry_idx));
                         if should_break {
                             break;

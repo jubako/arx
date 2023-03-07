@@ -192,19 +192,19 @@ impl LinkEntry {
 }
 
 pub struct Builder {
-    store: Rc<jbk::reader::EntryStore>,
-    path_property: jbk::reader::builder::ArrayProperty,
-    parent_property: jbk::reader::builder::IntProperty,
-    owner_property: jbk::reader::builder::IntProperty,
-    group_property: jbk::reader::builder::IntProperty,
-    rigths_property: jbk::reader::builder::IntProperty,
-    mtime_property: jbk::reader::builder::IntProperty,
-    variant_id_property: jbk::reader::builder::VariantIdProperty,
-    file_content_address_property: jbk::reader::builder::ContentProperty,
-    file_size_property: jbk::reader::builder::IntProperty,
-    dir_first_child_property: jbk::reader::builder::IntProperty,
-    dir_nb_children_property: jbk::reader::builder::IntProperty,
-    link_target_property: jbk::reader::builder::ArrayProperty,
+    pub(crate) store: Rc<jbk::reader::EntryStore>,
+    pub(crate) path_property: jbk::reader::builder::ArrayProperty,
+    pub(crate) parent_property: jbk::reader::builder::IntProperty,
+    pub(crate) owner_property: jbk::reader::builder::IntProperty,
+    pub(crate) group_property: jbk::reader::builder::IntProperty,
+    pub(crate) rigths_property: jbk::reader::builder::IntProperty,
+    pub(crate) mtime_property: jbk::reader::builder::IntProperty,
+    pub(crate) variant_id_property: jbk::reader::builder::VariantIdProperty,
+    pub(crate) file_content_address_property: jbk::reader::builder::ContentProperty,
+    pub(crate) file_size_property: jbk::reader::builder::IntProperty,
+    pub(crate) dir_first_child_property: jbk::reader::builder::IntProperty,
+    pub(crate) dir_nb_children_property: jbk::reader::builder::IntProperty,
+    pub(crate) link_target_property: jbk::reader::builder::ArrayProperty,
 }
 
 impl jbk::reader::builder::BuilderTrait for Builder {
@@ -329,13 +329,13 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
     }
 }
 
-pub struct ReadEntry<'builder> {
+pub struct ReadEntry<'builder, Builder: BuilderTrait> {
     builder: &'builder Builder,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
 
-impl<'builder> ReadEntry<'builder> {
+impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
     pub fn new<R: Range>(range: &R, builder: &'builder Builder) -> Self {
         let end = range.offset() + range.count();
         Self {
@@ -350,8 +350,8 @@ impl<'builder> ReadEntry<'builder> {
     }
 }
 
-impl<'builder> Iterator for ReadEntry<'builder> {
-    type Item = jbk::Result<Entry>;
+impl<'builder, Builder: BuilderTrait> Iterator for ReadEntry<'builder, Builder> {
+    type Item = jbk::Result<Builder::Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
