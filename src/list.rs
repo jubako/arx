@@ -49,5 +49,5 @@ pub fn list<P: AsRef<Path>>(infile: P) -> jbk::Result<()> {
         .schema
         .create_builder(index.get_store(arx.get_entry_storage())?)?;
     let op = Lister {};
-    runner.run(index.get_finder(&builder)?, &op)
+    runner.run(index.get_finder(builder)?, &op)
 }

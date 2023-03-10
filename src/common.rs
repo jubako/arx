@@ -201,7 +201,7 @@ impl Schema {
 
 impl jbk::reader::schema::SchemaTrait for Schema {
     type Builder = Builder;
-    fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Self::Builder> {
+    fn create_builder(&self, store: Rc<jbk::reader::EntryStore>) -> jbk::Result<Rc<Self::Builder>> {
         let layout = store.layout();
         let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
         assert_eq!(variants.len(), 3);
@@ -212,7 +212,7 @@ impl jbk::reader::schema::SchemaTrait for Schema {
         let dir_first_child_property = (&variants[1][0]).try_into()?;
         let dir_nb_children_property = (&variants[1][1]).try_into()?;
         let link_target_property = (&variants[2][0]).try_into()?;
-        Ok(Builder {
+        Ok(Rc::new(Builder {
             value_storage: Rc::clone(&self.value_storage),
             store,
             path_property,
@@ -222,7 +222,7 @@ impl jbk::reader::schema::SchemaTrait for Schema {
             dir_first_child_property,
             dir_nb_children_property,
             link_target_property,
-        })
+        }))
     }
 }
 
@@ -256,7 +256,7 @@ impl jbk::reader::CompareTrait<Schema> for EntryCompare<'_, '_> {
 }
 
 pub struct ReadEntry<'finder> {
-    finder: &'finder jbk::reader::Finder<'finder, Schema>,
+    finder: &'finder jbk::reader::Finder<Schema>,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
@@ -358,7 +358,7 @@ impl<'a> ArxRunner<'a> {
                 Entry::Dir(e) => {
                     op.on_directory_enter(&mut self.current_path, &e)?;
                     let finder = jbk::reader::Finder::new(
-                        finder.builder(),
+                        Rc::clone(finder.builder()),
                         e.get_first_child(),
                         e.get_nb_children(),
                     );
