@@ -10,7 +10,7 @@ fn dump_entry(container: &jbk::reader::Container, entry: &Entry) -> jbk::Result<
         Entry::File(e) => {
             let reader = container.get_reader(e.get_content_address())?;
             std::io::copy(
-                &mut reader.create_stream_all(),
+                &mut reader.create_flux_all(),
                 &mut std::io::stdout().lock(),
             )?;
             Ok(())

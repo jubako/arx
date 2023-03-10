@@ -353,7 +353,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     Entry::File(e) => {
                         let reader = self.arx.get_reader(e.get_content_address()).unwrap();
                         let mut stream =
-                            reader.create_stream_from(jbk::Offset::new(offset.try_into().unwrap()));
+                            reader.create_flux_from(jbk::Offset::new(offset.try_into().unwrap()));
                         let size = min(size as u64, stream.size().into_u64());
                         let data = stream.read_vec(size as usize).unwrap();
                         reply.data(&data)
