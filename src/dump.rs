@@ -9,10 +9,7 @@ fn dump_entry(container: &jbk::reader::Container, entry: &Entry) -> jbk::Result<
         Entry::Dir(_) => Err("Found directory".to_string().into()),
         Entry::File(e) => {
             let reader = container.get_reader(e.get_content_address())?;
-            std::io::copy(
-                &mut reader.create_flux_all(),
-                &mut std::io::stdout().lock(),
-            )?;
+            std::io::copy(&mut reader.create_flux_all(), &mut std::io::stdout().lock())?;
             Ok(())
         }
         Entry::Link(_) => Err("Found link".to_string().into()),
@@ -47,8 +44,11 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                 } else if let Entry::Dir(e) = entry {
                     let offset = e.get_first_child();
                     let count = e.get_nb_children();
-                    current_finder =
-                        jbk::reader::Finder::new(Rc::clone(current_finder.builder()), offset, count);
+                    current_finder = jbk::reader::Finder::new(
+                        Rc::clone(current_finder.builder()),
+                        offset,
+                        count,
+                    );
                 } else {
                     return Err("Cannot found entry".to_string().into());
                 }
