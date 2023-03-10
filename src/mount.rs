@@ -139,7 +139,7 @@ struct ArxFs<'a> {
     arx: Arx,
     resolver: jbk::reader::Resolver,
     entry_index: jbk::reader::Index,
-    builder: Builder,
+    builder: Rc<Builder>,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
     attr_cache: LruCache<jbk::EntryIdx, fuse::FileAttr>,
     pub stats: &'a mut StatCounter,
@@ -164,7 +164,7 @@ impl<'a> ArxFs<'a> {
     }
 
     pub fn get_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Entry> {
-        let finder: jbk::reader::Finder<Schema> = self.entry_index.get_finder(&self.builder)?;
+        let finder: jbk::reader::Finder<Schema> = self.entry_index.get_finder(Rc::clone(&self.builder))?;
         finder.get_entry(idx)
     }
 
@@ -172,14 +172,14 @@ impl<'a> ArxFs<'a> {
         match ino.try_into() {
             Err(_) => {
                 let index = self.arx.get_index_for_name("arx_root")?;
-                Ok(index.get_finder(&self.builder)?)
+                Ok(index.get_finder(Rc::clone(&self.builder))?)
             }
             Ok(idx) => {
                 let entry = self.get_entry(idx)?;
                 if let Entry::Dir(e) = entry {
                     let offset = e.get_first_child();
                     let count = e.get_nb_children();
-                    Ok(jbk::reader::Finder::new(&self.builder, offset, count))
+                    Ok(jbk::reader::Finder::new(Rc::clone(&self.builder), offset, count))
                 } else {
                     Err("No at directory".to_string().into())
                 }
@@ -249,7 +249,7 @@ impl<'a> fuse::Filesystem for ArxFs<'a> {
                     Some(attr) => attr,
                     None => {
                         let finder: jbk::reader::Finder<Schema> =
-                            self.entry_index.get_finder(&self.builder).unwrap();
+                            self.entry_index.get_finder(Rc::clone(&self.builder)).unwrap();
                         let entry = finder.get_entry(idx).unwrap();
                         let attr = entry.to_fillattr(&self.arx).unwrap();
                         self.attr_cache.push(idx, attr);

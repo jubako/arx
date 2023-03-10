@@ -28,7 +28,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let index = directory.get_index_from_name("arx_root")?;
     let builder = schema.create_builder(index.get_store(&entry_storage)?)?;
     let resolver = jbk::reader::Resolver::new(Rc::clone(&value_storage));
-    let mut current_finder: jbk::reader::Finder<Schema> = index.get_finder(&builder)?;
+    let mut current_finder: jbk::reader::Finder<Schema> = index.get_finder(Rc::clone(&builder))?;
     let mut components = path.as_ref().iter().peekable();
     while let Some(component) = components.next() {
         // Search for the current component.
@@ -48,7 +48,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
                     let offset = e.get_first_child();
                     let count = e.get_nb_children();
                     current_finder =
-                        jbk::reader::Finder::new(current_finder.builder(), offset, count);
+                        jbk::reader::Finder::new(Rc::clone(current_finder.builder()), offset, count);
                 } else {
                     return Err("Cannot found entry".to_string().into());
                 }

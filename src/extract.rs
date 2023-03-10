@@ -63,5 +63,5 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
         .schema
         .create_builder(index.get_store(arx.get_entry_storage())?)?;
     let op = Extractor::new(&arx);
-    runner.run(index.get_finder(&builder)?, &op)
+    runner.run(index.get_finder(builder)?, &op)
 }
