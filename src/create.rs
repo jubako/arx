@@ -140,8 +140,8 @@ impl Creator {
         let entry_def = schema::Schema::new(
             // Common part
             schema::CommonProperties::new(vec![
-                schema::Property::VLArray(1, Rc::clone(&path_store)), // the path
-                schema::Property::new_int(),                          // index of the parent entry
+                schema::Property::new_array(1, Rc::clone(&path_store)), // the path
+                schema::Property::new_int(),                            // index of the parent entry
             ]),
             vec![
                 // File
@@ -153,7 +153,7 @@ impl Creator {
                 ]),
                 // Link
                 schema::VariantProperties::new(vec![
-                    schema::Property::VLArray(1, Rc::clone(&path_store)), // Id of the linked entry
+                    schema::Property::new_array(1, Rc::clone(&path_store)), // Id of the linked entry
                 ]),
             ],
         );
