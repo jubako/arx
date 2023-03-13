@@ -20,11 +20,11 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
-    parent: jbk::Bound<jbk::EntryIdx>,
+    parent: jbk::Generator<jbk::EntryIdx, u64>,
 }
 
 impl Entry {
-    pub fn new(path: PathBuf, parent: jbk::Bound<jbk::EntryIdx>) -> jbk::Result<Self> {
+    pub fn new(path: PathBuf, parent: jbk::Generator<jbk::EntryIdx, u64>) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
@@ -53,7 +53,10 @@ impl Entry {
         })
     }
 
-    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Bound<jbk::EntryIdx>) -> Self {
+    pub fn new_from_fs(
+        dir_entry: fs::DirEntry,
+        parent: jbk::Generator<jbk::EntryIdx, u64>,
+    ) -> Self {
         let path = dir_entry.path();
         if let Ok(file_type) = dir_entry.file_type() {
             if file_type.is_dir() {
@@ -98,6 +101,10 @@ pub struct Creator {
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
     queue: VecDeque<Entry>,
+}
+
+fn add_idx_one(idx: u64) -> u64 {
+    idx + 1
 }
 
 impl Creator {
@@ -239,8 +246,15 @@ impl Creator {
                     ],
                 );
                 let mut entry_count = 0;
+                let parent_idx = jbk_entry.get_idx();
+                let parent_idx_generator = jbk::Generator::<jbk::EntryIdx, u64>::from((
+                    parent_idx,
+                    add_idx_one as fn(u64) -> u64,
+                    //std::convert::identity as fn(jbk::EntryIdx) -> jbk::EntryIdx,
+                ));
+
                 for sub_entry in fs::read_dir(&entry.path)? {
-                    self.push_back(Entry::new_from_fs(sub_entry?, jbk_entry.get_idx()));
+                    self.push_back(Entry::new_from_fs(sub_entry?, parent_idx_generator.clone()));
                     entry_count += 1;
                 }
                 nb_entries.fulfil(entry_count);
