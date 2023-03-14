@@ -1,5 +1,4 @@
 use crate::common::*;
-use jbk::reader::schema::SchemaTrait;
 use jubako as jbk;
 use std::fs::{create_dir, create_dir_all, File};
 use std::os::unix::fs::symlink;
@@ -58,10 +57,6 @@ pub fn extract<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let mut runner = ArxRunner::new(&arx, outdir.as_ref().to_path_buf());
 
-    let index = arx.get_index_for_name("arx_root")?;
-    let builder = arx
-        .schema
-        .create_builder(index.get_store(arx.get_entry_storage())?)?;
     let op = Extractor::new(&arx);
-    runner.run(index.get_finder(builder)?, &op)
+    runner.run(arx.root_index()?, &op)
 }
