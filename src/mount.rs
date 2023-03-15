@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
@@ -450,8 +451,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
                         let entry_path = entry.get_path().unwrap();
                         let should_break =
                             reply.add(entry_ino.get(), /* offset =*/ i, kind, &entry_path);
-                        self.resolve_cache
-                            .put((ino, entry_path.into()), Some(entry_idx));
+                        self.resolve_cache.put((ino, entry_path), Some(entry_idx));
                         if should_break {
                             break;
                         }

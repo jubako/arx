@@ -1,7 +1,7 @@
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -29,7 +29,7 @@ impl Entry {
         }
     }
 
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         match self {
             Self::File(e) => e.get_path(),
             Self::Dir(e) => e.get_path(),
@@ -83,10 +83,10 @@ pub struct FileEntry {
 }
 
 impl FileEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -119,10 +119,10 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -170,10 +170,10 @@ pub struct LinkEntry {
 }
 
 impl LinkEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -184,10 +184,10 @@ impl LinkEntry {
         }
     }
 
-    pub fn get_target_link(&self) -> jbk::Result<String> {
+    pub fn get_target_link(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.target.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 }
 
