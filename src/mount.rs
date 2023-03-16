@@ -448,6 +448,24 @@ impl<'a> ArxFs<'a> {
     }
 }
 
+const ROOT_ATTR: fuser::FileAttr = fuser::FileAttr {
+    ino: 1,
+    size: 0,
+    kind: fuser::FileType::Directory,
+    blocks: 1,
+    atime: std::time::UNIX_EPOCH,
+    mtime: std::time::UNIX_EPOCH,
+    ctime: std::time::UNIX_EPOCH,
+    crtime: std::time::UNIX_EPOCH,
+    perm: 0o555,
+    nlink: 2,
+    uid: 1000,
+    gid: 1000,
+    rdev: 0,
+    blksize: 0,
+    flags: 0,
+};
+
 impl<'a> fuser::Filesystem for ArxFs<'a> {
     fn lookup(
         &mut self,
@@ -496,24 +514,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         let ino = Ino::from(ino);
         match ino.try_into() {
             Err(_) => {
-                let attr = fuser::FileAttr {
-                    ino: ino.get(),
-                    size: 0,
-                    kind: fuser::FileType::Directory,
-                    blocks: 1,
-                    atime: std::time::UNIX_EPOCH,
-                    mtime: std::time::UNIX_EPOCH,
-                    ctime: std::time::UNIX_EPOCH,
-                    crtime: std::time::UNIX_EPOCH,
-                    perm: 0o555,
-                    nlink: 2,
-                    uid: 1000,
-                    gid: 1000,
-                    rdev: 0,
-                    blksize: 0,
-                    flags: 0,
-                };
-                reply.attr(&TTL, &attr);
+                reply.attr(&TTL, &ROOT_ATTR);
             }
             Ok(idx) => {
                 let attr = self.attr_cache.get(&idx);
