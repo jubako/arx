@@ -36,13 +36,50 @@ impl Entry {
             Self::Link(e) => e.get_path(),
         }
     }
+
+    pub fn owner(&self) -> u32 {
+        match self {
+            Self::File(e) => e.owner,
+            Self::Dir(e) => e.owner,
+            Self::Link(e) => e.owner,
+        }
+    }
+
+    pub fn group(&self) -> u32 {
+        match self {
+            Self::File(e) => e.group,
+            Self::Dir(e) => e.group,
+            Self::Link(e) => e.group,
+        }
+    }
+
+    pub fn rigths(&self) -> u32 {
+        match self {
+            Self::File(e) => e.rigths,
+            Self::Dir(e) => e.rigths,
+            Self::Link(e) => e.rigths,
+        }
+    }
+
+    pub fn mtime(&self) -> u64 {
+        match self {
+            Self::File(e) => e.mtime,
+            Self::Dir(e) => e.mtime,
+            Self::Link(e) => e.mtime,
+        }
+    }
 }
 
 pub struct FileEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
+    owner: u32,
+    group: u32,
+    rigths: u32,
+    mtime: u64,
     content_address: jbk::reader::ContentAddress,
+    size: jbk::Size,
 }
 
 impl FileEntry {
@@ -63,12 +100,20 @@ impl FileEntry {
     pub fn get_content_address(&self) -> jbk::reader::ContentAddress {
         self.content_address
     }
+
+    pub fn size(&self) -> jbk::Size {
+        self.size
+    }
 }
 
 pub struct DirEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
+    owner: u32,
+    group: u32,
+    rigths: u32,
+    mtime: u64,
     first_child: jbk::EntryIdx,
     nb_children: jbk::EntryCount,
 }
@@ -117,6 +162,10 @@ pub struct LinkEntry {
     idx: jbk::EntryIdx,
     path: jbk::reader::Array,
     parent: jbk::EntryIdx,
+    owner: u32,
+    group: u32,
+    rigths: u32,
+    mtime: u64,
     target: jbk::reader::Array,
 }
 
@@ -146,8 +195,13 @@ pub struct Builder {
     store: Rc<jbk::reader::EntryStore>,
     path_property: jbk::reader::builder::ArrayProperty,
     parent_property: jbk::reader::builder::IntProperty,
+    owner_property: jbk::reader::builder::IntProperty,
+    group_property: jbk::reader::builder::IntProperty,
+    rigths_property: jbk::reader::builder::IntProperty,
+    mtime_property: jbk::reader::builder::IntProperty,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     file_content_address_property: jbk::reader::builder::ContentProperty,
+    file_size_property: jbk::reader::builder::IntProperty,
     dir_first_child_property: jbk::reader::builder::IntProperty,
     dir_nb_children_property: jbk::reader::builder::IntProperty,
     link_target_property: jbk::reader::builder::ArrayProperty,
@@ -160,14 +214,24 @@ impl jbk::reader::builder::BuilderTrait for Builder {
         let reader = self.store.get_entry_reader(idx);
         let path = self.path_property.create(&reader)?;
         let parent = (self.parent_property.create(&reader)? as u32).into();
+        let owner = self.owner_property.create(&reader)? as u32;
+        let group = self.group_property.create(&reader)? as u32;
+        let rigths = self.rigths_property.create(&reader)? as u32;
+        let mtime = self.mtime_property.create(&reader)?;
         Ok(match self.variant_id_property.create(&reader)?.into_u8() {
             0 => {
                 let content_address = self.file_content_address_property.create(&reader)?;
+                let size = self.file_size_property.create(&reader)?.into();
                 Entry::File(FileEntry {
                     idx,
                     path,
                     parent,
+                    owner,
+                    group,
+                    rigths,
+                    mtime,
                     content_address,
+                    size,
                 })
             }
             1 => {
@@ -177,6 +241,10 @@ impl jbk::reader::builder::BuilderTrait for Builder {
                     idx,
                     path,
                     parent,
+                    owner,
+                    group,
+                    rigths,
+                    mtime,
                     first_child,
                     nb_children,
                 })
@@ -187,6 +255,10 @@ impl jbk::reader::builder::BuilderTrait for Builder {
                     idx,
                     path,
                     parent,
+                    owner,
+                    group,
+                    rigths,
+                    mtime,
                     target,
                 })
             }
@@ -204,8 +276,13 @@ fn create_builder(
     assert_eq!(variants.len(), 3);
     let path_property = (&layout.common[0], value_storage).try_into()?;
     let parent_property = (&layout.common[1], value_storage).try_into()?;
+    let owner_property = (&layout.common[2], value_storage).try_into()?;
+    let group_property = (&layout.common[3], value_storage).try_into()?;
+    let rigths_property = (&layout.common[4], value_storage).try_into()?;
+    let mtime_property = (&layout.common[5], value_storage).try_into()?;
     let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_offset);
     let file_content_address_property = (&variants[0][0]).try_into()?;
+    let file_size_property = (&variants[0][1], value_storage).try_into()?;
     let dir_first_child_property = (&variants[1][0], value_storage).try_into()?;
     let dir_nb_children_property = (&variants[1][1], value_storage).try_into()?;
     let link_target_property = (&variants[2][0], value_storage).try_into()?;
@@ -213,8 +290,13 @@ fn create_builder(
         store,
         path_property,
         parent_property,
+        owner_property,
+        group_property,
+        rigths_property,
+        mtime_property,
         variant_id_property,
         file_content_address_property,
+        file_size_property,
         dir_first_child_property,
         dir_nb_children_property,
         link_target_property,
