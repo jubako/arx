@@ -1,7 +1,7 @@
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -29,7 +29,7 @@ impl Entry {
         }
     }
 
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         match self {
             Self::File(e) => e.get_path(),
             Self::Dir(e) => e.get_path(),
@@ -83,10 +83,10 @@ pub struct FileEntry {
 }
 
 impl FileEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -119,10 +119,10 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -170,10 +170,10 @@ pub struct LinkEntry {
 }
 
 impl LinkEntry {
-    pub fn get_path(&self) -> jbk::Result<String> {
+    pub fn get_path(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.path.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 
     pub fn get_parent(&self) -> Option<jbk::EntryIdx> {
@@ -184,27 +184,27 @@ impl LinkEntry {
         }
     }
 
-    pub fn get_target_link(&self) -> jbk::Result<String> {
+    pub fn get_target_link(&self) -> jbk::Result<OsString> {
         let mut path = Vec::with_capacity(125);
         self.target.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(OsString::from_vec(path))
     }
 }
 
 pub struct Builder {
-    store: Rc<jbk::reader::EntryStore>,
-    path_property: jbk::reader::builder::ArrayProperty,
-    parent_property: jbk::reader::builder::IntProperty,
-    owner_property: jbk::reader::builder::IntProperty,
-    group_property: jbk::reader::builder::IntProperty,
-    rigths_property: jbk::reader::builder::IntProperty,
-    mtime_property: jbk::reader::builder::IntProperty,
-    variant_id_property: jbk::reader::builder::VariantIdProperty,
-    file_content_address_property: jbk::reader::builder::ContentProperty,
-    file_size_property: jbk::reader::builder::IntProperty,
-    dir_first_child_property: jbk::reader::builder::IntProperty,
-    dir_nb_children_property: jbk::reader::builder::IntProperty,
-    link_target_property: jbk::reader::builder::ArrayProperty,
+    pub(crate) store: Rc<jbk::reader::EntryStore>,
+    pub(crate) path_property: jbk::reader::builder::ArrayProperty,
+    pub(crate) parent_property: jbk::reader::builder::IntProperty,
+    pub(crate) owner_property: jbk::reader::builder::IntProperty,
+    pub(crate) group_property: jbk::reader::builder::IntProperty,
+    pub(crate) rigths_property: jbk::reader::builder::IntProperty,
+    pub(crate) mtime_property: jbk::reader::builder::IntProperty,
+    pub(crate) variant_id_property: jbk::reader::builder::VariantIdProperty,
+    pub(crate) file_content_address_property: jbk::reader::builder::ContentProperty,
+    pub(crate) file_size_property: jbk::reader::builder::IntProperty,
+    pub(crate) dir_first_child_property: jbk::reader::builder::IntProperty,
+    pub(crate) dir_nb_children_property: jbk::reader::builder::IntProperty,
+    pub(crate) link_target_property: jbk::reader::builder::ArrayProperty,
 }
 
 impl jbk::reader::builder::BuilderTrait for Builder {
@@ -329,13 +329,13 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
     }
 }
 
-pub struct ReadEntry<'builder> {
+pub struct ReadEntry<'builder, Builder: BuilderTrait> {
     builder: &'builder Builder,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
 }
 
-impl<'builder> ReadEntry<'builder> {
+impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
     pub fn new<R: Range>(range: &R, builder: &'builder Builder) -> Self {
         let end = range.offset() + range.count();
         Self {
@@ -350,8 +350,8 @@ impl<'builder> ReadEntry<'builder> {
     }
 }
 
-impl<'builder> Iterator for ReadEntry<'builder> {
-    type Item = jbk::Result<Entry>;
+impl<'builder, Builder: BuilderTrait> Iterator for ReadEntry<'builder, Builder> {
+    type Item = jbk::Result<Builder::Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
