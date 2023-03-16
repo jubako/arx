@@ -10,6 +10,8 @@ use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
+pub type EntryResult<T> = Result<T, EntryType>;
+
 pub enum Entry {
     File(FileEntry),
     Dir(DirEntry),
