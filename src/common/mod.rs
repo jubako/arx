@@ -1,3 +1,7 @@
+mod entry_type;
+
+pub use entry_type::EntryType;
+
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
@@ -218,52 +222,56 @@ impl jbk::reader::builder::BuilderTrait for Builder {
         let group = self.group_property.create(&reader)? as u32;
         let rigths = self.rigths_property.create(&reader)? as u32;
         let mtime = self.mtime_property.create(&reader)?;
-        Ok(match self.variant_id_property.create(&reader)?.into_u8() {
-            0 => {
-                let content_address = self.file_content_address_property.create(&reader)?;
-                let size = self.file_size_property.create(&reader)?.into();
-                Entry::File(FileEntry {
-                    idx,
-                    path,
-                    parent,
-                    owner,
-                    group,
-                    rigths,
-                    mtime,
-                    content_address,
-                    size,
-                })
-            }
-            1 => {
-                let first_child = (self.dir_first_child_property.create(&reader)? as u32).into();
-                let nb_children = (self.dir_nb_children_property.create(&reader)? as u32).into();
-                Entry::Dir(DirEntry {
-                    idx,
-                    path,
-                    parent,
-                    owner,
-                    group,
-                    rigths,
-                    mtime,
-                    first_child,
-                    nb_children,
-                })
-            }
-            2 => {
-                let target = self.link_target_property.create(&reader)?;
-                Entry::Link(LinkEntry {
-                    idx,
-                    path,
-                    parent,
-                    owner,
-                    group,
-                    rigths,
-                    mtime,
-                    target,
-                })
-            }
-            _ => unreachable!(),
-        })
+        Ok(
+            match self.variant_id_property.create(&reader)?.try_into()? {
+                EntryType::File => {
+                    let content_address = self.file_content_address_property.create(&reader)?;
+                    let size = self.file_size_property.create(&reader)?.into();
+                    Entry::File(FileEntry {
+                        idx,
+                        path,
+                        parent,
+                        owner,
+                        group,
+                        rigths,
+                        mtime,
+                        content_address,
+                        size,
+                    })
+                }
+                EntryType::Dir => {
+                    let first_child =
+                        (self.dir_first_child_property.create(&reader)? as u32).into();
+                    let nb_children =
+                        (self.dir_nb_children_property.create(&reader)? as u32).into();
+                    Entry::Dir(DirEntry {
+                        idx,
+                        path,
+                        parent,
+                        owner,
+                        group,
+                        rigths,
+                        mtime,
+                        first_child,
+                        nb_children,
+                    })
+                }
+                EntryType::File => {
+                    let target = self.link_target_property.create(&reader)?;
+                    Entry::Link(LinkEntry {
+                        idx,
+                        path,
+                        parent,
+                        owner,
+                        group,
+                        rigths,
+                        mtime,
+                        target,
+                    })
+                }
+                _ => unreachable!(),
+            },
+        )
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::common::{Arx, Builder, EntryCompare, ReadEntry};
+use crate::common::{Arx, Builder, EntryCompare, EntryType, ReadEntry};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
@@ -158,8 +158,8 @@ impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
-        match self.variant_id_property.create(&reader)?.into_u8() {
-            2 => {
+        match self.variant_id_property.create(&reader)?.try_into()? {
+            EntryType::Link => {
                 let target = self.link_property.create(&reader)?;
                 let mut vec = vec![];
                 target.resolve_to_vec(&mut vec)?;
@@ -197,14 +197,13 @@ impl jbk::reader::builder::BuilderTrait for LightFileBuilder {
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
-        match self.variant_id_property.create(&reader)?.into_u8() {
-            0 => {
+        match self.variant_id_property.create(&reader)?.try_into()? {
+            EntryType::File => {
                 let content_address = self.content_address_property.create(&reader)?;
                 Ok(LightFile::Some(content_address))
             }
-            1 => Ok(LightFile::Dir),
-            2 => Ok(LightFile::Link),
-            _ => Err("Invalid variant_id".into()),
+            EntryType::Dir => Ok(LightFile::Dir),
+            EntryType::Link => Ok(LightFile::Link),
         }
     }
 }
@@ -232,16 +231,15 @@ impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
-        match self.variant_id_property.create(&reader)?.into_u8() {
-            1 => {
+        match self.variant_id_property.create(&reader)?.try_into()? {
+            EntryType::Dir => {
                 let first_child: jbk::EntryIdx =
                     (self.first_child_property.create(&reader)? as u32).into();
                 let nb_children: jbk::EntryCount =
                     (self.nb_children_property.create(&reader)? as u32).into();
                 Ok(Some(jbk::EntryRange::new(first_child, nb_children)))
             }
-            0 | 2 => Ok(None),
-            _ => Err("Invalid variant_id".into()),
+            _ => Ok(None),
         }
     }
 }
@@ -275,13 +273,11 @@ impl jbk::reader::builder::BuilderTrait for LightCommonPathBuilder {
         let path_prop = self.path_property.create(&reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
-        let file_type = match self.variant_id_property.create(&reader)?.into_u8() {
-            0 => fuser::FileType::RegularFile,
-            1 => fuser::FileType::Directory,
-            2 => fuser::FileType::Symlink,
-            _ => return Err("Invalid variant_id".into()),
-        };
-        Ok(LightCommonPath { file_type, path })
+        let file_type: EntryType = self.variant_id_property.create(&reader)?.try_into()?;
+        Ok(LightCommonPath {
+            file_type: file_type.into(),
+            path,
+        })
     }
 }
 
@@ -347,36 +343,28 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
-        let (size, kind) = match &self.variant_id_property.create(&reader)?.into_u8() {
-            0 => (
-                self.file_size_property.create(&reader)?,
-                fuser::FileType::RegularFile,
-            ),
-            1 => (
-                (self.dir_nb_children_property.create(&reader)? + 1) * 10,
-                fuser::FileType::Directory,
-            ),
-            2 => (
-                {
-                    let link = self.link_target_property.create(&reader)?;
-                    match link.size {
-                        Some(s) => s.into_u64(),
-                        None => {
-                            let mut vec = vec![];
-                            link.resolve_to_vec(&mut vec)?;
-                            vec.len() as u64
-                        }
+        let kind = self.variant_id_property.create(&reader)?.try_into()?;
+
+        let size = match &kind {
+            EntryType::File => self.file_size_property.create(&reader)?,
+            EntryType::Dir => (self.dir_nb_children_property.create(&reader)? + 1) * 10,
+            EntryType::Link => {
+                let link = self.link_target_property.create(&reader)?;
+                match link.size {
+                    Some(s) => s.into_u64(),
+                    None => {
+                        let mut vec = vec![];
+                        link.resolve_to_vec(&mut vec)?;
+                        vec.len() as u64
                     }
-                },
-                fuser::FileType::Symlink,
-            ),
-            _ => return Err("Invalid variant_id".into()),
+                }
+            }
         };
         let rigths = (self.rights_property.create(&reader)? as u16) & 0b1111_1111_0110_1101;
         Ok(fuser::FileAttr {
             ino: Ino::from(idx).get(),
             size,
-            kind,
+            kind: kind.into(),
             blocks: 1,
             atime: std::time::UNIX_EPOCH,
             mtime: std::time::UNIX_EPOCH
