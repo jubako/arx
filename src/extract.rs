@@ -28,15 +28,15 @@ struct EntryBuilder {
 }
 
 impl EntryBuilder {
-    pub fn new(builder: &Builder) -> Self {
+    pub fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            path_property: builder.path_property.clone(),
-            first_child_property: builder.dir_first_child_property.clone(),
-            nb_children_property: builder.dir_nb_children_property.clone(),
-            content_address_property: builder.file_content_address_property,
-            link_property: builder.link_target_property.clone(),
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            path_property: properties.path_property.clone(),
+            first_child_property: properties.dir_first_child_property.clone(),
+            nb_children_property: properties.dir_nb_children_property.clone(),
+            content_address_property: properties.file_content_address_property,
+            link_property: properties.link_target_property.clone(),
         }
     }
 }
@@ -81,8 +81,8 @@ struct Extractor {
 
 impl Extractor {
     pub fn new(arx: Arx, extract_dir: OsString) -> jbk::Result<Self> {
-        let builder = arx.create_builder(&arx.get_index_for_name("arx_root")?)?;
-        let builder = EntryBuilder::new(&builder);
+        let properties = arx.create_properties(&arx.get_index_for_name("arx_root")?)?;
+        let builder = EntryBuilder::new(&properties);
 
         Ok(Self {
             arx,

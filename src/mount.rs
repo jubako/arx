@@ -1,4 +1,4 @@
-use crate::common::{Arx, Builder, EntryCompare, EntryResult, EntryType, ReadEntry};
+use crate::common::{AllProperties, Arx, EntryCompare, EntryResult, EntryType, ReadEntry};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
@@ -144,11 +144,11 @@ struct LightLinkBuilder {
 }
 
 impl LightLinkBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            link_property: builder.link_target_property.clone(),
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            link_property: properties.link_target_property.clone(),
         }
     }
 }
@@ -179,11 +179,11 @@ struct LightFileBuilder {
 }
 
 impl LightFileBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            content_address_property: builder.file_content_address_property,
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            content_address_property: properties.file_content_address_property,
         }
     }
 }
@@ -213,12 +213,12 @@ struct LightDirBuilder {
 }
 
 impl LightDirBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            first_child_property: builder.dir_first_child_property.clone(),
-            nb_children_property: builder.dir_nb_children_property.clone(),
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            first_child_property: properties.dir_first_child_property.clone(),
+            nb_children_property: properties.dir_nb_children_property.clone(),
         }
     }
 }
@@ -255,11 +255,11 @@ struct LightCommonPathBuilder {
 }
 
 impl LightCommonPathBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            path_property: builder.path_property.clone(),
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            path_property: properties.path_property.clone(),
         }
     }
 }
@@ -283,10 +283,10 @@ struct LightCommonParentBuilder {
 }
 
 impl LightCommonParentBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            parent_property: builder.parent_property.clone(),
+            store: Rc::clone(&properties.store),
+            parent_property: properties.parent_property.clone(),
         }
     }
 }
@@ -319,17 +319,17 @@ struct AttrBuilder {
 }
 
 impl AttrBuilder {
-    fn new(builder: &Builder) -> Self {
+    fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            owner_property: builder.owner_property.clone(),
-            group_property: builder.group_property.clone(),
-            rights_property: builder.rigths_property.clone(),
-            mtime_property: builder.mtime_property.clone(),
-            file_size_property: builder.file_size_property.clone(),
-            dir_nb_children_property: builder.dir_nb_children_property.clone(),
-            link_target_property: builder.link_target_property.clone(),
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            owner_property: properties.owner_property.clone(),
+            group_property: properties.group_property.clone(),
+            rights_property: properties.rigths_property.clone(),
+            mtime_property: properties.mtime_property.clone(),
+            file_size_property: properties.file_size_property.clone(),
+            dir_nb_children_property: properties.dir_nb_children_property.clone(),
+            link_target_property: properties.link_target_property.clone(),
         }
     }
 }
@@ -381,7 +381,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
 struct ArxFs<'a> {
     arx: Arx,
     entry_index: jbk::reader::Index,
-    builder: Builder,
+    properties: AllProperties,
     light_file_builder: LightFileBuilder,
     light_dir_builder: LightDirBuilder,
     light_link_builder: LightLinkBuilder,
@@ -397,17 +397,17 @@ struct ArxFs<'a> {
 impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let entry_index = arx.get_index_for_name("arx_entries")?;
-        let builder = arx.create_builder(&entry_index)?;
-        let light_file_builder = LightFileBuilder::new(&builder);
-        let light_dir_builder = LightDirBuilder::new(&builder);
-        let light_link_builder = LightLinkBuilder::new(&builder);
-        let light_common_path_builder = LightCommonPathBuilder::new(&builder);
-        let light_common_parent_builder = LightCommonParentBuilder::new(&builder);
-        let attr_builder = AttrBuilder::new(&builder);
+        let properties = arx.create_properties(&entry_index)?;
+        let light_file_builder = LightFileBuilder::new(&properties);
+        let light_dir_builder = LightDirBuilder::new(&properties);
+        let light_link_builder = LightLinkBuilder::new(&properties);
+        let light_common_path_builder = LightCommonPathBuilder::new(&properties);
+        let light_common_parent_builder = LightCommonParentBuilder::new(&properties);
+        let attr_builder = AttrBuilder::new(&properties);
         Ok(Self {
             arx,
             entry_index,
-            builder,
+            properties,
             light_file_builder,
             light_dir_builder,
             light_link_builder,
@@ -467,7 +467,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
             Some(idx) => *idx,
             None => {
                 let range = self.get_entry_range(parent).unwrap();
-                let comparator = EntryCompare::new(&self.builder, name);
+                let comparator = EntryCompare::new(&self.properties, name);
                 let idx = range
                     .find(&comparator)
                     .unwrap()

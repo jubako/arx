@@ -1,13 +1,13 @@
-mod basic_builder;
 mod entry_type;
 mod light_path;
+mod properties;
 
-pub use basic_builder::{create_builder, Builder};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
 pub use light_path::LightPath;
+pub use properties::AllProperties;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
@@ -15,12 +15,12 @@ use std::path::Path;
 pub type EntryResult<T> = Result<T, EntryType>;
 
 pub struct EntryCompare<'builder> {
-    builder: &'builder Builder,
+    builder: &'builder AllProperties,
     path_value: Vec<u8>,
 }
 
 impl<'builder> EntryCompare<'builder> {
-    pub fn new(builder: &'builder Builder, component: &OsStr) -> Self {
+    pub fn new(builder: &'builder AllProperties, component: &OsStr) -> Self {
         let path_value = component.to_os_string().into_vec();
         Self {
             builder,
@@ -92,8 +92,8 @@ impl Arx {
         Ok(Self { container })
     }
 
-    pub fn create_builder(&self, index: &jbk::reader::Index) -> jbk::Result<Builder> {
-        create_builder(
+    pub fn create_properties(&self, index: &jbk::reader::Index) -> jbk::Result<AllProperties> {
+        AllProperties::new(
             index.get_store(self.get_entry_storage())?,
             self.get_value_storage(),
         )

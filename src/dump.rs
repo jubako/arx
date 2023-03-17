@@ -1,4 +1,4 @@
-use crate::common::{Arx, Builder, EntryCompare, EntryType};
+use crate::common::{AllProperties, Arx, EntryCompare, EntryType};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use jubako::reader::Range;
@@ -20,13 +20,13 @@ struct EntryBuilder {
 }
 
 impl EntryBuilder {
-    pub fn new(builder: &Builder) -> Self {
+    pub fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&builder.store),
-            variant_id_property: builder.variant_id_property,
-            first_child_property: builder.dir_first_child_property.clone(),
-            nb_children_property: builder.dir_nb_children_property.clone(),
-            content_address_property: builder.file_content_address_property,
+            store: Rc::clone(&properties.store),
+            variant_id_property: properties.variant_id_property,
+            first_child_property: properties.dir_first_child_property.clone(),
+            nb_children_property: properties.dir_nb_children_property.clone(),
+            content_address_property: properties.file_content_address_property,
         }
     }
 }
@@ -70,8 +70,8 @@ fn dump_entry(container: &jbk::reader::Container, entry: &Entry) -> jbk::Result<
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let root_index = arx.root_index()?;
-    let base_builder = arx.create_builder(&root_index)?;
-    let builder = EntryBuilder::new(&base_builder);
+    let properties = arx.create_properties(&root_index)?;
+    let builder = EntryBuilder::new(&properties);
     let mut current_range: jbk::EntryRange = (&root_index).into();
     let mut components = path.as_ref().iter().peekable();
     while let Some(component) = components.next() {
@@ -79,7 +79,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         // All children of a parent are stored concatened.
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
-        let comparator = EntryCompare::new(&base_builder, component);
+        let comparator = EntryCompare::new(&properties, component);
         let found = current_range.find(&comparator)?;
         match found {
             None => return Err("Cannot found entry".to_string().into()),
