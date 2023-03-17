@@ -1,48 +1,112 @@
 use crate::common::*;
+use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::Range;
 use jubako as jbk;
-use std::path::{Path, PathBuf};
+use std::cell::RefCell;
+use std::ffi::OsString;
+use std::os::unix::ffi::OsStringExt;
+use std::path::Path;
+use std::rc::Rc;
 
-struct Lister {}
+enum Entry {
+    File(Vec<u8>),
+    Link(Vec<u8>),
+    Dir(Vec<u8>, jbk::EntryRange),
+}
 
-impl ArxOperator for Lister {
-    fn on_start(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
-        Ok(())
+struct EntryBuilder {
+    store: Rc<jbk::reader::EntryStore>,
+    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    path_property: jbk::reader::builder::ArrayProperty,
+    first_child_property: jbk::reader::builder::IntProperty,
+    nb_children_property: jbk::reader::builder::IntProperty,
+}
+
+impl EntryBuilder {
+    fn new(builder: &Builder) -> Self {
+        Self {
+            store: Rc::clone(&builder.store),
+            variant_id_property: builder.variant_id_property,
+            path_property: builder.path_property.clone(),
+
+            first_child_property: builder.dir_first_child_property.clone(),
+            nb_children_property: builder.dir_nb_children_property.clone(),
+        }
+    }
+}
+
+impl jbk::reader::builder::BuilderTrait for EntryBuilder {
+    type Entry = Entry;
+
+    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
+        let reader = self.store.get_entry_reader(idx);
+        let path_prop = self.path_property.create(&reader)?;
+        let mut path = vec![];
+        path_prop.resolve_to_vec(&mut path)?;
+        let file_type = self.variant_id_property.create(&reader)?.try_into()?;
+        Ok(match file_type {
+            EntryType::File => Entry::File(path),
+            EntryType::Link => Entry::Link(path),
+            EntryType::Dir => {
+                let first_child: jbk::EntryIdx =
+                    (self.first_child_property.create(&reader)? as u32).into();
+                let nb_children: jbk::EntryCount =
+                    (self.nb_children_property.create(&reader)? as u32).into();
+                let range = jbk::EntryRange::new(first_child, nb_children);
+                Entry::Dir(path, range)
+            }
+        })
+    }
+}
+
+struct Lister {
+    arx: Arx,
+    builder: EntryBuilder,
+    current_path: RefCell<LightPath>,
+}
+
+impl Lister {
+    fn new(arx: Arx) -> jbk::Result<Self> {
+        let builder = arx.create_builder(&arx.get_index_for_name("arx_root")?)?;
+        let builder = EntryBuilder::new(&builder);
+        Ok(Self {
+            arx,
+            builder,
+            current_path: RefCell::new(LightPath::new()),
+        })
     }
 
-    fn on_stop(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
-        Ok(())
+    fn run(&self) -> jbk::Result<()> {
+        self._run(&self.arx.root_index()?)
     }
 
-    fn on_file(&self, current_path: &mut PathBuf, entry: &FileEntry) -> jbk::Result<()> {
-        current_path.push(entry.get_path()?);
-        println!("{}", current_path.display());
-        current_path.pop();
-        Ok(())
-    }
-
-    fn on_link(&self, current_path: &mut PathBuf, entry: &LinkEntry) -> jbk::Result<()> {
-        current_path.push(entry.get_path()?);
-        println!("{}", current_path.display());
-        current_path.pop();
-        Ok(())
-    }
-
-    fn on_directory_enter(&self, current_path: &mut PathBuf, entry: &DirEntry) -> jbk::Result<()> {
-        current_path.push(entry.get_path()?);
-        println!("{}", current_path.display());
-        Ok(())
-    }
-
-    fn on_directory_exit(&self, current_path: &mut PathBuf, _entry: &DirEntry) -> jbk::Result<()> {
-        current_path.pop();
+    fn _run<R: Range>(&self, range: &R) -> jbk::Result<()> {
+        let read_entry = ReadEntry::new(range, &self.builder);
+        for entry in read_entry {
+            match entry? {
+                Entry::File(path) | Entry::Link(path) => {
+                    self.current_path
+                        .borrow_mut()
+                        .push(OsString::from_vec(path));
+                    self.current_path.borrow().println()?;
+                    self.current_path.borrow_mut().pop();
+                }
+                Entry::Dir(path, range) => {
+                    self.current_path
+                        .borrow_mut()
+                        .push(OsString::from_vec(path));
+                    self.current_path.borrow().println()?;
+                    self._run(&range)?;
+                    self.current_path.borrow_mut().pop();
+                }
+            }
+        }
         Ok(())
     }
 }
 
 pub fn list<P: AsRef<Path>>(infile: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
-    let mut runner = ArxRunner::new(&arx, PathBuf::with_capacity(2048));
-
-    let op = Lister {};
-    runner.run(arx.root_index()?, &op)
+    let lister = Lister::new(arx)?;
+    lister.run()
 }
