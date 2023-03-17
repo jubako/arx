@@ -1,5 +1,6 @@
 use jubako as jbk;
 
+use crate::common::EntryType;
 use jbk::creator::{schema, EntryTrait};
 use std::collections::VecDeque;
 use std::ffi::OsString;
@@ -246,7 +247,7 @@ impl Creator {
                 let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
                 let jbk_entry = jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
-                    Some(1.into()),
+                    Some(EntryType::Dir.into()),
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
@@ -279,7 +280,7 @@ impl Creator {
                     .add_content(jbk::creator::FileSource::open(&entry.path)?.into())?;
                 jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
-                    Some(0.into()),
+                    Some(EntryType::File.into()),
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
@@ -299,7 +300,7 @@ impl Creator {
                 let target = fs::read_link(&entry.path)?;
                 jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
-                    Some(2.into()),
+                    Some(EntryType::Link.into()),
                     vec![
                         entry_path,
                         jbk::Value::Unsigned(entry.parent.into()),
