@@ -2,7 +2,6 @@ use crate::common::*;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
-use std::cell::RefCell;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
@@ -62,42 +61,34 @@ impl jbk::reader::builder::BuilderTrait for EntryBuilder {
 struct Lister {
     arx: Arx,
     builder: EntryBuilder,
-    current_path: RefCell<LightPath>,
 }
 
 impl Lister {
     fn new(arx: Arx) -> jbk::Result<Self> {
         let builder = arx.create_builder(&arx.get_index_for_name("arx_root")?)?;
         let builder = EntryBuilder::new(&builder);
-        Ok(Self {
-            arx,
-            builder,
-            current_path: RefCell::new(LightPath::new()),
-        })
+        Ok(Self { arx, builder })
     }
 
     fn run(&self) -> jbk::Result<()> {
-        self._run(&self.arx.root_index()?)
+        let mut current_path = LightPath::new();
+        self._run(&self.arx.root_index()?, &mut current_path)
     }
 
-    fn _run<R: Range>(&self, range: &R) -> jbk::Result<()> {
+    fn _run<R: Range>(&self, range: &R, current_path: &mut LightPath) -> jbk::Result<()> {
         let read_entry = ReadEntry::new(range, &self.builder);
         for entry in read_entry {
             match entry? {
                 Entry::File(path) | Entry::Link(path) => {
-                    self.current_path
-                        .borrow_mut()
-                        .push(OsString::from_vec(path));
-                    self.current_path.borrow().println()?;
-                    self.current_path.borrow_mut().pop();
+                    current_path.push(OsString::from_vec(path));
+                    current_path.println()?;
+                    current_path.pop();
                 }
                 Entry::Dir(path, range) => {
-                    self.current_path
-                        .borrow_mut()
-                        .push(OsString::from_vec(path));
-                    self.current_path.borrow().println()?;
-                    self._run(&range)?;
-                    self.current_path.borrow_mut().pop();
+                    current_path.push(OsString::from_vec(path));
+                    current_path.println()?;
+                    self._run(&range, current_path)?;
+                    current_path.pop();
                 }
             }
         }
