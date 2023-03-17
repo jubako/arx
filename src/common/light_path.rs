@@ -19,7 +19,7 @@ impl LightPath {
         self.0.pop();
     }
 
-    pub fn println(&self) -> std::io::Result<()> {
+    pub fn println2(&self, component: &[u8]) -> std::io::Result<()> {
         let mut stdout = io::stdout().lock();
         let mut parts = self.0.iter();
         if let Some(part) = parts.next() {
@@ -28,9 +28,17 @@ impl LightPath {
                 stdout.write_all(b"/")?;
                 stdout.write_all(part.as_bytes())?;
             }
+            if !component.is_empty() {
+                stdout.write_all(b"/")?;
+            }
         }
+        stdout.write_all(component)?;
         stdout.write_all(b"\n")?;
         Ok(())
+    }
+
+    pub fn println(&self) -> std::io::Result<()> {
+        self.println2(b"")
     }
 }
 

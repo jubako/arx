@@ -80,9 +80,7 @@ impl Lister {
         for entry in read_entry {
             match entry? {
                 Entry::File(path) | Entry::Link(path) => {
-                    current_path.push(OsString::from_vec(path));
-                    current_path.println()?;
-                    current_path.pop();
+                    current_path.println2(&path)?;
                 }
                 Entry::Dir(path, range) => {
                     current_path.push(OsString::from_vec(path));
