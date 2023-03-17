@@ -8,32 +8,42 @@ use jbk::reader::Range;
 use jubako as jbk;
 pub use light_path::LightPath;
 pub use properties::AllProperties;
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
+use std::rc::Rc;
 
 pub type EntryResult<T> = Result<T, EntryType>;
 
-pub struct EntryCompare<'builder> {
-    builder: &'builder AllProperties,
-    path_value: Vec<u8>,
+pub struct Comparator {
+    store: Rc<jbk::reader::EntryStore>,
+    path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl<'builder> EntryCompare<'builder> {
-    pub fn new(builder: &'builder AllProperties, component: &OsStr) -> Self {
-        let path_value = component.to_os_string().into_vec();
+impl Comparator {
+    pub fn new(properties: &AllProperties) -> Self {
         Self {
-            builder,
-            path_value,
+            store: Rc::clone(&properties.store),
+            path_property: properties.path_property.clone(),
+        }
+    }
+
+    pub fn compare_with<'a>(&'a self, component: &'a [u8]) -> EntryCompare {
+        EntryCompare {
+            comparator: self,
+            path_value: component,
         }
     }
 }
 
+pub struct EntryCompare<'a> {
+    comparator: &'a Comparator,
+    path_value: &'a [u8],
+}
+
 impl jbk::reader::CompareTrait for EntryCompare<'_> {
     fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
-        let reader = self.builder.store.get_entry_reader(idx);
-        let entry_path = self.builder.path_property.create(&reader)?;
-        match entry_path.partial_cmp(&self.path_value) {
+        let reader = self.comparator.store.get_entry_reader(idx);
+        let entry_path = self.comparator.path_property.create(&reader)?;
+        match entry_path.partial_cmp(self.path_value) {
             Some(c) => Ok(c),
             None => Err("Cannot compare".into()),
         }

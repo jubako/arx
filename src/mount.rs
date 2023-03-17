@@ -1,4 +1,4 @@
-use crate::common::{AllProperties, Arx, EntryCompare, EntryResult, EntryType, ReadEntry};
+use crate::common::{AllProperties, Arx, Comparator, EntryResult, EntryType, ReadEntry};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
@@ -381,7 +382,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
 struct ArxFs<'a> {
     arx: Arx,
     entry_index: jbk::reader::Index,
-    properties: AllProperties,
+    comparator: Comparator,
     light_file_builder: LightFileBuilder,
     light_dir_builder: LightDirBuilder,
     light_link_builder: LightLinkBuilder,
@@ -398,6 +399,7 @@ impl<'a> ArxFs<'a> {
     pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
         let entry_index = arx.get_index_for_name("arx_entries")?;
         let properties = arx.create_properties(&entry_index)?;
+        let comparator = Comparator::new(&properties);
         let light_file_builder = LightFileBuilder::new(&properties);
         let light_dir_builder = LightDirBuilder::new(&properties);
         let light_link_builder = LightLinkBuilder::new(&properties);
@@ -407,7 +409,7 @@ impl<'a> ArxFs<'a> {
         Ok(Self {
             arx,
             entry_index,
-            properties,
+            comparator,
             light_file_builder,
             light_dir_builder,
             light_link_builder,
@@ -467,7 +469,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
             Some(idx) => *idx,
             None => {
                 let range = self.get_entry_range(parent).unwrap();
-                let comparator = EntryCompare::new(&self.properties, name);
+                let comparator = self.comparator.compare_with(name.as_bytes());
                 let idx = range
                     .find(&comparator)
                     .unwrap()

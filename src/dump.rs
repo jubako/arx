@@ -1,7 +1,8 @@
-use crate::common::{AllProperties, Arx, EntryCompare, EntryType};
+use crate::common::{AllProperties, Arx, Comparator, EntryType};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use jubako::reader::Range;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -71,6 +72,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let root_index = arx.root_index()?;
     let properties = arx.create_properties(&root_index)?;
+    let comparator = Comparator::new(&properties);
     let builder = EntryBuilder::new(&properties);
     let mut current_range: jbk::EntryRange = (&root_index).into();
     let mut components = path.as_ref().iter().peekable();
@@ -79,7 +81,7 @@ pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
         // All children of a parent are stored concatened.
         // So if parent_id is different than current_parent,
         // we know we are out of the directory
-        let comparator = EntryCompare::new(&properties, component);
+        let comparator = comparator.compare_with(component.as_bytes());
         let found = current_range.find(&comparator)?;
         match found {
             None => return Err("Cannot found entry".to_string().into()),
