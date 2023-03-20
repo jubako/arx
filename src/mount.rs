@@ -298,10 +298,10 @@ impl jbk::reader::builder::BuilderTrait for LightCommonParentBuilder {
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
         let parent = self.parent_property.create(&reader)?;
-        let parent = if parent != 0 {
+        let parent = if parent == 0 {
             None
         } else {
-            Some((parent as u32).into())
+            Some((parent as u32 - 1).into())
         };
         Ok(parent)
     }
