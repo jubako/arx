@@ -1,4 +1,5 @@
 use crate::common::{AllProperties, Arx, Comparator, EntryResult, EntryType, ReadEntry};
+use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
@@ -389,9 +390,9 @@ struct ArxFs<'a> {
     light_common_path_builder: LightCommonPathBuilder,
     light_common_parent_builder: LightCommonParentBuilder,
     attr_builder: AttrBuilder,
-    resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
-    attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr>,
-    reader_cache: HashMap<Ino, (jbk::Reader, u64)>,
+    resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>, FxBuildHasher>,
+    attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr, FxBuildHasher>,
+    reader_cache: HashMap<Ino, (jbk::Reader, u64), FxBuildHasher>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -416,9 +417,15 @@ impl<'a> ArxFs<'a> {
             light_common_path_builder,
             light_common_parent_builder,
             attr_builder,
-            resolve_cache: LruCache::new(NonZeroUsize::new(4 * 1024).unwrap()),
-            attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
-            reader_cache: HashMap::new(),
+            resolve_cache: LruCache::with_hasher(
+                NonZeroUsize::new(4 * 1024).unwrap(),
+                FxBuildHasher::default(),
+            ),
+            attr_cache: LruCache::with_hasher(
+                NonZeroUsize::new(100).unwrap(),
+                FxBuildHasher::default(),
+            ),
+            reader_cache: HashMap::with_hasher(FxBuildHasher::default()),
             stats,
         })
     }
