@@ -2,6 +2,7 @@ use jubako as jbk;
 
 use crate::common::EntryType;
 use jbk::creator::schema;
+use std::collections::{hash_map::Entry as MapEntry, HashMap};
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
@@ -112,6 +113,7 @@ pub struct Creator {
     entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
+    content_cache: HashMap<blake3::Hash, jbk::ContentIdx>,
 }
 
 impl Creator {
@@ -181,6 +183,7 @@ impl Creator {
             entry_store,
             entry_count: 0.into(),
             root_count: 0.into(),
+            content_cache: HashMap::new(),
         })
     }
 
@@ -277,9 +280,8 @@ impl Creator {
                 )
             }
             EntryKind::File => {
-                let content_id = self
-                    .content_pack
-                    .add_content(jbk::creator::FileSource::open(&entry.path)?.into())?;
+                let content_id =
+                    self.add_content(jbk::creator::FileSource::open(&entry.path)?.into())?;
                 jbk::creator::BasicEntry::new_from_schema(
                     &self.entry_store.schema,
                     Some(EntryType::File.into()),
@@ -319,5 +321,19 @@ impl Creator {
         let current_idx = self.entry_store.add_entry(entry);
         self.entry_count += 1;
         Ok(Some(current_idx))
+    }
+
+    fn add_content(&mut self, content: jbk::Reader) -> jbk::Result<jbk::ContentIdx> {
+        let mut hasher = blake3::Hasher::new();
+        std::io::copy(&mut content.create_flux_all(), &mut hasher)?;
+        let hash = hasher.finalize();
+        match self.content_cache.entry(hash) {
+            MapEntry::Vacant(e) => {
+                let content_idx = self.content_pack.add_content(content)?;
+                e.insert(content_idx);
+                Ok(content_idx)
+            }
+            MapEntry::Occupied(e) => Ok(*e.get()),
+        }
     }
 }
