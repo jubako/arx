@@ -237,7 +237,7 @@ impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
                         (self.first_child_property.create(&reader)? as u32).into();
                     let nb_children: jbk::EntryCount =
                         (self.nb_children_property.create(&reader)? as u32).into();
-                    Ok(jbk::EntryRange::new(first_child, nb_children))
+                    Ok(jbk::EntryRange::new_from_size(first_child, nb_children))
                 }
                 other => Err(other),
             },

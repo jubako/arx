@@ -66,7 +66,7 @@ impl jbk::reader::builder::BuilderTrait for EntryBuilder {
                     (self.first_child_property.create(&reader)? as u32).into();
                 let nb_children: jbk::EntryCount =
                     (self.nb_children_property.create(&reader)? as u32).into();
-                let range = jbk::EntryRange::new(first_child, nb_children);
+                let range = jbk::EntryRange::new_from_size(first_child, nb_children);
                 Entry::Dir(path, range)
             }
         })
