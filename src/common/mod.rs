@@ -48,6 +48,9 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
             None => Err("Cannot compare".into()),
         }
     }
+    fn ordered(&self) -> bool {
+        true
+    }
 }
 
 pub struct ReadEntry<'builder, Builder: BuilderTrait> {
