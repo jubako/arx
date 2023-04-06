@@ -89,14 +89,11 @@ fn main() -> jbk::Result<()> {
 
             let mut creator = Creator::new(&create_cmd.outfile)?;
 
-            let root_parent = jbk::Vow::new(0.into());
-            let root_parent: jbk::Generator<jbk::EntryIdx, u64> =
-                (root_parent.bind(), std::convert::identity as fn(u64) -> u64).into();
             for infile in create_cmd.infiles {
-                creator.push_back(Entry::new(infile, root_parent.clone())?);
+                creator.handle(Entry::new_root(infile)?)?;
             }
 
-            creator.run(create_cmd.outfile)
+            creator.finalize(create_cmd.outfile)
         }
 
         Commands::List(list_cmd) => {

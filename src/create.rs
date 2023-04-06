@@ -1,8 +1,7 @@
 use jubako as jbk;
 
 use crate::common::EntryType;
-use jbk::creator::{schema, EntryTrait};
-use std::collections::VecDeque;
+use jbk::creator::schema;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
@@ -22,43 +21,49 @@ enum EntryKind {
 pub struct Entry {
     kind: EntryKind,
     path: PathBuf,
-    parent: jbk::Generator<jbk::EntryIdx, u64>,
+    parent: jbk::Word<u64>,
+    is_root: bool,
 }
 
 impl Entry {
-    pub fn new(path: PathBuf, parent: jbk::Generator<jbk::EntryIdx, u64>) -> jbk::Result<Self> {
+    pub fn new_root(path: PathBuf) -> jbk::Result<Self> {
+        Self::new(path, ((|| 0) as fn() -> u64).into(), true)
+    }
+
+    fn new(path: PathBuf, parent: jbk::Word<u64>, is_root: bool) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
                 kind: EntryKind::Dir,
                 path,
                 parent,
+                is_root,
             }
         } else if attr.is_file() {
             Self {
                 kind: EntryKind::File,
                 path,
                 parent,
+                is_root,
             }
         } else if attr.is_symlink() {
             Self {
                 kind: EntryKind::Link,
                 path,
                 parent,
+                is_root,
             }
         } else {
             Self {
                 kind: EntryKind::Other,
                 path,
                 parent,
+                is_root,
             }
         })
     }
 
-    pub fn new_from_fs(
-        dir_entry: fs::DirEntry,
-        parent: jbk::Generator<jbk::EntryIdx, u64>,
-    ) -> Self {
+    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Word<u64>, is_root: bool) -> Self {
         let path = dir_entry.path();
         if let Ok(file_type) = dir_entry.file_type() {
             if file_type.is_dir() {
@@ -66,24 +71,28 @@ impl Entry {
                     kind: EntryKind::Dir,
                     path,
                     parent,
+                    is_root,
                 }
             } else if file_type.is_file() {
                 Self {
                     kind: EntryKind::File,
                     path,
                     parent,
+                    is_root,
                 }
             } else if file_type.is_symlink() {
                 Self {
                     kind: EntryKind::Link,
                     path,
                     parent,
+                    is_root,
                 }
             } else {
                 Self {
                     kind: EntryKind::Other,
                     path,
                     parent,
+                    is_root,
                 }
             }
         } else {
@@ -91,6 +100,7 @@ impl Entry {
                 kind: EntryKind::Other,
                 path,
                 parent,
+                is_root,
             }
         }
     }
@@ -102,11 +112,6 @@ pub struct Creator {
     entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
-    queue: VecDeque<Entry>,
-}
-
-fn add_idx_one(idx: u64) -> u64 {
-    idx + 1
 }
 
 impl Creator {
@@ -165,6 +170,7 @@ impl Creator {
                     schema::Property::new_array(1, Rc::clone(&path_store)), // Id of the linked entry
                 ]),
             ],
+            Some(vec![1.into(), 0.into()]),
         );
 
         let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
@@ -175,11 +181,10 @@ impl Creator {
             entry_store,
             entry_count: 0.into(),
             root_count: 0.into(),
-            queue: VecDeque::<Entry>::new(),
         })
     }
 
-    fn finalize(mut self, outfile: PathBuf) -> jbk::Result<()> {
+    pub fn finalize(mut self, outfile: PathBuf) -> jbk::Result<()> {
         let entry_store_id = self.directory_pack.add_entry_store(self.entry_store);
         self.directory_pack.create_index(
             "arx_entries",
@@ -211,68 +216,65 @@ impl Creator {
         Ok(())
     }
 
-    pub fn push_back(&mut self, entry: Entry) {
+    pub fn handle(&mut self, entry: Entry) -> jbk::Result<Option<jbk::Bound<jbk::EntryIdx>>> {
         if let EntryKind::Other = entry.kind {
-            // do not add other to the queue
-        } else {
-            self.queue.push_back(entry);
+            return Ok(None);
+        };
+
+        if self.entry_count.into_u32() % 1000 == 0 {
+            println!("{}", self.entry_count);
         }
-    }
 
-    fn next_id(&self) -> jbk::EntryCount {
-        // Return the id that will be pushed back.
-        // The id is the entry_count (entries already added) + the size of the queue (entries to add)
-        self.entry_count + self.queue.len() as u32
-    }
-
-    pub fn run(mut self, outfile: PathBuf) -> jbk::Result<()> {
-        self.root_count = (self.queue.len() as u32).into();
-        while !self.queue.is_empty() {
-            let entry = self.queue.pop_front().unwrap();
-            self.handle(entry)?;
-            if self.entry_count.into_u32() % 1000 == 0 {
-                println!("{}", self.entry_count);
-            }
+        if entry.is_root {
+            self.root_count += 1;
         }
-        self.finalize(outfile)
-    }
 
-    fn handle(&mut self, entry: Entry) -> jbk::Result<()> {
         let entry_path =
             jbk::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
         let metadata = fs::symlink_metadata(&entry.path)?;
         let entry = Box::new(match entry.kind {
             EntryKind::Dir => {
-                let nb_entries = jbk::Vow::new(0_u64);
-                let first_entry = self.next_id() + 1; // The current directory is not in the queue but not yet added we need to count it now.
-                let jbk_entry = jbk::creator::BasicEntry::new_from_schema(
+                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
+
+                let mut children_idx = Vec::new();
+                for sub_entry in fs::read_dir(&entry.path)? {
+                    let entry_idx_bind = entry_idx.bind();
+                    let parent_idx_generator: Box<dyn Fn() -> u64> =
+                        Box::new(move || entry_idx_bind.get().into_u64() + 1);
+                    let child_idx = self.handle(Entry::new_from_fs(
+                        sub_entry?,
+                        parent_idx_generator.into(),
+                        false,
+                    ))?;
+                    if let Some(child_idx) = child_idx {
+                        children_idx.push(child_idx);
+                    }
+                }
+
+                let entry_count = children_idx.len() as u64;
+                let first_entry_generator: Box<dyn Fn() -> u64> = Box::new(move || {
+                    children_idx
+                        .iter()
+                        .map(|i| i.get().into_u64())
+                        .min()
+                        .unwrap_or(0)
+                });
+
+                jbk::creator::BasicEntry::new_from_schema_idx(
                     &self.entry_store.schema,
+                    entry_idx,
                     Some(EntryType::Dir.into()),
                     vec![
                         entry_path,
-                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned(entry.parent),
                         jbk::Value::Unsigned((metadata.uid() as u64).into()),
                         jbk::Value::Unsigned((metadata.gid() as u64).into()),
                         jbk::Value::Unsigned((metadata.mode() as u64).into()),
                         jbk::Value::Unsigned((metadata.mtime() as u64).into()),
-                        jbk::Value::Unsigned(first_entry.into_u64().into()),
-                        jbk::Value::Unsigned(nb_entries.bind().into()),
+                        jbk::Value::Unsigned(first_entry_generator.into()),
+                        jbk::Value::Unsigned(entry_count.into()),
                     ],
-                );
-                let mut entry_count = 0;
-                let parent_idx = jbk_entry.get_idx();
-                let parent_idx_generator = jbk::Generator::<jbk::EntryIdx, u64>::from((
-                    parent_idx,
-                    add_idx_one as fn(u64) -> u64,
-                    //std::convert::identity as fn(jbk::EntryIdx) -> jbk::EntryIdx,
-                ));
-
-                for sub_entry in fs::read_dir(&entry.path)? {
-                    self.push_back(Entry::new_from_fs(sub_entry?, parent_idx_generator.clone()));
-                    entry_count += 1;
-                }
-                nb_entries.fulfil(entry_count);
-                jbk_entry
+                )
             }
             EntryKind::File => {
                 let content_id = self
@@ -283,7 +285,7 @@ impl Creator {
                     Some(EntryType::File.into()),
                     vec![
                         entry_path,
-                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned(entry.parent),
                         jbk::Value::Unsigned((metadata.uid() as u64).into()),
                         jbk::Value::Unsigned((metadata.gid() as u64).into()),
                         jbk::Value::Unsigned((metadata.mode() as u64).into()),
@@ -303,7 +305,7 @@ impl Creator {
                     Some(EntryType::Link.into()),
                     vec![
                         entry_path,
-                        jbk::Value::Unsigned(entry.parent.into()),
+                        jbk::Value::Unsigned(entry.parent),
                         jbk::Value::Unsigned((metadata.uid() as u64).into()),
                         jbk::Value::Unsigned((metadata.gid() as u64).into()),
                         jbk::Value::Unsigned((metadata.mode() as u64).into()),
@@ -314,8 +316,8 @@ impl Creator {
             }
             EntryKind::Other => unreachable!(),
         });
-        self.entry_store.add_entry(entry);
+        let current_idx = self.entry_store.add_entry(entry);
         self.entry_count += 1;
-        Ok(())
+        Ok(Some(current_idx))
     }
 }

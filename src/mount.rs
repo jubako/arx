@@ -1,4 +1,5 @@
 use crate::common::{AllProperties, Arx, Comparator, EntryResult, EntryType, ReadEntry};
+use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
 use jubako as jbk;
@@ -236,7 +237,7 @@ impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
                         (self.first_child_property.create(&reader)? as u32).into();
                     let nb_children: jbk::EntryCount =
                         (self.nb_children_property.create(&reader)? as u32).into();
-                    Ok(jbk::EntryRange::new(first_child, nb_children))
+                    Ok(jbk::EntryRange::new_from_size(first_child, nb_children))
                 }
                 other => Err(other),
             },
@@ -298,10 +299,10 @@ impl jbk::reader::builder::BuilderTrait for LightCommonParentBuilder {
     fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
         let reader = self.store.get_entry_reader(idx);
         let parent = self.parent_property.create(&reader)?;
-        let parent = if parent != 0 {
+        let parent = if parent == 0 {
             None
         } else {
-            Some((parent as u32).into())
+            Some((parent as u32 - 1).into())
         };
         Ok(parent)
     }
@@ -389,9 +390,9 @@ struct ArxFs<'a> {
     light_common_path_builder: LightCommonPathBuilder,
     light_common_parent_builder: LightCommonParentBuilder,
     attr_builder: AttrBuilder,
-    resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>>,
-    attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr>,
-    reader_cache: HashMap<Ino, (jbk::Reader, u64)>,
+    resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>, FxBuildHasher>,
+    attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr, FxBuildHasher>,
+    reader_cache: HashMap<Ino, (jbk::Reader, u64), FxBuildHasher>,
     pub stats: &'a mut StatCounter,
 }
 
@@ -416,9 +417,15 @@ impl<'a> ArxFs<'a> {
             light_common_path_builder,
             light_common_parent_builder,
             attr_builder,
-            resolve_cache: LruCache::new(NonZeroUsize::new(4 * 1024).unwrap()),
-            attr_cache: LruCache::new(NonZeroUsize::new(100).unwrap()),
-            reader_cache: HashMap::new(),
+            resolve_cache: LruCache::with_hasher(
+                NonZeroUsize::new(4 * 1024).unwrap(),
+                FxBuildHasher::default(),
+            ),
+            attr_cache: LruCache::with_hasher(
+                NonZeroUsize::new(100).unwrap(),
+                FxBuildHasher::default(),
+            ),
+            reader_cache: HashMap::with_hasher(FxBuildHasher::default()),
             stats,
         })
     }
