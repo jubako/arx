@@ -131,9 +131,7 @@ impl Extractor {
         let mut offset = 0;
         loop {
             let sub_size = std::cmp::min(size - offset, 4 * 1024);
-            let reader = reader
-                .create_sub_memory_reader(offset.into(), jbk::End::new_size(sub_size))?
-                .into_memory_reader()?;
+            let reader = reader.into_memory_reader(offset.into(), jbk::End::new_size(sub_size))?;
             let written = file.write(reader.get_slice(jbk::Offset::zero(), jbk::End::None)?)?;
             offset += written;
             if offset == size {

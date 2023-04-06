@@ -590,9 +590,7 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
             reader.create_sub_reader(jbk::Offset::new(offset.try_into().unwrap()), jbk::End::None);
         let size = min(size as u64, reader.size().into_u64());
         let reader = reader
-            .create_sub_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
-            .unwrap()
-            .into_memory_reader()
+            .into_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
             .unwrap();
         let data = reader
             .get_slice(jbk::Offset::zero(), jbk::End::None)
