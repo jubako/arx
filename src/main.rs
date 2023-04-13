@@ -1,4 +1,5 @@
 use jubako as jbk;
+use libarx as arx;
 
 use arx::{Creator, Entry};
 use clap::{Args, Parser, Subcommand};
