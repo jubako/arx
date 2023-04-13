@@ -1,6 +1,8 @@
 use jubako as jbk;
 use libarx as arx;
 
+mod list;
+
 use arx::{Creator, Entry};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
@@ -102,7 +104,7 @@ fn main() -> jbk::Result<()> {
                 println!("Listing entries in archive {:?}", list_cmd.infile);
             }
 
-            arx::list(list_cmd.infile)
+            list::list(list_cmd.infile)
         }
 
         Commands::Dump(dump_cmd) => {
