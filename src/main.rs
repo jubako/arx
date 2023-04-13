@@ -1,6 +1,7 @@
 use jubako as jbk;
 use libarx as arx;
 
+mod extract;
 mod list;
 
 use arx::{Creator, Entry};
@@ -126,7 +127,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::extract(extract_cmd.infile, extract_cmd.outdir)
+            extract::extract(extract_cmd.infile, extract_cmd.outdir)
         }
 
         Commands::Mount(mount_cmd) => {
