@@ -24,7 +24,7 @@ struct FileBuilder {
     content_address_property: jbk::reader::builder::ContentProperty,
 }
 
-impl libarx::walk::Builder for FileBuilder {
+impl libarx::SimpleBuilder for FileBuilder {
     type Entry = FileEntry;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -37,7 +37,7 @@ impl libarx::walk::Builder for FileBuilder {
     fn create_entry(
         &self,
         _idx: jbk::EntryIdx,
-        reader: &libarx::walk::Reader,
+        reader: &libarx::Reader,
     ) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
@@ -52,7 +52,7 @@ struct LinkBuilder {
     link_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::walk::Builder for LinkBuilder {
+impl libarx::SimpleBuilder for LinkBuilder {
     type Entry = Link;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -65,7 +65,7 @@ impl libarx::walk::Builder for LinkBuilder {
     fn create_entry(
         &self,
         _idx: jbk::EntryIdx,
-        reader: &libarx::walk::Reader,
+        reader: &libarx::Reader,
     ) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
@@ -82,7 +82,7 @@ struct DirBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::walk::Builder for DirBuilder {
+impl libarx::SimpleBuilder for DirBuilder {
     type Entry = Path;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -94,7 +94,7 @@ impl libarx::walk::Builder for DirBuilder {
     fn create_entry(
         &self,
         _idx: jbk::EntryIdx,
-        reader: &libarx::walk::Reader,
+        reader: &libarx::Reader,
     ) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
@@ -103,11 +103,13 @@ impl libarx::walk::Builder for DirBuilder {
     }
 }
 
+type FullBuilder = (FileBuilder, LinkBuilder, DirBuilder);
+
 struct Extractor<'a> {
     arx: &'a libarx::Arx,
 }
 
-impl libarx::walk::Operator<PathBuf, FileEntry, Link, Path> for Extractor<'_> {
+impl libarx::walk::Operator<PathBuf, (FileEntry, Link, Path)> for Extractor<'_> {
     fn on_start(&self, current_path: &mut PathBuf) -> jbk::Result<()> {
         create_dir_all(current_path)?;
         Ok(())
@@ -163,5 +165,5 @@ where
     let arx = libarx::Arx::new(infile)?;
     let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, outdir.into());
-    walker.run::<FileBuilder, LinkBuilder, DirBuilder>(index, &Extractor { arx: &arx })
+    walker.run::<FullBuilder>(index, &Extractor { arx: &arx })
 }

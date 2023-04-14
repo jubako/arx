@@ -6,7 +6,7 @@ struct FileBuilder {
     content_address_property: jbk::reader::builder::ContentProperty,
 }
 
-impl libarx::walk::Builder for FileBuilder {
+impl libarx::SimpleBuilder for FileBuilder {
     type Entry = jbk::ContentAddress;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -18,7 +18,7 @@ impl libarx::walk::Builder for FileBuilder {
     fn create_entry(
         &self,
         _idx: jbk::EntryIdx,
-        reader: &libarx::walk::Reader,
+        reader: &libarx::Reader,
     ) -> jbk::Result<Self::Entry> {
         self.content_address_property.create(reader)
     }
@@ -26,7 +26,7 @@ impl libarx::walk::Builder for FileBuilder {
 
 fn dump_entry(
     container: &jbk::reader::Container,
-    entry: &libarx::Entry<jbk::ContentAddress, (), ()>,
+    entry: &libarx::Entry<(jbk::ContentAddress, (), ())>,
 ) -> jbk::Result<()> {
     match entry {
         libarx::Entry::Dir(_, _) => Err("Found directory".to_string().into()),
@@ -39,10 +39,12 @@ fn dump_entry(
     }
 }
 
+type FullBuilder = (FileBuilder, (), ());
+
 pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
     let arx = libarx::Arx::new(infile)?;
     dump_entry(
         &arx.container,
-        &libarx::locate::<P, FileBuilder, (), ()>(&arx, path)?,
+        &libarx::locate::<P, FullBuilder>(&arx, path)?,
     )
 }

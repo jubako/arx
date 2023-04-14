@@ -5,11 +5,11 @@ use std::os::unix::ffi::OsStringExt;
 
 type Path = Vec<u8>;
 
-struct EntryBuilder {
+struct PathBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::walk::Builder for EntryBuilder {
+impl libarx::SimpleBuilder for PathBuilder {
     type Entry = Path;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -21,7 +21,7 @@ impl libarx::walk::Builder for EntryBuilder {
     fn create_entry(
         &self,
         _idx: jbk::EntryIdx,
-        reader: &libarx::walk::Reader,
+        reader: &libarx::Reader,
     ) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
@@ -32,7 +32,7 @@ impl libarx::walk::Builder for EntryBuilder {
 
 struct Lister {}
 
-impl libarx::walk::Operator<libarx::LightPath, Path, Path, Path> for Lister {
+impl libarx::walk::Operator<libarx::LightPath, (Path, Path, Path)> for Lister {
     fn on_start(&self, _current_path: &mut libarx::LightPath) -> jbk::Result<()> {
         Ok(())
     }
@@ -63,9 +63,11 @@ impl libarx::walk::Operator<libarx::LightPath, Path, Path, Path> for Lister {
     }
 }
 
+type FullBuilder = (PathBuilder, PathBuilder, PathBuilder);
+
 pub fn list<P: AsRef<std::path::Path>>(infile: P) -> jbk::Result<()> {
     let arx = libarx::Arx::new(infile)?;
     let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, Default::default());
-    walker.run::<EntryBuilder, EntryBuilder, EntryBuilder>(index, &Lister {})
+    walker.run::<FullBuilder>(index, &Lister {})
 }

@@ -1,7 +1,12 @@
+mod builder;
+mod entry;
 mod entry_type;
 mod light_path;
 mod properties;
 
+pub(crate) use builder::Builder;
+pub use builder::{FullBuilder, SimpleBuilder};
+pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
@@ -12,6 +17,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 pub type EntryResult<T> = Result<T, EntryType>;
+pub use jbk::SubReader as Reader;
 
 pub struct Comparator {
     store: Rc<jbk::reader::EntryStore>,

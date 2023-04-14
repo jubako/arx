@@ -1,25 +1,18 @@
-use crate::common::{Arx, Comparator};
+use crate::common::{Arx, Builder, Comparator, Entry, FullBuilder};
 use jubako as jbk;
 use jubako::reader::Range;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use super::walk::{Builder, Entry, WalkerBuilder};
-
-pub fn locate<P, FileBuilder, LinkBuilder, DirBuilder>(
-    arx: &Arx,
-    path: P,
-) -> jbk::Result<Entry<FileBuilder::Entry, LinkBuilder::Entry, DirBuilder::Entry>>
+pub fn locate<P, B>(arx: &Arx, path: P) -> jbk::Result<Entry<B::Entry>>
 where
     P: AsRef<Path>,
-    FileBuilder: Builder,
-    LinkBuilder: Builder,
-    DirBuilder: Builder,
+    B: FullBuilder,
 {
     let root_index = arx.root_index()?;
     let properties = arx.create_properties(&root_index)?;
     let comparator = Comparator::new(&properties);
-    let builder = WalkerBuilder::<FileBuilder, LinkBuilder, DirBuilder>::new(&properties);
+    let builder = Builder::<B>::new(&properties);
     let mut current_range: jbk::EntryRange = (&root_index).into();
     let mut components = path.as_ref().iter().peekable();
     while let Some(component) = components.next() {
