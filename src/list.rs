@@ -1,3 +1,4 @@
+use crate::light_path::LightPath;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use std::ffi::OsString;
@@ -34,33 +35,25 @@ type FullBuilder = (PathBuilder, PathBuilder, PathBuilder);
 
 struct Lister {}
 
-impl libarx::walk::Operator<libarx::LightPath, FullBuilder> for Lister {
-    fn on_start(&self, _current_path: &mut libarx::LightPath) -> jbk::Result<()> {
+impl libarx::walk::Operator<LightPath, FullBuilder> for Lister {
+    fn on_start(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_stop(&self, _current_path: &mut libarx::LightPath) -> jbk::Result<()> {
+    fn on_stop(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_directory_enter(
-        &self,
-        current_path: &mut libarx::LightPath,
-        path: &Path,
-    ) -> jbk::Result<()> {
+    fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
         current_path.push(OsString::from_vec(path.clone()));
         Ok(current_path.println()?)
     }
-    fn on_directory_exit(
-        &self,
-        current_path: &mut libarx::LightPath,
-        _path: &Path,
-    ) -> jbk::Result<()> {
+    fn on_directory_exit(&self, current_path: &mut LightPath, _path: &Path) -> jbk::Result<()> {
         current_path.pop();
         Ok(())
     }
-    fn on_file(&self, current_path: &mut libarx::LightPath, path: &Path) -> jbk::Result<()> {
+    fn on_file(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
         Ok(current_path.println2(path)?)
     }
-    fn on_link(&self, current_path: &mut libarx::LightPath, path: &Path) -> jbk::Result<()> {
+    fn on_link(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
         Ok(current_path.println2(path)?)
     }
 }

@@ -6,5 +6,5 @@ pub mod walk;
 
 pub use arx::Arx;
 pub use arx_fs::{mount, ArxFs};
-pub use common::{AllProperties, Builder, Entry, LightPath, Reader};
+pub use common::{AllProperties, Builder, Entry, Reader};
 pub use walk::*;

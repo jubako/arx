@@ -1,7 +1,6 @@
 mod builder;
 mod entry;
 mod entry_type;
-mod light_path;
 mod properties;
 
 pub use builder::Builder;
@@ -11,7 +10,6 @@ pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
-pub use light_path::LightPath;
 pub use properties::AllProperties;
 use std::rc::Rc;
 

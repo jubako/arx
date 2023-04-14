@@ -3,6 +3,7 @@ use libarx as arx;
 
 mod dump;
 mod extract;
+mod light_path;
 mod list;
 
 use clap::{Args, Parser, Subcommand};
