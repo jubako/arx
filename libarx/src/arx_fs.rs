@@ -644,8 +644,6 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                         let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
                         let entry_ino = Ino::from(entry_idx);
                         let entry_path = OsString::from_vec(entry.path);
-                        //println!("=> reply {entry_ino:?}, {i}, {kind:?} {:?}", entry.get_path());
-                        //println!("Put in cache for {ino:?}/{entry_path:?} => {entry_idx:?}");
                         let should_break = reply.add(
                             entry_ino.get(),
                             /* offset =*/ i,
