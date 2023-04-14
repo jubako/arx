@@ -30,9 +30,11 @@ impl libarx::Builder for PathBuilder {
     }
 }
 
+type FullBuilder = (PathBuilder, PathBuilder, PathBuilder);
+
 struct Lister {}
 
-impl libarx::walk::Operator<libarx::LightPath, (Path, Path, Path)> for Lister {
+impl libarx::walk::Operator<libarx::LightPath, FullBuilder> for Lister {
     fn on_start(&self, _current_path: &mut libarx::LightPath) -> jbk::Result<()> {
         Ok(())
     }
@@ -63,11 +65,9 @@ impl libarx::walk::Operator<libarx::LightPath, (Path, Path, Path)> for Lister {
     }
 }
 
-type FullBuilder = (PathBuilder, PathBuilder, PathBuilder);
-
 pub fn list<P: AsRef<std::path::Path>>(infile: P) -> jbk::Result<()> {
     let arx = libarx::Arx::new(infile)?;
     let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, Default::default());
-    walker.run::<FullBuilder>(index, &Lister {})
+    walker.run(index, &Lister {})
 }

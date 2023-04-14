@@ -2,13 +2,29 @@ use super::common::*;
 use jbk::reader::Range;
 use jubako as jbk;
 
-pub trait Operator<Context, E: EntryDef> {
+pub trait Operator<Context, Builder: FullBuilder> {
     fn on_start(&self, context: &mut Context) -> jbk::Result<()>;
     fn on_stop(&self, context: &mut Context) -> jbk::Result<()>;
-    fn on_directory_enter(&self, context: &mut Context, entry: &E::Dir) -> jbk::Result<()>;
-    fn on_directory_exit(&self, context: &mut Context, entry: &E::Dir) -> jbk::Result<()>;
-    fn on_file(&self, context: &mut Context, entry: &E::File) -> jbk::Result<()>;
-    fn on_link(&self, context: &mut Context, entry: &E::Link) -> jbk::Result<()>;
+    fn on_directory_enter(
+        &self,
+        context: &mut Context,
+        entry: &<Builder::Entry as EntryDef>::Dir,
+    ) -> jbk::Result<()>;
+    fn on_directory_exit(
+        &self,
+        context: &mut Context,
+        entry: &<Builder::Entry as EntryDef>::Dir,
+    ) -> jbk::Result<()>;
+    fn on_file(
+        &self,
+        context: &mut Context,
+        entry: &<Builder::Entry as EntryDef>::File,
+    ) -> jbk::Result<()>;
+    fn on_link(
+        &self,
+        context: &mut Context,
+        entry: &<Builder::Entry as EntryDef>::Link,
+    ) -> jbk::Result<()>;
 }
 
 pub struct Walker<'a, Context> {
@@ -24,7 +40,7 @@ impl<'a, Context> Walker<'a, Context> {
     pub fn run<B>(
         &mut self,
         index: jbk::reader::Index,
-        op: &dyn Operator<Context, B::Entry>,
+        op: &dyn Operator<Context, B>,
     ) -> jbk::Result<()>
     where
         B: FullBuilder,
@@ -41,7 +57,7 @@ impl<'a, Context> Walker<'a, Context> {
         &mut self,
         range: &R,
         builder: &RealBuilder<B>,
-        op: &dyn Operator<Context, B::Entry>,
+        op: &dyn Operator<Context, B>,
     ) -> jbk::Result<()>
     where
         B: FullBuilder,

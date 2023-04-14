@@ -109,7 +109,7 @@ struct Extractor<'a> {
     arx: &'a libarx::Arx,
 }
 
-impl libarx::walk::Operator<PathBuf, (FileEntry, Link, Path)> for Extractor<'_> {
+impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
     fn on_start(&self, current_path: &mut PathBuf) -> jbk::Result<()> {
         create_dir_all(current_path)?;
         Ok(())
@@ -165,5 +165,5 @@ where
     let arx = libarx::Arx::new(infile)?;
     let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, outdir.into());
-    walker.run::<FullBuilder>(index, &Extractor { arx: &arx })
+    walker.run(index, &Extractor { arx: &arx })
 }
