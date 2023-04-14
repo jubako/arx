@@ -1,11 +1,10 @@
 mod common;
-mod create;
-mod dump;
+pub mod create;
+mod locator;
 mod mount;
 pub mod walk;
 
 pub use common::{AllProperties, Arx, LightPath};
-pub use create::*;
-pub use dump::*;
+pub use locator::locate;
 pub use mount::*;
 pub use walk::*;

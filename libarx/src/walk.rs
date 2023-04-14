@@ -22,13 +22,21 @@ pub trait Builder {
     fn create_entry(&self, idx: jbk::EntryIdx, reader: &Reader) -> jbk::Result<Self::Entry>;
 }
 
-enum Entry<FileEntry, LinkEntry, DirEntry> {
+impl Builder for () {
+    type Entry = ();
+    fn new(_properties: &AllProperties) -> Self {}
+    fn create_entry(&self, _idx: jbk::EntryIdx, _reader: &Reader) -> jbk::Result<Self::Entry> {
+        Ok(())
+    }
+}
+
+pub enum Entry<FileEntry, LinkEntry, DirEntry> {
     File(FileEntry),
     Link(LinkEntry),
     Dir(jbk::EntryRange, DirEntry),
 }
 
-struct WalkerBuilder<FileBuilder, LinkBuilder, DirBuilder> {
+pub(crate) struct WalkerBuilder<FileBuilder, LinkBuilder, DirBuilder> {
     store: Rc<jbk::reader::EntryStore>,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     first_child_property: jbk::reader::builder::IntProperty,
@@ -38,13 +46,16 @@ struct WalkerBuilder<FileBuilder, LinkBuilder, DirBuilder> {
     dir_builder: DirBuilder,
 }
 
-impl<FileBuilder, LinkBuilder, DirBuilder> WalkerBuilder<FileBuilder, LinkBuilder, DirBuilder> {
-    fn new(
-        properties: &AllProperties,
-        file_builder: FileBuilder,
-        link_builder: LinkBuilder,
-        dir_builder: DirBuilder,
-    ) -> Self {
+impl<FileBuilder, LinkBuilder, DirBuilder> WalkerBuilder<FileBuilder, LinkBuilder, DirBuilder>
+where
+    FileBuilder: Builder,
+    LinkBuilder: Builder,
+    DirBuilder: Builder,
+{
+    pub fn new(properties: &AllProperties) -> Self {
+        let file_builder = FileBuilder::new(properties);
+        let link_builder = LinkBuilder::new(properties);
+        let dir_builder = DirBuilder::new(properties);
         Self {
             store: Rc::clone(&properties.store),
             variant_id_property: properties.variant_id_property,
@@ -112,10 +123,7 @@ impl<'a, Context> Walker<'a, Context> {
         DirBuilder: Builder,
     {
         let properties = self.arx.create_properties(&index)?;
-        let file_builder = FileBuilder::new(&properties);
-        let link_builder = LinkBuilder::new(&properties);
-        let dir_builder = DirBuilder::new(&properties);
-        let builder = WalkerBuilder::new(&properties, file_builder, link_builder, dir_builder);
+        let builder = WalkerBuilder::<FileBuilder, LinkBuilder, DirBuilder>::new(&properties);
 
         op.on_start(&mut self.context)?;
         self._run(&index, &builder, op)?;

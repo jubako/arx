@@ -1,10 +1,10 @@
 use jubako as jbk;
 use libarx as arx;
 
+mod dump;
 mod extract;
 mod list;
 
-use arx::{Creator, Entry};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -91,10 +91,10 @@ fn main() -> jbk::Result<()> {
                 println!("With files {:?}", create_cmd.infiles);
             }
 
-            let mut creator = Creator::new(&create_cmd.outfile)?;
+            let mut creator = arx::create::Creator::new(&create_cmd.outfile)?;
 
             for infile in create_cmd.infiles {
-                creator.handle(Entry::new_root(infile)?)?;
+                creator.handle(arx::create::Entry::new_root(infile)?)?;
             }
 
             creator.finalize(create_cmd.outfile)
@@ -116,7 +116,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::dump(dump_cmd.infile, dump_cmd.path.into())
+            dump::dump(dump_cmd.infile, dump_cmd.path.into())
         }
 
         Commands::Extract(extract_cmd) => {
