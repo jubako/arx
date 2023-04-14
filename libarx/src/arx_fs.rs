@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 
-struct StatCounter {
+pub struct StatCounter {
     nb_lookup: u64,
     nb_getattr: u64,
     nb_readlink: u64,
@@ -79,6 +79,12 @@ impl StatCounter {
 
     pub fn releasedir(&mut self) {
         self.nb_releasedir += 1;
+    }
+}
+
+impl Default for StatCounter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -381,7 +387,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
     }
 }
 
-struct ArxFs<'a> {
+pub struct ArxFs<'a> {
     arx: Arx,
     entry_index: jbk::reader::Index,
     comparator: Comparator,
@@ -431,7 +437,7 @@ impl<'a> ArxFs<'a> {
         })
     }
 
-    pub fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
+    fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
         match ino.try_into() {
             Err(_) => Ok((&self.arx.root_index).into()),
             Ok(idx) => match self.entry_index.get_entry(&self.light_dir_builder, idx)? {
@@ -439,6 +445,15 @@ impl<'a> ArxFs<'a> {
                 Err(_) => Err("No at directory".to_string().into()),
             },
         }
+    }
+
+    pub fn mount<P: AsRef<Path>>(self, mount_point: P) -> jbk::Result<()> {
+        let options = vec![
+            fuser::MountOption::RO,
+            fuser::MountOption::FSName("arx".into()),
+        ];
+        fuser::mount2(self, &mount_point, &options)?;
+        Ok(())
     }
 }
 
@@ -728,11 +743,7 @@ pub fn mount<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let arxfs = ArxFs::new(arx, &mut stats)?;
 
-    let options = vec![
-        fuser::MountOption::RO,
-        fuser::MountOption::FSName("arx".into()),
-    ];
-    fuser::mount2(arxfs, &outdir, &options)?;
+    arxfs.mount(&outdir)?;
 
     println!("Stats:\n {stats}");
     Ok(())
