@@ -219,6 +219,11 @@ impl Creator {
         Ok(())
     }
 
+    pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> jbk::Result<()> {
+        self.handle(Entry::new_root(path.as_ref().into())?)?;
+        Ok(())
+    }
+
     pub fn handle(&mut self, entry: Entry) -> jbk::Result<Option<jbk::Bound<jbk::EntryIdx>>> {
         if let EntryKind::Other = entry.kind {
             return Ok(None);

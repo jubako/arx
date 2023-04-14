@@ -96,7 +96,7 @@ fn main() -> jbk::Result<()> {
             let mut creator = arx::create::Creator::new(&create_cmd.outfile)?;
 
             for infile in create_cmd.infiles {
-                creator.handle(arx::create::Entry::new_root(infile)?)?;
+                creator.add_from_path(infile)?;
             }
 
             creator.finalize(create_cmd.outfile)
