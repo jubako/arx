@@ -9,7 +9,7 @@ struct PathBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::SimpleBuilder for PathBuilder {
+impl libarx::Builder for PathBuilder {
     type Entry = Path;
 
     fn new(properties: &libarx::AllProperties) -> Self {

@@ -6,7 +6,7 @@ struct FileBuilder {
     content_address_property: jbk::reader::builder::ContentProperty,
 }
 
-impl libarx::SimpleBuilder for FileBuilder {
+impl libarx::Builder for FileBuilder {
     type Entry = jbk::ContentAddress;
 
     fn new(properties: &libarx::AllProperties) -> Self {

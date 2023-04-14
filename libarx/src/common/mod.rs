@@ -4,8 +4,8 @@ mod entry_type;
 mod light_path;
 mod properties;
 
-pub(crate) use builder::Builder;
-pub use builder::{FullBuilder, SimpleBuilder};
+pub use builder::Builder;
+pub(crate) use builder::{FullBuilder, RealBuilder};
 pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};

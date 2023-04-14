@@ -5,14 +5,14 @@ use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use std::rc::Rc;
 
-pub trait SimpleBuilder {
+pub trait Builder {
     type Entry;
 
     fn new(properties: &AllProperties) -> Self;
     fn create_entry(&self, idx: jbk::EntryIdx, reader: &Reader) -> jbk::Result<Self::Entry>;
 }
 
-impl SimpleBuilder for () {
+impl Builder for () {
     type Entry = ();
     fn new(_properties: &AllProperties) -> Self {}
     fn create_entry(&self, _idx: jbk::EntryIdx, _reader: &Reader) -> jbk::Result<Self::Entry> {
@@ -43,9 +43,9 @@ pub trait FullBuilder {
 
 impl<F, L, D> FullBuilder for (F, L, D)
 where
-    F: SimpleBuilder,
-    L: SimpleBuilder,
-    D: SimpleBuilder,
+    F: Builder,
+    L: Builder,
+    D: Builder,
 {
     type Entry = (F::Entry, L::Entry, D::Entry);
 
@@ -81,7 +81,7 @@ where
     }
 }
 
-pub(crate) struct Builder<B: FullBuilder> {
+pub(crate) struct RealBuilder<B: FullBuilder> {
     store: Rc<jbk::reader::EntryStore>,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     first_child_property: jbk::reader::builder::IntProperty,
@@ -89,7 +89,7 @@ pub(crate) struct Builder<B: FullBuilder> {
     builder: B,
 }
 
-impl<B> Builder<B>
+impl<B> RealBuilder<B>
 where
     B: FullBuilder,
 {
@@ -105,7 +105,7 @@ where
     }
 }
 
-impl<B> jbk::reader::builder::BuilderTrait for Builder<B>
+impl<B> jbk::reader::builder::BuilderTrait for RealBuilder<B>
 where
     B: FullBuilder,
 {

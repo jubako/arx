@@ -30,7 +30,7 @@ impl<'a, Context> Walker<'a, Context> {
         B: FullBuilder,
     {
         let properties = self.arx.create_properties(&index)?;
-        let builder = Builder::<B>::new(&properties);
+        let builder = RealBuilder::<B>::new(&properties);
 
         op.on_start(&mut self.context)?;
         self._run(&index, &builder, op)?;
@@ -40,7 +40,7 @@ impl<'a, Context> Walker<'a, Context> {
     fn _run<R: Range, B>(
         &mut self,
         range: &R,
-        builder: &Builder<B>,
+        builder: &RealBuilder<B>,
         op: &dyn Operator<Context, B::Entry>,
     ) -> jbk::Result<()>
     where

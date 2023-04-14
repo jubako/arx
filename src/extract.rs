@@ -24,7 +24,7 @@ struct FileBuilder {
     content_address_property: jbk::reader::builder::ContentProperty,
 }
 
-impl libarx::SimpleBuilder for FileBuilder {
+impl libarx::Builder for FileBuilder {
     type Entry = FileEntry;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -52,7 +52,7 @@ struct LinkBuilder {
     link_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::SimpleBuilder for LinkBuilder {
+impl libarx::Builder for LinkBuilder {
     type Entry = Link;
 
     fn new(properties: &libarx::AllProperties) -> Self {
@@ -82,7 +82,7 @@ struct DirBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::SimpleBuilder for DirBuilder {
+impl libarx::Builder for DirBuilder {
     type Entry = Path;
 
     fn new(properties: &libarx::AllProperties) -> Self {

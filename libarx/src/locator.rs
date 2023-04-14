@@ -1,4 +1,4 @@
-use crate::common::{Arx, Builder, Comparator, Entry, FullBuilder};
+use crate::common::{Arx, Comparator, Entry, FullBuilder, RealBuilder};
 use jubako as jbk;
 use jubako::reader::Range;
 use std::os::unix::ffi::OsStrExt;
@@ -12,7 +12,7 @@ where
     let root_index = arx.root_index()?;
     let properties = arx.create_properties(&root_index)?;
     let comparator = Comparator::new(&properties);
-    let builder = Builder::<B>::new(&properties);
+    let builder = RealBuilder::<B>::new(&properties);
     let mut current_range: jbk::EntryRange = (&root_index).into();
     let mut components = path.as_ref().iter().peekable();
     while let Some(component) = components.next() {
