@@ -1,17 +1,20 @@
+mod builder;
+mod entry;
 mod entry_type;
-mod light_path;
 mod properties;
 
+pub use builder::Builder;
+pub(crate) use builder::{FullBuilder, RealBuilder};
+pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 use jubako as jbk;
-pub use light_path::LightPath;
 pub use properties::AllProperties;
-use std::path::Path;
 use std::rc::Rc;
 
 pub type EntryResult<T> = Result<T, EntryType>;
+pub use jbk::SubReader as Reader;
 
 pub struct Comparator {
     store: Rc<jbk::reader::EntryStore>,
@@ -85,35 +88,5 @@ impl<'builder, Builder: BuilderTrait> Iterator for ReadEntry<'builder, Builder> 
             self.current += 1;
             Some(entry)
         }
-    }
-}
-
-pub struct Arx {
-    pub container: jbk::reader::Container,
-}
-
-impl std::ops::Deref for Arx {
-    type Target = jbk::reader::Container;
-    fn deref(&self) -> &Self::Target {
-        &self.container
-    }
-}
-
-impl Arx {
-    pub fn new<P: AsRef<Path>>(file: P) -> jbk::Result<Self> {
-        let container = jbk::reader::Container::new(&file)?;
-        Ok(Self { container })
-    }
-
-    pub fn create_properties(&self, index: &jbk::reader::Index) -> jbk::Result<AllProperties> {
-        AllProperties::new(
-            index.get_store(self.get_entry_storage())?,
-            self.get_value_storage(),
-        )
-    }
-
-    pub fn root_index(&self) -> jbk::Result<jbk::reader::Index> {
-        let directory = self.container.get_directory_pack();
-        directory.get_index_from_name("arx_root")
     }
 }

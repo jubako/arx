@@ -1,4 +1,5 @@
 use jubako as jbk;
+use libarx as arx;
 
 use clap::Parser;
 use std::env;
@@ -16,6 +17,17 @@ struct Cli {
     mountdir: PathBuf,
 }
 
+fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
+where
+    INP: AsRef<std::path::Path>,
+    OUTP: AsRef<std::path::Path>,
+{
+    let arx = arx::Arx::new(infile)?;
+    let arxfs = arx::ArxFs::new(arx)?;
+
+    arxfs.mount(&outdir)
+}
+
 fn main() -> ExitCode {
     let args = Cli::parse();
 
@@ -24,7 +36,7 @@ fn main() -> ExitCode {
             if args.verbose > 0 {
                 println!("Auto Mount archive {:?} in {:?}", exe_path, args.mountdir);
             }
-            match arx::mount(exe_path, args.mountdir) {
+            match mount(exe_path, args.mountdir) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => match e.error {
                     jbk::ErrorKind::NotAJbk => {

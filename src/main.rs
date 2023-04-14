@@ -1,6 +1,12 @@
 use jubako as jbk;
+use libarx as arx;
 
-use arx::{Creator, Entry};
+mod dump;
+mod extract;
+mod light_path;
+mod list;
+mod mount;
+
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -87,10 +93,10 @@ fn main() -> jbk::Result<()> {
                 println!("With files {:?}", create_cmd.infiles);
             }
 
-            let mut creator = Creator::new(&create_cmd.outfile)?;
+            let mut creator = arx::create::Creator::new(&create_cmd.outfile)?;
 
             for infile in create_cmd.infiles {
-                creator.handle(Entry::new_root(infile)?)?;
+                creator.add_from_path(infile)?;
             }
 
             creator.finalize(create_cmd.outfile)
@@ -101,7 +107,7 @@ fn main() -> jbk::Result<()> {
                 println!("Listing entries in archive {:?}", list_cmd.infile);
             }
 
-            arx::list(list_cmd.infile)
+            list::list(list_cmd.infile)
         }
 
         Commands::Dump(dump_cmd) => {
@@ -112,7 +118,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::dump(dump_cmd.infile, dump_cmd.path.into())
+            dump::dump(dump_cmd.infile, dump_cmd.path.into())
         }
 
         Commands::Extract(extract_cmd) => {
@@ -123,7 +129,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::extract(extract_cmd.infile, extract_cmd.outdir)
+            extract::extract(extract_cmd.infile, extract_cmd.outdir)
         }
 
         Commands::Mount(mount_cmd) => {
@@ -134,7 +140,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::mount(mount_cmd.infile, mount_cmd.mountdir)
+            mount::mount(mount_cmd.infile, mount_cmd.mountdir)
         }
     }
 }

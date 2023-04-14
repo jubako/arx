@@ -12,7 +12,8 @@ use std::rc::Rc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
-enum EntryKind {
+#[derive(PartialEq, Eq)]
+pub enum EntryKind {
     Dir,
     File,
     Link,
@@ -20,8 +21,8 @@ enum EntryKind {
 }
 
 pub struct Entry {
-    kind: EntryKind,
-    path: PathBuf,
+    pub kind: EntryKind,
+    pub path: PathBuf,
     parent: jbk::Word<u64>,
     is_root: bool,
 }
@@ -219,9 +220,35 @@ impl Creator {
         Ok(())
     }
 
-    pub fn handle(&mut self, entry: Entry) -> jbk::Result<Option<jbk::Bound<jbk::EntryIdx>>> {
+    pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> jbk::Result<()> {
+        self.handle(Entry::new_root(path.as_ref().into())?, &Some)?;
+        Ok(())
+    }
+
+    pub fn add_from_path_with_filter<P, F>(&mut self, path: P, filter: &F) -> jbk::Result<()>
+    where
+        P: AsRef<std::path::Path>,
+        F: Fn(Entry) -> Option<Entry>,
+    {
+        self.handle(Entry::new_root(path.as_ref().into())?, filter)?;
+        Ok(())
+    }
+
+    fn handle<F>(
+        &mut self,
+        entry: Entry,
+        filter: &F,
+    ) -> jbk::Result<Option<jbk::Bound<jbk::EntryIdx>>>
+    where
+        F: Fn(Entry) -> Option<Entry>,
+    {
         if let EntryKind::Other = entry.kind {
             return Ok(None);
+        };
+
+        let entry = match filter(entry) {
+            Some(e) => e,
+            None => return Ok(None),
         };
 
         if self.entry_count.into_u32() % 1000 == 0 {
@@ -244,11 +271,10 @@ impl Creator {
                     let entry_idx_bind = entry_idx.bind();
                     let parent_idx_generator: Box<dyn Fn() -> u64> =
                         Box::new(move || entry_idx_bind.get().into_u64() + 1);
-                    let child_idx = self.handle(Entry::new_from_fs(
-                        sub_entry?,
-                        parent_idx_generator.into(),
-                        false,
-                    ))?;
+                    let child_idx = self.handle(
+                        Entry::new_from_fs(sub_entry?, parent_idx_generator.into(), false),
+                        filter,
+                    )?;
                     if let Some(child_idx) = child_idx {
                         children_idx.push(child_idx);
                     }

@@ -33,16 +33,11 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "blake3 1.3.3",
  "clap",
- "fuser",
- "fxhash",
  "jubako",
- "libc",
- "lru",
- "typenum",
+ "libarx",
 ]
 
 [[package]]
@@ -227,6 +222,7 @@ dependencies = [
 [[package]]
 name = "fuser"
 version = "0.12.0"
+source = "git+https://github.com/cberner/fuser.git#6ff6110397e0cb4606784c6e358c80a228e318e9"
 dependencies = [
  "libc",
  "log",
@@ -325,6 +321,19 @@ dependencies = [
  "typenum",
  "uuid",
  "zstd",
+]
+
+[[package]]
+name = "libarx"
+version = "0.2.0"
+dependencies = [
+ "blake3 1.3.3",
+ "fuser",
+ "fxhash",
+ "jubako",
+ "libc",
+ "lru",
+ "typenum",
 ]
 
 [[package]]
