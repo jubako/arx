@@ -5,6 +5,7 @@ mod dump;
 mod extract;
 mod light_path;
 mod list;
+mod mount;
 
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
@@ -139,7 +140,7 @@ fn main() -> jbk::Result<()> {
                 );
             }
 
-            arx::mount(mount_cmd.infile, mount_cmd.mountdir)
+            mount::mount(mount_cmd.infile, mount_cmd.mountdir)
         }
     }
 }

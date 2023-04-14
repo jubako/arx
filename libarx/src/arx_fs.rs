@@ -18,90 +18,19 @@ use std::rc::Rc;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 
-pub struct StatCounter {
-    nb_lookup: u64,
-    nb_getattr: u64,
-    nb_readlink: u64,
-    nb_open: u64,
-    nb_read: u64,
-    nb_release: u64,
-    nb_opendir: u64,
-    nb_readdir: u64,
-    nb_releasedir: u64,
+pub trait Stats {
+    fn lookup(&mut self) {}
+    fn getattr(&mut self) {}
+    fn readlink(&mut self) {}
+    fn open(&mut self) {}
+    fn read(&mut self) {}
+    fn release(&mut self) {}
+    fn opendir(&mut self) {}
+    fn readdir(&mut self) {}
+    fn releasedir(&mut self) {}
 }
 
-impl StatCounter {
-    pub fn new() -> Self {
-        Self {
-            nb_lookup: 0,
-            nb_getattr: 0,
-            nb_readlink: 0,
-            nb_open: 0,
-            nb_read: 0,
-            nb_release: 0,
-            nb_opendir: 0,
-            nb_readdir: 0,
-            nb_releasedir: 0,
-        }
-    }
-
-    pub fn lookup(&mut self) {
-        self.nb_lookup += 1;
-    }
-
-    pub fn getattr(&mut self) {
-        self.nb_getattr += 1;
-    }
-
-    pub fn readlink(&mut self) {
-        self.nb_readlink += 1;
-    }
-
-    pub fn open(&mut self) {
-        self.nb_open += 1;
-    }
-
-    pub fn read(&mut self) {
-        self.nb_read += 1;
-    }
-
-    pub fn release(&mut self) {
-        self.nb_release += 1;
-    }
-
-    pub fn opendir(&mut self) {
-        self.nb_opendir += 1;
-    }
-
-    pub fn readdir(&mut self) {
-        self.nb_readdir += 1;
-    }
-
-    pub fn releasedir(&mut self) {
-        self.nb_releasedir += 1;
-    }
-}
-
-impl Default for StatCounter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl std::fmt::Display for StatCounter {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "nb_lookup: {}", self.nb_lookup)?;
-        writeln!(f, "nb_getattr: {}", self.nb_getattr)?;
-        writeln!(f, "nb_readlink: {}", self.nb_readlink)?;
-        writeln!(f, "nb_open: {}", self.nb_open)?;
-        writeln!(f, "nb_read: {}", self.nb_read)?;
-        writeln!(f, "nb_release: {}", self.nb_release)?;
-        writeln!(f, "nb_opendir: {}", self.nb_opendir)?;
-        writeln!(f, "nb_readdir: {}", self.nb_readdir)?;
-        writeln!(f, "nb_releasedir: {}", self.nb_releasedir)?;
-        Ok(())
-    }
-}
+impl Stats for () {}
 
 // Root ino (from kernel pov) is 1.
 // However, our root is the "root" index and it doesn't have a ino
@@ -387,7 +316,9 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
     }
 }
 
-pub struct ArxFs<'a> {
+static mut NOSTATS: () = ();
+
+pub struct ArxFs<'a, S: Stats> {
     arx: Arx,
     entry_index: jbk::reader::Index,
     comparator: Comparator,
@@ -400,11 +331,18 @@ pub struct ArxFs<'a> {
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>, FxBuildHasher>,
     attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr, FxBuildHasher>,
     reader_cache: HashMap<Ino, (jbk::Reader, u64), FxBuildHasher>,
-    pub stats: &'a mut StatCounter,
+    stats: &'a mut S,
 }
 
-impl<'a> ArxFs<'a> {
-    pub fn new(arx: Arx, stats: &'a mut StatCounter) -> jbk::Result<Self> {
+impl ArxFs<'static, ()> {
+    pub fn new(arx: Arx) -> jbk::Result<Self> {
+        // SAFETY: No data race can occurs on empty type doing nothing
+        Self::new_with_stats(arx, unsafe { &mut NOSTATS })
+    }
+}
+
+impl<'a, S: Stats> ArxFs<'a, S> {
+    pub fn new_with_stats(arx: Arx, stats: &'a mut S) -> jbk::Result<Self> {
         let entry_index = arx.get_index_for_name("arx_entries")?;
         let properties = arx.create_properties(&entry_index)?;
         let comparator = Comparator::new(&properties);
@@ -475,7 +413,7 @@ const ROOT_ATTR: fuser::FileAttr = fuser::FileAttr {
     flags: 0,
 };
 
-impl<'a> fuser::Filesystem for ArxFs<'a> {
+impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
     fn lookup(
         &mut self,
         _req: &fuser::Request,
@@ -736,15 +674,4 @@ impl<'a> fuser::Filesystem for ArxFs<'a> {
         self.stats.releasedir();
         reply.ok()
     }
-}
-
-pub fn mount<P: AsRef<Path>>(infile: P, outdir: P) -> jbk::Result<()> {
-    let mut stats = StatCounter::new();
-    let arx = Arx::new(infile)?;
-    let arxfs = ArxFs::new(arx, &mut stats)?;
-
-    arxfs.mount(&outdir)?;
-
-    println!("Stats:\n {stats}");
-    Ok(())
 }
