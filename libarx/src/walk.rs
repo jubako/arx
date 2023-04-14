@@ -1,4 +1,5 @@
 use super::common::*;
+use super::Arx;
 use jbk::reader::Range;
 use jubako as jbk;
 
@@ -37,19 +38,14 @@ impl<'a, Context> Walker<'a, Context> {
         Self { arx, context }
     }
 
-    pub fn run<B>(
-        &mut self,
-        index: jbk::reader::Index,
-        op: &dyn Operator<Context, B>,
-    ) -> jbk::Result<()>
+    pub fn run<B>(&mut self, op: &dyn Operator<Context, B>) -> jbk::Result<()>
     where
         B: FullBuilder,
     {
-        let properties = self.arx.create_properties(&index)?;
-        let builder = RealBuilder::<B>::new(&properties);
+        let builder = RealBuilder::<B>::new(&self.arx.properties);
 
         op.on_start(&mut self.context)?;
-        self._run(&index, &builder, op)?;
+        self._run(&self.arx.root_index, &builder, op)?;
         op.on_stop(&mut self.context)
     }
 

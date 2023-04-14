@@ -163,7 +163,6 @@ where
     PathBuf: From<OUTP>,
 {
     let arx = libarx::Arx::new(infile)?;
-    let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, outdir.into());
-    walker.run(index, &Extractor { arx: &arx })
+    walker.run(&Extractor { arx: &arx })
 }

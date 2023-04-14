@@ -1,4 +1,5 @@
-use crate::common::{AllProperties, Arx, Comparator, EntryResult, EntryType, ReadEntry};
+use super::Arx;
+use crate::common::{AllProperties, Comparator, EntryResult, EntryType, ReadEntry};
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
@@ -432,7 +433,7 @@ impl<'a> ArxFs<'a> {
 
     pub fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
         match ino.try_into() {
-            Err(_) => Ok((&self.arx.root_index()?).into()),
+            Err(_) => Ok((&self.arx.root_index).into()),
             Ok(idx) => match self.entry_index.get_entry(&self.light_dir_builder, idx)? {
                 Ok(r) => Ok(r),
                 Err(_) => Err("No at directory".to_string().into()),

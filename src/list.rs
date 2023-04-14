@@ -67,7 +67,6 @@ impl libarx::walk::Operator<libarx::LightPath, FullBuilder> for Lister {
 
 pub fn list<P: AsRef<std::path::Path>>(infile: P) -> jbk::Result<()> {
     let arx = libarx::Arx::new(infile)?;
-    let index = arx.get_index_for_name("arx_root")?;
     let mut walker = libarx::walk::Walker::new(&arx, Default::default());
-    walker.run(index, &Lister {})
+    walker.run(&Lister {})
 }
