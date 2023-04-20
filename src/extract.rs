@@ -1,5 +1,6 @@
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs::{create_dir, create_dir_all, File};
 use std::io::Write;
@@ -107,11 +108,37 @@ type FullBuilder = (FileBuilder, LinkBuilder, DirBuilder);
 
 struct Extractor<'a> {
     arx: &'a libarx::Arx,
+    files: HashSet<PathBuf>,
+    base_dir: PathBuf,
+}
+
+impl Extractor<'_> {
+    fn should_extract(&self, current_file: &PathBuf, is_dir: bool) -> bool {
+        if self.files.is_empty() {
+            return true;
+        }
+        if self.files.contains(current_file) {
+            return true;
+        } else if is_dir {
+            for file in &self.files {
+                // We must create the dir if it is the parent dir of the file to extract
+                for ancestor in file.ancestors() {
+                    if current_file == ancestor {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+    fn abs_path(&self, current_file: &PathBuf) -> PathBuf {
+        [&self.base_dir, current_file].iter().collect()
+    }
 }
 
 impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
-    fn on_start(&self, current_path: &mut PathBuf) -> jbk::Result<()> {
-        create_dir_all(current_path)?;
+    fn on_start(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
+        create_dir_all(&self.base_dir)?;
         Ok(())
     }
 
@@ -121,7 +148,13 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
 
     fn on_directory_enter(&self, current_path: &mut PathBuf, path: &Path) -> jbk::Result<bool> {
         current_path.push(OsString::from_vec(path.clone()));
-        create_dir(current_path)?;
+        if !self.should_extract(current_path, true) {
+            return Ok(false);
+        }
+        let abs_path = self.abs_path(current_path);
+        if !abs_path.try_exists()? {
+            create_dir(abs_path)?;
+        }
         Ok(true)
     }
     fn on_directory_exit(&self, current_path: &mut PathBuf, _path: &Path) -> jbk::Result<()> {
@@ -131,7 +164,11 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
     fn on_file(&self, current_path: &mut PathBuf, entry: &FileEntry) -> jbk::Result<()> {
         let reader = self.arx.container.get_reader(entry.content)?;
         current_path.push(OsString::from_vec(entry.path.clone()));
-        let mut file = File::create(&PathBuf::from(&*current_path))?;
+        if !self.should_extract(current_path, false) {
+            current_path.pop();
+            return Ok(());
+        }
+        let mut file = File::create(&self.abs_path(current_path))?;
         let size = reader.size().into_usize();
         let mut offset = 0;
         loop {
@@ -148,21 +185,30 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
     }
     fn on_link(&self, current_path: &mut PathBuf, link: &Link) -> jbk::Result<()> {
         current_path.push(OsString::from_vec(link.path.clone()));
+        if !self.should_extract(current_path, false) {
+            current_path.pop();
+            return Ok(());
+        }
         symlink(
             PathBuf::from(OsString::from_vec(link.target.clone())),
-            PathBuf::from(&*current_path),
+            PathBuf::from(&self.abs_path(current_path)),
         )?;
         current_path.pop();
         Ok(())
     }
 }
 
-pub fn extract<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
+pub fn extract<INP, OUTP>(infile: INP, outdir: OUTP, extract_files: Vec<PathBuf>) -> jbk::Result<()>
 where
     INP: AsRef<std::path::Path>,
     PathBuf: From<OUTP>,
 {
     let arx = libarx::Arx::new(infile)?;
-    let mut walker = libarx::walk::Walker::new(&arx, outdir.into());
-    walker.run(&Extractor { arx: &arx })
+    let mut walker = libarx::walk::Walker::new(&arx, Default::default());
+    let extractor = Extractor {
+        arx: &arx,
+        files: extract_files.into_iter().collect(),
+        base_dir: outdir.into(),
+    };
+    walker.run(&extractor)
 }

@@ -76,6 +76,9 @@ struct Extract {
 
     #[clap(short = 'C', required = false)]
     outdir: Option<PathBuf>,
+
+    #[clap(value_parser)]
+    extract_files: Vec<PathBuf>,
 }
 
 #[derive(Args)]
@@ -134,7 +137,7 @@ fn main() -> jbk::Result<()> {
                 println!("Extract archive {:?} in {:?}", extract_cmd.infile, outdir);
             }
 
-            extract::extract(extract_cmd.infile, outdir)
+            extract::extract(extract_cmd.infile, outdir, extract_cmd.extract_files)
         }
 
         Commands::Mount(mount_cmd) => {
