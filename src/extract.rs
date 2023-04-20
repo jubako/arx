@@ -1,6 +1,7 @@
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use std::collections::HashSet;
+use std::env::current_dir;
 use std::ffi::OsString;
 use std::fs::{create_dir, create_dir_all, OpenOptions};
 use std::io::Write;
@@ -213,23 +214,36 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
     }
 }
 
-pub fn extract<INP, OUTP>(
-    infile: INP,
-    outdir: OUTP,
+#[derive(clap::Args)]
+pub struct Options {
+    #[clap(short = 'f', long = "file")]
+    infile: PathBuf,
+
+    #[clap(short = 'C', required = false)]
+    outdir: Option<PathBuf>,
+
+    #[clap(value_parser)]
     extract_files: Vec<PathBuf>,
+
+    #[clap(short = 'p', long = "progress", default_value_t = false, action)]
     progress: bool,
-) -> jbk::Result<()>
-where
-    INP: AsRef<std::path::Path>,
-    PathBuf: From<OUTP>,
-{
-    let arx = libarx::Arx::new(infile)?;
+}
+
+pub fn extract(options: Options, verbose_level: u8) -> jbk::Result<()> {
+    let outdir = match options.outdir {
+        Some(o) => o,
+        None => current_dir()?,
+    };
+    if verbose_level > 0 {
+        println!("Extract archive {:?} in {:?}", options.infile, outdir);
+    }
+    let arx = libarx::Arx::new(options.infile)?;
     let mut walker = libarx::walk::Walker::new(&arx, Default::default());
     let extractor = Extractor {
         arx: &arx,
-        files: extract_files.into_iter().collect(),
-        base_dir: outdir.into(),
-        print_progress: progress,
+        files: options.extract_files.into_iter().collect(),
+        base_dir: outdir,
+        print_progress: options.progress,
     };
     walker.run(&extractor)
 }

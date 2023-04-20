@@ -108,9 +108,21 @@ impl libarx::walk::Operator<PathBuf, libarx::FullBuilder> for StableLister {
     }
 }
 
-pub fn list<P: AsRef<std::path::Path>>(infile: P, stable_output: Option<u8>) -> jbk::Result<()> {
-    let arx = libarx::Arx::new(infile)?;
-    if let Some(version) = stable_output {
+#[derive(clap::Args)]
+pub struct Options {
+    #[clap(value_parser)]
+    infile: PathBuf,
+
+    #[clap(long = "stable-output", action)]
+    stable_output: Option<u8>,
+}
+
+pub fn list(options: Options, verbose_level: u8) -> jbk::Result<()> {
+    if verbose_level > 0 {
+        println!("Listing entries in archive {:?}", options.infile);
+    }
+    let arx = libarx::Arx::new(options.infile)?;
+    if let Some(version) = options.stable_output {
         match version {
             1 => {
                 let mut walker = libarx::walk::Walker::new(&arx, Default::default());
