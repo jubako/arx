@@ -54,6 +54,9 @@ struct Create {
 struct List {
     #[clap(value_parser)]
     infile: PathBuf,
+
+    #[clap(long = "stable-output", action)]
+    stable_output: Option<u8>,
 }
 
 #[derive(Args)]
@@ -107,7 +110,7 @@ fn main() -> jbk::Result<()> {
                 println!("Listing entries in archive {:?}", list_cmd.infile);
             }
 
-            list::list(list_cmd.infile)
+            list::list(list_cmd.infile, list_cmd.stable_output)
         }
 
         Commands::Dump(dump_cmd) => {
