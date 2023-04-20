@@ -42,9 +42,10 @@ impl libarx::walk::Operator<LightPath, FullBuilder> for Lister {
     fn on_stop(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
+    fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<bool> {
         current_path.push(OsString::from_vec(path.clone()));
-        Ok(current_path.println()?)
+        current_path.println()?;
+        Ok(true)
     }
     fn on_directory_exit(&self, current_path: &mut LightPath, _path: &Path) -> jbk::Result<()> {
         current_path.pop();

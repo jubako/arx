@@ -119,10 +119,10 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
         Ok(())
     }
 
-    fn on_directory_enter(&self, current_path: &mut PathBuf, path: &Path) -> jbk::Result<()> {
+    fn on_directory_enter(&self, current_path: &mut PathBuf, path: &Path) -> jbk::Result<bool> {
         current_path.push(OsString::from_vec(path.clone()));
         create_dir(current_path)?;
-        Ok(())
+        Ok(true)
     }
     fn on_directory_exit(&self, current_path: &mut PathBuf, _path: &Path) -> jbk::Result<()> {
         current_path.pop();
