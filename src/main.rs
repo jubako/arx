@@ -8,6 +8,7 @@ mod list;
 mod mount;
 
 use clap::{Args, Parser, Subcommand};
+use std::env::current_dir;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -70,11 +71,11 @@ struct Dump {
 
 #[derive(Args)]
 struct Extract {
-    #[clap(value_parser)]
+    #[clap(short = 'f', long = "file")]
     infile: PathBuf,
 
-    #[clap(value_parser)]
-    outdir: PathBuf,
+    #[clap(short = 'C', required = false)]
+    outdir: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -125,14 +126,15 @@ fn main() -> jbk::Result<()> {
         }
 
         Commands::Extract(extract_cmd) => {
+            let outdir = match extract_cmd.outdir {
+                Some(o) => o,
+                None => current_dir()?,
+            };
             if args.verbose > 0 {
-                println!(
-                    "Extract archive {:?} in {:?}",
-                    extract_cmd.infile, extract_cmd.outdir
-                );
+                println!("Extract archive {:?} in {:?}", extract_cmd.infile, outdir);
             }
 
-            extract::extract(extract_cmd.infile, extract_cmd.outdir)
+            extract::extract(extract_cmd.infile, outdir)
         }
 
         Commands::Mount(mount_cmd) => {
