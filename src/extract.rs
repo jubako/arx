@@ -2,7 +2,7 @@ use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
 use std::collections::HashSet;
 use std::ffi::OsString;
-use std::fs::{create_dir, create_dir_all, File};
+use std::fs::{create_dir, create_dir_all, OpenOptions};
 use std::io::Write;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::symlink;
@@ -173,7 +173,10 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
             return Ok(());
         }
         let abs_path = self.abs_path(current_path);
-        let mut file = File::create(&abs_path)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&abs_path)?;
         let size = reader.size().into_usize();
         let mut offset = 0;
         loop {
