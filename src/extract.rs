@@ -3,8 +3,9 @@ use jubako as jbk;
 use std::collections::HashSet;
 use std::env::current_dir;
 use std::ffi::OsString;
-use std::fs::{create_dir, create_dir_all, OpenOptions};
+use std::fs::{create_dir, create_dir_all, File, OpenOptions};
 use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
@@ -227,21 +228,38 @@ pub struct Options {
 
     #[clap(short = 'p', long = "progress", default_value_t = false, action)]
     progress: bool,
+
+    #[clap(short = 'L', long = "file-list")]
+    file_list: Option<PathBuf>,
+}
+
+fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<PathBuf>> {
+    if let Some(file_list) = &options.file_list {
+        let file = File::open(file_list)?;
+        let mut files: HashSet<PathBuf> = Default::default();
+        for line in BufReader::new(file).lines() {
+            files.insert(line?.into());
+        }
+        Ok(files)
+    } else {
+        Ok(options.extract_files.iter().cloned().collect())
+    }
 }
 
 pub fn extract(options: Options, verbose_level: u8) -> jbk::Result<()> {
+    let files_to_extract = get_files_to_extract(&options)?;
     let outdir = match options.outdir {
         Some(o) => o,
         None => current_dir()?,
     };
     if verbose_level > 0 {
-        println!("Extract archive {:?} in {:?}", options.infile, outdir);
+        println!("Extract archive {:?} in {:?}", &options.infile, outdir);
     }
-    let arx = libarx::Arx::new(options.infile)?;
+    let arx = libarx::Arx::new(&options.infile)?;
     let mut walker = libarx::walk::Walker::new(&arx, Default::default());
     let extractor = Extractor {
         arx: &arx,
-        files: options.extract_files.into_iter().collect(),
+        files: files_to_extract,
         base_dir: outdir,
         print_progress: options.progress,
     };
