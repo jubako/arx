@@ -1,5 +1,7 @@
 use jubako as jbk;
 use libarx as arx;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
@@ -12,8 +14,24 @@ pub struct Options {
     #[clap(short, long, value_parser)]
     outfile: PathBuf,
 
-    #[clap(short, long, default_value_t = false)]
+    #[clap(short = 'L', long = "file-list")]
+    file_list: Option<PathBuf>,
+
+    #[clap(short, long, required = false, default_value_t = false, action)]
     recurse: bool,
+}
+
+fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
+    if let Some(file_list) = &options.file_list {
+        let file = File::open(file_list)?;
+        let mut files = Vec::new();
+        for line in BufReader::new(file).lines() {
+            files.push(line?.into());
+        }
+        Ok(files)
+    } else {
+        Ok(options.infiles.clone())
+    }
 }
 
 pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
@@ -24,7 +42,8 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
 
     let mut creator = arx::create::Creator::new(&options.outfile)?;
 
-    for infile in options.infiles {
+    let files_to_add = get_files_to_add(&options)?;
+    for infile in files_to_add {
         creator.add_from_path(infile, options.recurse)?;
     }
 
