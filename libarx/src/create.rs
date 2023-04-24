@@ -3,6 +3,7 @@ use jubako as jbk;
 use crate::common::EntryType;
 use jbk::creator::schema;
 use std::collections::{hash_map::Entry as MapEntry, HashMap};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
@@ -11,109 +12,412 @@ use std::rc::Rc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum EntryKind {
     Dir,
-    File,
+    File(jbk::Size),
     Link,
     Other,
 }
 
+#[derive(Debug)]
 pub struct Entry {
     pub kind: EntryKind,
     pub path: PathBuf,
+    pub name: OsString,
     parent: jbk::Word<u64>,
-    is_root: bool,
+    uid: u64,
+    gid: u64,
+    mode: u64,
+    mtime: u64,
 }
 
 impl Entry {
     pub fn new_root(path: PathBuf) -> jbk::Result<Self> {
-        Self::new(path, ((|| 0) as fn() -> u64).into(), true)
+        let name = path.file_name().unwrap().to_os_string();
+        Self::new(path, name, ((|| 0) as fn() -> u64).into())
     }
 
-    fn new(path: PathBuf, parent: jbk::Word<u64>, is_root: bool) -> jbk::Result<Self> {
+    fn new(path: PathBuf, name: OsString, parent: jbk::Word<u64>) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
                 kind: EntryKind::Dir,
                 path,
+                name,
                 parent,
-                is_root,
+                uid: attr.uid() as u64,
+                gid: attr.gid() as u64,
+                mode: attr.mode() as u64,
+                mtime: attr.mtime() as u64,
             }
         } else if attr.is_file() {
             Self {
-                kind: EntryKind::File,
+                kind: EntryKind::File(attr.size().into()),
                 path,
+                name,
                 parent,
-                is_root,
+                uid: attr.uid() as u64,
+                gid: attr.gid() as u64,
+                mode: attr.mode() as u64,
+                mtime: attr.mtime() as u64,
             }
         } else if attr.is_symlink() {
             Self {
                 kind: EntryKind::Link,
                 path,
+                name,
                 parent,
-                is_root,
+                uid: attr.uid() as u64,
+                gid: attr.gid() as u64,
+                mode: attr.mode() as u64,
+                mtime: attr.mtime() as u64,
             }
         } else {
             Self {
                 kind: EntryKind::Other,
                 path,
+                name,
                 parent,
-                is_root,
+                uid: attr.uid() as u64,
+                gid: attr.gid() as u64,
+                mode: attr.mode() as u64,
+                mtime: attr.mtime() as u64,
             }
         })
     }
 
-    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Word<u64>, is_root: bool) -> Self {
+    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Word<u64>) -> jbk::Result<Self> {
         let path = dir_entry.path();
-        if let Ok(file_type) = dir_entry.file_type() {
+        let name = dir_entry.file_name();
+        Ok(if let Ok(file_type) = dir_entry.file_type() {
+            let attr = fs::symlink_metadata(&path)?;
             if file_type.is_dir() {
                 Self {
                     kind: EntryKind::Dir,
                     path,
+                    name,
                     parent,
-                    is_root,
+                    uid: attr.uid() as u64,
+                    gid: attr.gid() as u64,
+                    mode: attr.mode() as u64,
+                    mtime: attr.mtime() as u64,
                 }
             } else if file_type.is_file() {
                 Self {
-                    kind: EntryKind::File,
+                    kind: EntryKind::File(attr.size().into()),
                     path,
+                    name,
                     parent,
-                    is_root,
+                    uid: attr.uid() as u64,
+                    gid: attr.gid() as u64,
+                    mode: attr.mode() as u64,
+                    mtime: attr.mtime() as u64,
                 }
             } else if file_type.is_symlink() {
                 Self {
                     kind: EntryKind::Link,
                     path,
+                    name,
                     parent,
-                    is_root,
+
+                    uid: attr.uid() as u64,
+                    gid: attr.gid() as u64,
+                    mode: attr.mode() as u64,
+                    mtime: attr.mtime() as u64,
                 }
             } else {
                 Self {
                     kind: EntryKind::Other,
                     path,
+                    name,
                     parent,
-                    is_root,
+
+                    uid: attr.uid() as u64,
+                    gid: attr.gid() as u64,
+                    mode: attr.mode() as u64,
+                    mtime: attr.mtime() as u64,
                 }
             }
         } else {
             Self {
                 kind: EntryKind::Other,
                 path,
+                name,
                 parent,
-                is_root,
+                uid: 0,
+                gid: 0,
+                mode: 0,
+                mtime: 0,
             }
+        })
+    }
+}
+
+type DirCache = HashMap<PathBuf, DirEntry>;
+type EntryIdx = jbk::Bound<jbk::EntryIdx>;
+type Void = jbk::Result<()>;
+
+/// A DirEntry structure to keep track of added direcotry in the archive.
+/// This is needed as we may adde file without recursion, and so we need
+/// to find the parent of "foo/bar/baz.txt" ("foo/bar") when we add it.
+struct DirEntry {
+    idx: EntryIdx,
+    dir_children: Rc<DirCache>,
+    file_children: Rc<Vec<EntryIdx>>,
+}
+
+impl DirEntry {
+    fn new(idx: EntryIdx) -> Self {
+        Self {
+            idx,
+            dir_children: Default::default(),
+            file_children: Default::default(),
+        }
+    }
+
+    fn first_entry_generator(&self) -> Box<dyn Fn() -> u64> {
+        let dir_children = Rc::clone(&self.dir_children);
+        let file_children = Rc::clone(&self.file_children);
+        Box::new(move || {
+            if dir_children.is_empty() && file_children.is_empty() {
+                0
+            } else {
+                std::cmp::min(
+                    file_children
+                        .iter()
+                        .map(|i| i.get().into_u64())
+                        .min()
+                        .unwrap_or(u64::MAX),
+                    dir_children
+                        .values()
+                        .map(|i| i.idx.get().into_u64())
+                        .min()
+                        .unwrap_or(u64::MAX),
+                )
+            }
+        })
+    }
+
+    fn entry_count_generator(&self) -> Box<dyn Fn() -> u64> {
+        let dir_children = Rc::clone(&self.dir_children);
+        let file_children = Rc::clone(&self.file_children);
+        Box::new(move || (dir_children.len() + file_children.len()) as u64)
+    }
+
+    fn add_directory(
+        &mut self,
+        path: &Path,
+        name: &OsStr,
+        entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
+    ) -> Void {
+        println!("Add directory {path:?} as {name:?}");
+        let metadata = fs::symlink_metadata(path)?;
+        let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
+        let entry_name = jbk::Value::Array(name.to_os_string().into_vec());
+
+        let dir_entry = DirEntry::new(entry_idx.bind());
+
+        let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
+            &entry_store.schema,
+            entry_idx,
+            Some(EntryType::Dir.into()),
+            vec![
+                entry_name,
+                jbk::Value::Unsigned(self.idx.clone().into()),
+                jbk::Value::Unsigned((metadata.uid() as u64).into()),
+                jbk::Value::Unsigned((metadata.gid() as u64).into()),
+                jbk::Value::Unsigned((metadata.mode() as u64).into()),
+                jbk::Value::Unsigned((metadata.mtime() as u64).into()),
+                jbk::Value::Unsigned(dir_entry.first_entry_generator().into()),
+                jbk::Value::Unsigned(dir_entry.entry_count_generator().into()),
+            ],
+        ));
+        entry_store.add_entry(entry);
+        /* SAFETY: We already have Rc on `self.dir_children` but it is only used
+          in a second step to get entry_count and min entry_idx.
+          So while we borrow `self.dir_children` we never read it otherwise.
+        */
+        unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
+            .entry(name.into())
+            .or_insert(dir_entry);
+        Ok(())
+    }
+
+    fn mk_dirs(
+        &mut self,
+        mut path: PathBuf,
+        mut components: std::path::Components,
+        entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
+    ) -> jbk::Result<&mut Self> {
+        if let Some(component) = components.next() {
+            path.push(component);
+            if !self.dir_children.contains_key::<Path>(component.as_ref()) {
+                self.add_directory(&path, component.as_os_str(), entry_store)?;
+            }
+            /* SAFETY: We already have Rc on `self.dir_children` but it is only used
+              in a second step to get entry_count and min entry_idx.
+              So while we borrow `self.dir_children` we never read it otherwise.
+            */
+            unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
+                .get_mut::<Path>(component.as_ref())
+                .unwrap()
+                .mk_dirs(path, components, entry_store)
+        } else {
+            Ok(self)
+        }
+    }
+
+    fn add<F, Adder>(
+        &mut self,
+        path: &Path,
+        name: &OsStr,
+        recurse: bool,
+        filter: &F,
+        entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
+        add_content: &mut Adder,
+    ) -> Void
+    where
+        F: Fn(Entry) -> Option<Entry>,
+        Adder: FnMut(jbk::Reader) -> jbk::Result<jbk::ContentIdx>,
+    {
+        let entry = Entry::new(
+            path.to_path_buf(),
+            name.to_os_string(),
+            self.idx.clone().into(),
+        )?;
+
+        if let EntryKind::Other = entry.kind {
+            return Ok(());
+        };
+
+        let entry = match filter(entry) {
+            Some(e) => e,
+            None => return Ok(()),
+        };
+
+        println!("Handle {entry:?}");
+
+        match entry.kind {
+            EntryKind::Dir => {
+                self.add_directory(path, &entry.name, entry_store)?;
+
+                if recurse {
+                    /* SAFETY: We already have Rc on `self.dir_children` but it is only used
+                      in a second step to get entry_count and min entry_idx.
+                      So while we borrow `self.dir_children` we never read it otherwise.
+                    */
+                    let dir_entry = unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
+                        .get_mut::<Path>(entry.name.as_ref())
+                        .unwrap();
+
+                    for sub_entry in fs::read_dir(path)? {
+                        let sub_entry = sub_entry?;
+                        dir_entry.add(
+                            &sub_entry.path(),
+                            &sub_entry.file_name(),
+                            recurse,
+                            filter,
+                            entry_store,
+                            add_content,
+                        )?;
+                    }
+                }
+                Ok(())
+            }
+            EntryKind::File(size) => {
+                println!("Add content of path {path:?}");
+                let content_id = add_content(jbk::creator::FileSource::open(path)?.into())?;
+                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
+                    &entry_store.schema,
+                    Some(EntryType::File.into()),
+                    vec![
+                        jbk::Value::Array(entry.name.into_vec()),
+                        jbk::Value::Unsigned(entry.parent),
+                        jbk::Value::Unsigned(entry.uid.into()),
+                        jbk::Value::Unsigned(entry.gid.into()),
+                        jbk::Value::Unsigned(entry.mode.into()),
+                        jbk::Value::Unsigned(entry.mtime.into()),
+                        jbk::Value::Content(jbk::ContentAddress::new(
+                            jbk::PackId::from(1),
+                            content_id,
+                        )),
+                        jbk::Value::Unsigned(size.into_u64().into()),
+                    ],
+                ));
+                let current_idx = entry_store.add_entry(entry);
+                /* SAFETY: We already have Rc on `self.file_children` but it is only used
+                  in a second step to get entry_count and min entry_idx.
+                  So while we borrow `self.file_children` we never read it otherwise.
+                */
+                unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
+                Ok(())
+            }
+            EntryKind::Link => {
+                let target = fs::read_link(path)?;
+                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
+                    &entry_store.schema,
+                    Some(EntryType::Link.into()),
+                    vec![
+                        jbk::Value::Array(entry.name.into_vec()),
+                        jbk::Value::Unsigned(entry.parent),
+                        jbk::Value::Unsigned(entry.uid.into()),
+                        jbk::Value::Unsigned(entry.gid.into()),
+                        jbk::Value::Unsigned(entry.mode.into()),
+                        jbk::Value::Unsigned(entry.mtime.into()),
+                        jbk::Value::Array(target.into_os_string().into_vec()),
+                    ],
+                ));
+                let current_idx = entry_store.add_entry(entry);
+                /* SAFETY: We already have Rc on `self.file_children` but it is only used
+                  in a second step to get entry_count and min entry_idx.
+                  So while we borrow `self.file_children` we never read it otherwise.
+                */
+                unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
+                Ok(())
+            }
+            EntryKind::Other => unreachable!(),
         }
     }
 }
 
-pub struct Creator {
+pub struct CachedContentPack {
     content_pack: jbk::creator::ContentPackCreator,
+    cache: HashMap<blake3::Hash, jbk::ContentIdx>,
+}
+
+impl CachedContentPack {
+    fn new(content_pack: jbk::creator::ContentPackCreator) -> Self {
+        Self {
+            content_pack,
+            cache: Default::default(),
+        }
+    }
+
+    fn add_content(&mut self, content: jbk::Reader) -> jbk::Result<jbk::ContentIdx> {
+        let mut hasher = blake3::Hasher::new();
+        std::io::copy(&mut content.create_flux_all(), &mut hasher)?;
+        let hash = hasher.finalize();
+        match self.cache.entry(hash) {
+            MapEntry::Vacant(e) => {
+                let content_idx = self.content_pack.add_content(content)?;
+                e.insert(content_idx);
+                Ok(content_idx)
+            }
+            MapEntry::Occupied(e) => Ok(*e.get()),
+        }
+    }
+
+    fn into_inner(self) -> jbk::creator::ContentPackCreator {
+        self.content_pack
+    }
+}
+
+pub struct Creator {
+    content_pack: CachedContentPack,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
-    entry_count: jbk::EntryCount,
-    root_count: jbk::EntryCount,
-    content_cache: HashMap<blake3::Hash, jbk::ContentIdx>,
+    dir_cache: DirEntry,
     tmp_path_content_pack: tempfile::TempPath,
     tmp_path_directory_pack: tempfile::TempPath,
 }
@@ -174,26 +478,28 @@ impl Creator {
 
         let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
 
+        let idx = jbk::Vow::new(0.into());
+        let root_entry = DirEntry::new(idx.bind());
+
         Ok(Self {
-            content_pack,
+            content_pack: CachedContentPack::new(content_pack),
             directory_pack,
             entry_store,
-            entry_count: 0.into(),
-            root_count: 0.into(),
-            content_cache: HashMap::new(),
+            dir_cache: root_entry,
             tmp_path_content_pack,
             tmp_path_directory_pack,
         })
     }
 
-    pub fn finalize(mut self, outfile: PathBuf) -> jbk::Result<()> {
+    pub fn finalize(mut self, outfile: PathBuf) -> Void {
+        let entry_count = self.entry_store.len();
         let entry_store_id = self.directory_pack.add_entry_store(self.entry_store);
         self.directory_pack.create_index(
             "arx_entries",
             jubako::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
             entry_store_id,
-            self.entry_count,
+            jbk::EntryCount::from(entry_count as u32),
             jubako::EntryIdx::from(0).into(),
         );
         self.directory_pack.create_index(
@@ -201,7 +507,7 @@ impl Creator {
             jubako::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
             entry_store_id,
-            self.root_count,
+            jbk::EntryCount::from(self.dir_cache.entry_count_generator()() as u32),
             jubako::EntryIdx::from(0).into(),
         );
         let mut outfilename = outfile.file_name().unwrap().to_os_string();
@@ -222,6 +528,7 @@ impl Creator {
         content_pack_path.set_file_name(outfilename);
         let content_pack_info = self
             .content_pack
+            .into_inner()
             .finalize(Some(content_pack_path.clone()))?;
         if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
             return Err(e.error.into());
@@ -239,146 +546,28 @@ impl Creator {
         Ok(())
     }
 
-    pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> jbk::Result<()> {
-        self.handle(Entry::new_root(path.as_ref().into())?, &Some)?;
-        Ok(())
+    pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P, recurse: bool) -> Void {
+        self.add_from_path_with_filter(path, recurse, &Some)
     }
 
-    pub fn add_from_path_with_filter<P, F>(&mut self, path: P, filter: &F) -> jbk::Result<()>
+    pub fn add_from_path_with_filter<P, F>(&mut self, path: P, recurse: bool, filter: &F) -> Void
     where
         P: AsRef<std::path::Path>,
         F: Fn(Entry) -> Option<Entry>,
     {
-        self.handle(Entry::new_root(path.as_ref().into())?, filter)?;
-        Ok(())
-    }
-
-    fn handle<F>(
-        &mut self,
-        entry: Entry,
-        filter: &F,
-    ) -> jbk::Result<Option<jbk::Bound<jbk::EntryIdx>>>
-    where
-        F: Fn(Entry) -> Option<Entry>,
-    {
-        if let EntryKind::Other = entry.kind {
-            return Ok(None);
+        let dir_cache: &mut DirEntry = if let Some(parents) = path.as_ref().parent() {
+            self.dir_cache
+                .mk_dirs(PathBuf::new(), parents.components(), &mut self.entry_store)?
+        } else {
+            &mut self.dir_cache
         };
-
-        let entry = match filter(entry) {
-            Some(e) => e,
-            None => return Ok(None),
-        };
-
-        if self.entry_count.into_u32() % 1000 == 0 {
-            println!("{}", self.entry_count);
-        }
-
-        if entry.is_root {
-            self.root_count += 1;
-        }
-
-        let entry_path =
-            jbk::Value::Array(entry.path.file_name().unwrap().to_os_string().into_vec());
-        let metadata = fs::symlink_metadata(&entry.path)?;
-        let entry = Box::new(match entry.kind {
-            EntryKind::Dir => {
-                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
-
-                let mut children_idx = Vec::new();
-                for sub_entry in fs::read_dir(&entry.path)? {
-                    let entry_idx_bind = entry_idx.bind();
-                    let parent_idx_generator: Box<dyn Fn() -> u64> =
-                        Box::new(move || entry_idx_bind.get().into_u64() + 1);
-                    let child_idx = self.handle(
-                        Entry::new_from_fs(sub_entry?, parent_idx_generator.into(), false),
-                        filter,
-                    )?;
-                    if let Some(child_idx) = child_idx {
-                        children_idx.push(child_idx);
-                    }
-                }
-
-                let entry_count = children_idx.len() as u64;
-                let first_entry_generator: Box<dyn Fn() -> u64> = Box::new(move || {
-                    children_idx
-                        .iter()
-                        .map(|i| i.get().into_u64())
-                        .min()
-                        .unwrap_or(0)
-                });
-
-                jbk::creator::BasicEntry::new_from_schema_idx(
-                    &self.entry_store.schema,
-                    entry_idx,
-                    Some(EntryType::Dir.into()),
-                    vec![
-                        entry_path,
-                        jbk::Value::Unsigned(entry.parent),
-                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
-                        jbk::Value::Unsigned(first_entry_generator.into()),
-                        jbk::Value::Unsigned(entry_count.into()),
-                    ],
-                )
-            }
-            EntryKind::File => {
-                let content_id =
-                    self.add_content(jbk::creator::FileSource::open(&entry.path)?.into())?;
-                jbk::creator::BasicEntry::new_from_schema(
-                    &self.entry_store.schema,
-                    Some(EntryType::File.into()),
-                    vec![
-                        entry_path,
-                        jbk::Value::Unsigned(entry.parent),
-                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
-                        jbk::Value::Content(jbk::ContentAddress::new(
-                            jbk::PackId::from(1),
-                            content_id,
-                        )),
-                        jbk::Value::Unsigned(metadata.size().into()),
-                    ],
-                )
-            }
-            EntryKind::Link => {
-                let target = fs::read_link(&entry.path)?;
-                jbk::creator::BasicEntry::new_from_schema(
-                    &self.entry_store.schema,
-                    Some(EntryType::Link.into()),
-                    vec![
-                        entry_path,
-                        jbk::Value::Unsigned(entry.parent),
-                        jbk::Value::Unsigned((metadata.uid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.gid() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mode() as u64).into()),
-                        jbk::Value::Unsigned((metadata.mtime() as u64).into()),
-                        jbk::Value::Array(target.into_os_string().into_vec()),
-                    ],
-                )
-            }
-            EntryKind::Other => unreachable!(),
-        });
-        let current_idx = self.entry_store.add_entry(entry);
-        self.entry_count += 1;
-        Ok(Some(current_idx))
-    }
-
-    fn add_content(&mut self, content: jbk::Reader) -> jbk::Result<jbk::ContentIdx> {
-        let mut hasher = blake3::Hasher::new();
-        std::io::copy(&mut content.create_flux_all(), &mut hasher)?;
-        let hash = hasher.finalize();
-        match self.content_cache.entry(hash) {
-            MapEntry::Vacant(e) => {
-                let content_idx = self.content_pack.add_content(content)?;
-                e.insert(content_idx);
-                Ok(content_idx)
-            }
-            MapEntry::Occupied(e) => Ok(*e.get()),
-        }
+        dir_cache.add(
+            path.as_ref(),
+            path.as_ref().file_name().unwrap(),
+            recurse,
+            filter,
+            &mut self.entry_store,
+            &mut |r| self.content_pack.add_content(r),
+        )
     }
 }

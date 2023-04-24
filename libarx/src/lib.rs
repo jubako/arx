@@ -1,3 +1,5 @@
+#![feature(get_mut_unchecked)]
+
 mod arx;
 mod arx_fs;
 mod common;

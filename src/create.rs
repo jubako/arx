@@ -11,6 +11,9 @@ pub struct Options {
     // Archive name to create
     #[clap(short, long, value_parser)]
     outfile: PathBuf,
+
+    #[clap(short, long, default_value_t = false)]
+    recurse: bool,
 }
 
 pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
@@ -22,7 +25,7 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
     let mut creator = arx::create::Creator::new(&options.outfile)?;
 
     for infile in options.infiles {
-        creator.add_from_path(infile)?;
+        creator.add_from_path(infile, options.recurse)?;
     }
 
     creator.finalize(options.outfile)
