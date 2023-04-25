@@ -9,6 +9,9 @@ pub struct Options {
     #[clap(long, required = false)]
     strip_prefix: Option<PathBuf>,
 
+    #[clap(short = 'C', required = false)]
+    base_dir: Option<PathBuf>,
+
     // Input
     #[clap(value_parser)]
     infiles: Vec<PathBuf>,
@@ -48,12 +51,18 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         None => PathBuf::new(),
     };
 
-    let mut creator = arx::create::Creator::new(&options.outfile, strip_prefix)?;
+    let out_file = std::env::current_dir()?.join(&options.outfile);
+
+    let mut creator = arx::create::Creator::new(&out_file, strip_prefix)?;
 
     let files_to_add = get_files_to_add(&options)?;
+
+    if let Some(base_dir) = &options.base_dir {
+        std::env::set_current_dir(base_dir)?;
+    };
     for infile in files_to_add {
         creator.add_from_path(infile, options.recurse)?;
     }
 
-    creator.finalize(options.outfile)
+    creator.finalize(out_file)
 }
