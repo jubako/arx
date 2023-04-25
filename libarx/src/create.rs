@@ -162,15 +162,22 @@ type Void = jbk::Result<()>;
 /// This is needed as we may adde file without recursion, and so we need
 /// to find the parent of "foo/bar/baz.txt" ("foo/bar") when we add it.
 struct DirEntry {
-    idx: EntryIdx,
+    idx: Option<EntryIdx>,
     dir_children: Rc<DirCache>,
     file_children: Rc<Vec<EntryIdx>>,
 }
 
 impl DirEntry {
+    fn new_root() -> Self {
+        Self {
+            idx: None,
+            dir_children: Default::default(),
+            file_children: Default::default(),
+        }
+    }
     fn new(idx: EntryIdx) -> Self {
         Self {
-            idx,
+            idx: Some(idx),
             dir_children: Default::default(),
             file_children: Default::default(),
         }
@@ -191,7 +198,8 @@ impl DirEntry {
                         .unwrap_or(u64::MAX),
                     dir_children
                         .values()
-                        .map(|i| i.idx.get().into_u64())
+                        // Unwrap is safe because children are not root, and idx is Some
+                        .map(|i| i.idx.as_ref().unwrap().get().into_u64())
                         .min()
                         .unwrap_or(u64::MAX),
                 )
@@ -203,6 +211,16 @@ impl DirEntry {
         let dir_children = Rc::clone(&self.dir_children);
         let file_children = Rc::clone(&self.file_children);
         Box::new(move || (dir_children.len() + file_children.len()) as u64)
+    }
+
+    fn as_parent_idx_generator(&self) -> Box<dyn Fn() -> u64> {
+        match &self.idx {
+            Some(idx) => {
+                let idx = idx.clone();
+                Box::new(move || idx.get().into_u64() + 1)
+            }
+            None => Box::new(|| 0),
+        }
     }
 
     fn add_directory(
@@ -224,7 +242,7 @@ impl DirEntry {
             Some(EntryType::Dir.into()),
             vec![
                 entry_name,
-                jbk::Value::Unsigned(self.idx.clone().into()),
+                jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
                 jbk::Value::Unsigned((metadata.uid() as u64).into()),
                 jbk::Value::Unsigned((metadata.gid() as u64).into()),
                 jbk::Value::Unsigned((metadata.mode() as u64).into()),
@@ -284,7 +302,7 @@ impl DirEntry {
         let entry = Entry::new(
             path.to_path_buf(),
             name.to_os_string(),
-            self.idx.clone().into(),
+            self.as_parent_idx_generator().into(),
         )?;
 
         if let EntryKind::Other = entry.kind {
@@ -478,8 +496,7 @@ impl Creator {
 
         let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
 
-        let idx = jbk::Vow::new(0.into());
-        let root_entry = DirEntry::new(idx.bind());
+        let root_entry = DirEntry::new_root();
 
         Ok(Self {
             content_pack: CachedContentPack::new(content_pack),
