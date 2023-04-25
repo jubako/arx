@@ -229,7 +229,6 @@ impl DirEntry {
         name: &OsStr,
         entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
     ) -> Void {
-        println!("Add directory {path:?} as {name:?}");
         let metadata = fs::symlink_metadata(path)?;
         let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
         let entry_name = jbk::Value::Array(name.to_os_string().into_vec());
@@ -314,8 +313,6 @@ impl DirEntry {
             None => return Ok(()),
         };
 
-        println!("Handle {entry:?}");
-
         match entry.kind {
             EntryKind::Dir => {
                 self.add_directory(path, &entry.name, entry_store)?;
@@ -344,7 +341,6 @@ impl DirEntry {
                 Ok(())
             }
             EntryKind::File(size) => {
-                println!("Add content of path {path:?}");
                 let content_id = add_content(jbk::creator::FileSource::open(path)?.into())?;
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
@@ -436,12 +432,13 @@ pub struct Creator {
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
     dir_cache: DirEntry,
+    strip_prefix: PathBuf,
     tmp_path_content_pack: tempfile::TempPath,
     tmp_path_directory_pack: tempfile::TempPath,
 }
 
 impl Creator {
-    pub fn new<P: AsRef<Path>>(outfile: P) -> jbk::Result<Self> {
+    pub fn new<P: AsRef<Path>>(outfile: P, strip_prefix: PathBuf) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap();
 
@@ -503,6 +500,7 @@ impl Creator {
             directory_pack,
             entry_store,
             dir_cache: root_entry,
+            strip_prefix,
             tmp_path_content_pack,
             tmp_path_directory_pack,
         })
@@ -572,19 +570,38 @@ impl Creator {
         P: AsRef<std::path::Path>,
         F: Fn(Entry) -> Option<Entry>,
     {
-        let dir_cache: &mut DirEntry = if let Some(parents) = path.as_ref().parent() {
-            self.dir_cache
-                .mk_dirs(PathBuf::new(), parents.components(), &mut self.entry_store)?
+        let rel_path = path.as_ref().strip_prefix(&self.strip_prefix).unwrap();
+        let dir_cache: &mut DirEntry = if let Some(parents) = rel_path.parent() {
+            self.dir_cache.mk_dirs(
+                self.strip_prefix.clone(),
+                parents.components(),
+                &mut self.entry_store,
+            )?
         } else {
             &mut self.dir_cache
         };
-        dir_cache.add(
-            path.as_ref(),
-            path.as_ref().file_name().unwrap(),
-            recurse,
-            filter,
-            &mut self.entry_store,
-            &mut |r| self.content_pack.add_content(r),
-        )
+        if rel_path.as_os_str().is_empty() {
+            for sub_entry in fs::read_dir(path)? {
+                let sub_entry = sub_entry?;
+                dir_cache.add(
+                    &sub_entry.path(),
+                    &sub_entry.file_name(),
+                    recurse,
+                    filter,
+                    &mut self.entry_store,
+                    &mut |r| self.content_pack.add_content(r),
+                )?;
+            }
+            Ok(())
+        } else {
+            dir_cache.add(
+                path.as_ref(),
+                path.as_ref().file_name().unwrap(),
+                recurse,
+                filter,
+                &mut self.entry_store,
+                &mut |r| self.content_pack.add_content(r),
+            )
+        }
     }
 }

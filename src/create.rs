@@ -6,6 +6,9 @@ use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct Options {
+    #[clap(long, required = false)]
+    strip_prefix: Option<PathBuf>,
+
     // Input
     #[clap(value_parser)]
     infiles: Vec<PathBuf>,
@@ -40,7 +43,12 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         println!("With files {:?}", options.infiles);
     }
 
-    let mut creator = arx::create::Creator::new(&options.outfile)?;
+    let strip_prefix = match &options.strip_prefix {
+        Some(s) => s.clone(),
+        None => PathBuf::new(),
+    };
+
+    let mut creator = arx::create::Creator::new(&options.outfile, strip_prefix)?;
 
     let files_to_add = get_files_to_add(&options)?;
     for infile in files_to_add {
