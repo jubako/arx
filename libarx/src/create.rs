@@ -12,6 +12,12 @@ use std::rc::Rc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
+pub enum ConcatMode {
+    OneFile,
+    TwoFiles,
+    NoConcat,
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum EntryKind {
     Dir,
@@ -436,12 +442,17 @@ pub struct Creator {
     entry_store: Box<jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>>,
     dir_cache: DirEntry,
     strip_prefix: PathBuf,
+    concat_mode: ConcatMode,
     tmp_path_content_pack: tempfile::TempPath,
     tmp_path_directory_pack: tempfile::TempPath,
 }
 
 impl Creator {
-    pub fn new<P: AsRef<Path>>(outfile: P, strip_prefix: PathBuf) -> jbk::Result<Self> {
+    pub fn new<P: AsRef<Path>>(
+        outfile: P,
+        strip_prefix: PathBuf,
+        concat_mode: ConcatMode,
+    ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap();
 
@@ -504,6 +515,7 @@ impl Creator {
             entry_store,
             dir_cache: root_entry,
             strip_prefix,
+            concat_mode,
             tmp_path_content_pack,
             tmp_path_directory_pack,
         })
@@ -528,29 +540,43 @@ impl Creator {
             jbk::EntryCount::from(self.dir_cache.entry_count_generator()() as u32),
             jubako::EntryIdx::from(0).into(),
         );
-        let mut outfilename = outfile.file_name().unwrap().to_os_string();
-        outfilename.push(".jbkd");
-        let mut directory_pack_path = PathBuf::new();
-        directory_pack_path.push(&outfile);
-        directory_pack_path.set_file_name(outfilename);
-        let directory_pack_info = self
-            .directory_pack
-            .finalize(Some(directory_pack_path.clone()))?;
-        if let Err(e) = self.tmp_path_directory_pack.persist(&directory_pack_path) {
-            return Err(e.error.into());
+
+        let directory_pack_info = match self.concat_mode {
+            ConcatMode::NoConcat => {
+                let mut outfilename = outfile.file_name().unwrap().to_os_string();
+                outfilename.push(".jbkd");
+                let mut directory_pack_path = PathBuf::new();
+                directory_pack_path.push(&outfile);
+                directory_pack_path.set_file_name(outfilename);
+                let directory_pack_info = self
+                    .directory_pack
+                    .finalize(Some(directory_pack_path.clone()))?;
+                if let Err(e) = self.tmp_path_directory_pack.persist(&directory_pack_path) {
+                    return Err(e.error.into());
+                };
+                directory_pack_info
+            }
+            _ => self.directory_pack.finalize(None)?,
         };
-        let mut outfilename = outfile.file_name().unwrap().to_os_string();
-        outfilename.push(".jbkc");
-        let mut content_pack_path = PathBuf::new();
-        content_pack_path.push(&outfile);
-        content_pack_path.set_file_name(outfilename);
-        let content_pack_info = self
-            .content_pack
-            .into_inner()
-            .finalize(Some(content_pack_path.clone()))?;
-        if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
-            return Err(e.error.into());
-        }
+
+        let content_pack_info = match self.concat_mode {
+            ConcatMode::OneFile => self.content_pack.into_inner().finalize(None)?,
+            _ => {
+                let mut outfilename = outfile.file_name().unwrap().to_os_string();
+                outfilename.push(".jbkc");
+                let mut content_pack_path = PathBuf::new();
+                content_pack_path.push(&outfile);
+                content_pack_path.set_file_name(outfilename);
+                let content_pack_info = self
+                    .content_pack
+                    .into_inner()
+                    .finalize(Some(content_pack_path.clone()))?;
+                if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
+                    return Err(e.error.into());
+                }
+                content_pack_info
+            }
+        };
 
         let mut manifest_creator = jbk::creator::ManifestPackCreator::new(
             outfile,

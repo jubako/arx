@@ -25,6 +25,9 @@ pub struct Options {
 
     #[clap(short, long, required = false, default_value_t = false, action)]
     recurse: bool,
+
+    #[clap(short = '1', long, required = false, default_value_t = false, action)]
+    one_file: bool,
 }
 
 fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
@@ -53,7 +56,12 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
 
     let out_file = std::env::current_dir()?.join(&options.outfile);
 
-    let mut creator = arx::create::Creator::new(&out_file, strip_prefix)?;
+    let concat_mode = if options.one_file {
+        arx::create::ConcatMode::OneFile
+    } else {
+        arx::create::ConcatMode::TwoFiles
+    };
+    let mut creator = arx::create::Creator::new(&out_file, strip_prefix, concat_mode)?;
 
     let files_to_add = get_files_to_add(&options)?;
 
