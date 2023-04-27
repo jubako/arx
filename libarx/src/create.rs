@@ -229,6 +229,9 @@ impl DirEntry {
         name: &OsStr,
         entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
     ) -> Void {
+        if self.dir_children.contains_key(&PathBuf::from(name)) {
+            return Ok(());
+        }
         let metadata = fs::symlink_metadata(path)?;
         let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
         let entry_name = jbk::Value::Array(name.to_os_string().into_vec());
