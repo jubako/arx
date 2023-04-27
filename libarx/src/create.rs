@@ -584,16 +584,18 @@ impl Creator {
             &mut self.dir_cache
         };
         if rel_path.as_os_str().is_empty() {
-            for sub_entry in fs::read_dir(path)? {
-                let sub_entry = sub_entry?;
-                dir_cache.add(
-                    &sub_entry.path(),
-                    &sub_entry.file_name(),
-                    recurse,
-                    filter,
-                    &mut self.entry_store,
-                    &mut |r| self.content_pack.add_content(r),
-                )?;
+            if recurse {
+                for sub_entry in fs::read_dir(path)? {
+                    let sub_entry = sub_entry?;
+                    dir_cache.add(
+                        &sub_entry.path(),
+                        &sub_entry.file_name(),
+                        recurse,
+                        filter,
+                        &mut self.entry_store,
+                        &mut |r| self.content_pack.add_content(r),
+                    )?;
+                }
             }
             Ok(())
         } else {
