@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct Options {
+    // Archive name to create
+    #[clap(short = 'f', long = "file", value_parser)]
+    outfile: PathBuf,
+
     #[clap(long, required = false)]
     strip_prefix: Option<PathBuf>,
 
@@ -15,10 +19,6 @@ pub struct Options {
     // Input
     #[clap(value_parser)]
     infiles: Vec<PathBuf>,
-
-    // Archive name to create
-    #[clap(short, long, value_parser)]
-    outfile: PathBuf,
 
     #[clap(short = 'L', long = "file-list")]
     file_list: Option<PathBuf>,
