@@ -9,6 +9,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
@@ -452,18 +453,20 @@ impl Creator {
         outfile: P,
         strip_prefix: PathBuf,
         concat_mode: ConcatMode,
+        progress: Arc<dyn jbk::creator::Progress>,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap();
 
         let (tmp_content_pack, tmp_path_content_pack) =
             tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
-        let content_pack = jbk::creator::ContentPackCreator::new_from_file(
+        let content_pack = jbk::creator::ContentPackCreator::new_from_file_with_progress(
             tmp_content_pack,
             jbk::PackId::from(1),
             VENDOR_ID,
             jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
+            progress,
         )?;
 
         let (_, tmp_path_directory_pack) = tempfile::NamedTempFile::new_in(out_dir)?.into_parts();

@@ -3,6 +3,7 @@ use libarx as arx;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(clap::Args)]
 pub struct Options {
@@ -43,6 +44,54 @@ fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
     }
 }
 
+#[derive(Clone)]
+struct ProgressBar {
+    comp_clusters: indicatif::ProgressBar,
+    uncomp_clusters: indicatif::ProgressBar,
+}
+
+impl ProgressBar {
+    fn new() -> Self {
+        let style = indicatif::ProgressStyle::with_template(
+            "{prefix} : {wide_bar:.cyan/blue} {pos:4} / {len:4}",
+        )
+        .unwrap()
+        .progress_chars("#+-");
+        let multi = indicatif::MultiProgress::new();
+        let comp_clusters = indicatif::ProgressBar::new(0)
+            .with_style(style.clone())
+            .with_prefix("Compressed Cluster  ");
+        let uncomp_clusters = indicatif::ProgressBar::new(0)
+            .with_style(style)
+            .with_prefix("Uncompressed Cluster");
+        multi.add(comp_clusters.clone());
+        multi.add(uncomp_clusters.clone());
+        Self {
+            comp_clusters,
+            uncomp_clusters,
+        }
+    }
+}
+
+impl jbk::creator::Progress for ProgressBar {
+    fn new_cluster(&self, _cluster_idx: u32, compressed: bool) {
+        if compressed {
+            &self.comp_clusters
+        } else {
+            &self.uncomp_clusters
+        }
+        .inc_length(1)
+    }
+    fn handle_cluster(&self, _cluster_idx: u32, compressed: bool) {
+        if compressed {
+            &self.comp_clusters
+        } else {
+            &self.uncomp_clusters
+        }
+        .inc(1)
+    }
+}
+
 pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
     if verbose_level > 0 {
         println!("Creating archive {:?}", options.outfile);
@@ -61,7 +110,9 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
     } else {
         arx::create::ConcatMode::TwoFiles
     };
-    let mut creator = arx::create::Creator::new(&out_file, strip_prefix, concat_mode)?;
+
+    let progress = Arc::new(ProgressBar::new());
+    let mut creator = arx::create::Creator::new(&out_file, strip_prefix, concat_mode, progress)?;
 
     let files_to_add = get_files_to_add(&options)?;
 
