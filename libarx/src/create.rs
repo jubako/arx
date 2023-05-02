@@ -3,7 +3,6 @@ use jubako as jbk;
 use crate::common::EntryType;
 use jbk::creator::schema;
 use std::collections::{hash_map::Entry as MapEntry, HashMap};
-use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
@@ -115,31 +114,28 @@ pub struct Creator {
     entry_count: jbk::EntryCount,
     root_count: jbk::EntryCount,
     content_cache: HashMap<blake3::Hash, jbk::ContentIdx>,
+    tmp_path_content_pack: tempfile::TempPath,
+    tmp_path_directory_pack: tempfile::TempPath,
 }
 
 impl Creator {
     pub fn new<P: AsRef<Path>>(outfile: P) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
-        let mut outfilename: OsString = outfile.file_name().unwrap().to_os_string();
-        outfilename.push(".jbkc");
-        let mut content_pack_path = PathBuf::new();
-        content_pack_path.push(outfile);
-        content_pack_path.set_file_name(outfilename);
-        let content_pack = jbk::creator::ContentPackCreator::new(
-            content_pack_path,
+        let out_dir = outfile.parent().unwrap();
+
+        let (tmp_content_pack, tmp_path_content_pack) =
+            tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
+        let content_pack = jbk::creator::ContentPackCreator::new_from_file(
+            tmp_content_pack,
             jbk::PackId::from(1),
             VENDOR_ID,
             jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
         )?;
 
-        outfilename = outfile.file_name().unwrap().to_os_string();
-        outfilename.push(".jbkd");
-        let mut directory_pack_path = PathBuf::new();
-        directory_pack_path.push(outfile);
-        directory_pack_path.set_file_name(outfilename);
+        let (_, tmp_path_directory_pack) = tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
         let mut directory_pack = jbk::creator::DirectoryPackCreator::new(
-            directory_pack_path,
+            &tmp_path_directory_pack,
             jbk::PackId::from(0),
             VENDOR_ID,
             jbk::FreeData31::clone_from_slice(&[0x00; 31]),
@@ -185,6 +181,8 @@ impl Creator {
             entry_count: 0.into(),
             root_count: 0.into(),
             content_cache: HashMap::new(),
+            tmp_path_content_pack,
+            tmp_path_directory_pack,
         })
     }
 
@@ -196,7 +194,7 @@ impl Creator {
             jbk::PropertyIdx::from(0),
             entry_store_id,
             self.entry_count,
-            jubako::EntryIdx::from(0),
+            jubako::EntryIdx::from(0).into(),
         );
         self.directory_pack.create_index(
             "arx_root",
@@ -204,10 +202,31 @@ impl Creator {
             jbk::PropertyIdx::from(0),
             entry_store_id,
             self.root_count,
-            jubako::EntryIdx::from(0),
+            jubako::EntryIdx::from(0).into(),
         );
-        let directory_pack_info = self.directory_pack.finalize()?;
-        let content_pack_info = self.content_pack.finalize()?;
+        let mut outfilename = outfile.file_name().unwrap().to_os_string();
+        outfilename.push(".jbkd");
+        let mut directory_pack_path = PathBuf::new();
+        directory_pack_path.push(&outfile);
+        directory_pack_path.set_file_name(outfilename);
+        let directory_pack_info = self
+            .directory_pack
+            .finalize(Some(directory_pack_path.clone()))?;
+        if let Err(e) = self.tmp_path_directory_pack.persist(&directory_pack_path) {
+            return Err(e.error.into());
+        };
+        let mut outfilename = outfile.file_name().unwrap().to_os_string();
+        outfilename.push(".jbkc");
+        let mut content_pack_path = PathBuf::new();
+        content_pack_path.push(&outfile);
+        content_pack_path.set_file_name(outfilename);
+        let content_pack_info = self
+            .content_pack
+            .finalize(Some(content_pack_path.clone()))?;
+        if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
+            return Err(e.error.into());
+        }
+
         let mut manifest_creator = jbk::creator::ManifestPackCreator::new(
             outfile,
             VENDOR_ID,
