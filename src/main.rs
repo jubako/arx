@@ -38,7 +38,18 @@ enum Commands {
     Mount(mount::Options),
 }
 
+fn configure_log() {
+    let env = env_logger::Env::default()
+        .filter("ARX_LOG")
+        .write_style("ARX_LOG_STYLE");
+    env_logger::Builder::from_env(env)
+        .format_module_path(false)
+        .format_timestamp(None)
+        .init();
+}
+
 fn main() -> jbk::Result<()> {
+    configure_log();
     let args = Cli::parse();
 
     match args.command {
