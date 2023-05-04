@@ -20,7 +20,7 @@ impl Builder for () {
     }
 }
 
-pub trait FullBuilder {
+pub trait FullBuilderTrait {
     type Entry: EntryDef;
 
     fn new(properties: &AllProperties) -> Self;
@@ -41,7 +41,7 @@ pub trait FullBuilder {
     ) -> jbk::Result<<Self::Entry as EntryDef>::Dir>;
 }
 
-impl<F, L, D> FullBuilder for (F, L, D)
+impl<F, L, D> FullBuilderTrait for (F, L, D)
 where
     F: Builder,
     L: Builder,
@@ -81,7 +81,7 @@ where
     }
 }
 
-pub(crate) struct RealBuilder<B: FullBuilder> {
+pub(crate) struct RealBuilder<B: FullBuilderTrait> {
     store: Rc<jbk::reader::EntryStore>,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     first_child_property: jbk::reader::builder::IntProperty,
@@ -91,7 +91,7 @@ pub(crate) struct RealBuilder<B: FullBuilder> {
 
 impl<B> RealBuilder<B>
 where
-    B: FullBuilder,
+    B: FullBuilderTrait,
 {
     pub fn new(properties: &AllProperties) -> Self {
         let builder = B::new(properties);
@@ -107,7 +107,7 @@ where
 
 impl<B> jbk::reader::builder::BuilderTrait for RealBuilder<B>
 where
-    B: FullBuilder,
+    B: FullBuilderTrait,
 {
     type Entry = Entry<B::Entry>;
 

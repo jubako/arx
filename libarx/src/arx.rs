@@ -1,4 +1,4 @@
-use super::common::{AllProperties, Comparator, Entry, FullBuilder, RealBuilder};
+use super::common::{AllProperties, Comparator, Entry, FullBuilderTrait, RealBuilder};
 use jubako as jbk;
 use jubako::reader::Range;
 use std::os::unix::ffi::OsStrExt;
@@ -50,7 +50,7 @@ impl Arx {
     pub fn get_entry<B, P>(&self, path: P) -> jbk::Result<Entry<B::Entry>>
     where
         P: AsRef<Path>,
-        B: FullBuilder,
+        B: FullBuilderTrait,
     {
         let comparator = Comparator::new(&self.properties);
         let builder = RealBuilder::<B>::new(&self.properties);

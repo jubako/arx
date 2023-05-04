@@ -3,8 +3,8 @@ mod entry;
 mod entry_type;
 mod properties;
 
-pub use builder::Builder;
-pub(crate) use builder::{FullBuilder, RealBuilder};
+pub(crate) use builder::RealBuilder;
+pub use builder::{Builder, FullBuilderTrait};
 pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
