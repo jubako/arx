@@ -110,6 +110,7 @@ struct Extractor<'a> {
     arx: &'a libarx::Arx,
     files: HashSet<PathBuf>,
     base_dir: PathBuf,
+    print_progress: bool,
 }
 
 impl Extractor<'_> {
@@ -153,7 +154,10 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
         }
         let abs_path = self.abs_path(current_path);
         if !abs_path.try_exists()? {
-            create_dir(abs_path)?;
+            create_dir(&abs_path)?;
+            if self.print_progress {
+                println!("{}", abs_path.display());
+            }
         }
         Ok(true)
     }
@@ -168,7 +172,8 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
             current_path.pop();
             return Ok(());
         }
-        let mut file = File::create(&self.abs_path(current_path))?;
+        let abs_path = self.abs_path(current_path);
+        let mut file = File::create(&abs_path)?;
         let size = reader.size().into_usize();
         let mut offset = 0;
         loop {
@@ -180,6 +185,9 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
                 break;
             }
         }
+        if self.print_progress {
+            println!("{}", abs_path.display());
+        }
         current_path.pop();
         Ok(())
     }
@@ -189,16 +197,25 @@ impl libarx::walk::Operator<PathBuf, FullBuilder> for Extractor<'_> {
             current_path.pop();
             return Ok(());
         }
+        let abs_path = self.abs_path(current_path);
         symlink(
             PathBuf::from(OsString::from_vec(link.target.clone())),
-            PathBuf::from(&self.abs_path(current_path)),
+            PathBuf::from(&abs_path),
         )?;
+        if self.print_progress {
+            println!("{}", abs_path.display());
+        }
         current_path.pop();
         Ok(())
     }
 }
 
-pub fn extract<INP, OUTP>(infile: INP, outdir: OUTP, extract_files: Vec<PathBuf>) -> jbk::Result<()>
+pub fn extract<INP, OUTP>(
+    infile: INP,
+    outdir: OUTP,
+    extract_files: Vec<PathBuf>,
+    progress: bool,
+) -> jbk::Result<()>
 where
     INP: AsRef<std::path::Path>,
     PathBuf: From<OUTP>,
@@ -209,6 +226,7 @@ where
         arx: &arx,
         files: extract_files.into_iter().collect(),
         base_dir: outdir.into(),
+        print_progress: progress,
     };
     walker.run(&extractor)
 }
