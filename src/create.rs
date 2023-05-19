@@ -123,5 +123,5 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         creator.add_from_path(infile, options.recurse)?;
     }
 
-    creator.finalize(out_file)
+    creator.finalize(&out_file)
 }

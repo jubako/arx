@@ -524,7 +524,7 @@ impl Creator {
         })
     }
 
-    pub fn finalize(mut self, outfile: PathBuf) -> Void {
+    pub fn finalize(mut self, outfile: &Path) -> Void {
         let entry_count = self.entry_store.len();
         let entry_store_id = self.directory_pack.add_entry_store(self.entry_store);
         self.directory_pack.create_index(
@@ -549,7 +549,7 @@ impl Creator {
                 let mut outfilename = outfile.file_name().unwrap().to_os_string();
                 outfilename.push(".jbkd");
                 let mut directory_pack_path = PathBuf::new();
-                directory_pack_path.push(&outfile);
+                directory_pack_path.push(outfile);
                 directory_pack_path.set_file_name(outfilename);
                 let directory_pack_info = self
                     .directory_pack
@@ -568,7 +568,7 @@ impl Creator {
                 let mut outfilename = outfile.file_name().unwrap().to_os_string();
                 outfilename.push(".jbkc");
                 let mut content_pack_path = PathBuf::new();
-                content_pack_path.push(&outfile);
+                content_pack_path.push(outfile);
                 content_pack_path.set_file_name(outfilename);
                 let content_pack_info = self
                     .content_pack
