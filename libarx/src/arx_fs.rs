@@ -14,7 +14,6 @@ use std::num::NonZeroUsize;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
-use std::rc::Rc;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 
@@ -76,7 +75,7 @@ impl TryInto<jbk::EntryIdx> for Ino {
 }
 
 struct LightLinkBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     link_property: jbk::reader::builder::ArrayProperty,
 }
@@ -84,7 +83,7 @@ struct LightLinkBuilder {
 impl LightLinkBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             link_property: properties.link_target_property.clone(),
         }
@@ -111,7 +110,7 @@ impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
 }
 
 struct LightFileBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     content_address_property: jbk::reader::builder::ContentProperty,
 }
@@ -119,7 +118,7 @@ struct LightFileBuilder {
 impl LightFileBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             content_address_property: properties.file_content_address_property,
         }
@@ -144,7 +143,7 @@ impl jbk::reader::builder::BuilderTrait for LightFileBuilder {
 }
 
 struct LightDirBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     first_child_property: jbk::reader::builder::IntProperty,
     nb_children_property: jbk::reader::builder::IntProperty,
@@ -153,7 +152,7 @@ struct LightDirBuilder {
 impl LightDirBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             first_child_property: properties.dir_first_child_property.clone(),
             nb_children_property: properties.dir_nb_children_property.clone(),
@@ -187,7 +186,7 @@ struct LightCommonPath {
 }
 
 struct LightCommonPathBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     path_property: jbk::reader::builder::ArrayProperty,
 }
@@ -195,7 +194,7 @@ struct LightCommonPathBuilder {
 impl LightCommonPathBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             path_property: properties.path_property.clone(),
         }
@@ -216,14 +215,14 @@ impl jbk::reader::builder::BuilderTrait for LightCommonPathBuilder {
 }
 
 struct LightCommonParentBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     parent_property: jbk::reader::builder::IntProperty,
 }
 
 impl LightCommonParentBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             parent_property: properties.parent_property.clone(),
         }
     }
@@ -245,7 +244,7 @@ impl jbk::reader::builder::BuilderTrait for LightCommonParentBuilder {
 }
 
 struct AttrBuilder {
-    store: Rc<jbk::reader::EntryStore>,
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     owner_property: jbk::reader::builder::IntProperty,
     group_property: jbk::reader::builder::IntProperty,
@@ -259,7 +258,7 @@ struct AttrBuilder {
 impl AttrBuilder {
     fn new(properties: &AllProperties) -> Self {
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             owner_property: properties.owner_property.clone(),
             group_property: properties.group_property.clone(),
