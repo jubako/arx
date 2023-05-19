@@ -394,6 +394,19 @@ impl<'a, S: Stats> ArxFs<'a, S> {
     }
 }
 
+impl<S: Stats + Send> ArxFs<'static, S> {
+    pub fn spawn_mount<P: AsRef<Path>>(
+        self,
+        mount_point: P,
+    ) -> jbk::Result<fuser::BackgroundSession> {
+        let options = vec![
+            fuser::MountOption::RO,
+            fuser::MountOption::FSName("arx".into()),
+        ];
+        Ok(fuser::spawn_mount2(self, &mount_point, &options)?)
+    }
+}
+
 const ROOT_ATTR: fuser::FileAttr = fuser::FileAttr {
     ino: 1,
     size: 0,
