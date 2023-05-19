@@ -33,3 +33,7 @@ indicatif = "0.17.3"
 [profile.release]
 #debug = 1
 lto = true
+
+[dev-dependencies]
+arx_test_dir = { path = "../arx_test_dir" }
+tempfile = "3.5.0"
