@@ -20,7 +20,7 @@ pub enum ConcatMode {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub enum EntryKind {
+pub enum FsEntryKind {
     Dir,
     File(jbk::Size),
     Link,
@@ -28,8 +28,8 @@ pub enum EntryKind {
 }
 
 #[derive(Debug)]
-pub struct Entry {
-    pub kind: EntryKind,
+pub struct FsEntry {
+    pub kind: FsEntryKind,
     pub path: PathBuf,
     pub name: OsString,
     parent: jbk::Word<u64>,
@@ -39,7 +39,7 @@ pub struct Entry {
     mtime: u64,
 }
 
-impl Entry {
+impl FsEntry {
     pub fn new_root(path: PathBuf) -> jbk::Result<Self> {
         let name = path.file_name().unwrap().to_os_string();
         Self::new(path, name, ((|| 0) as fn() -> u64).into())
@@ -49,7 +49,7 @@ impl Entry {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
-                kind: EntryKind::Dir,
+                kind: FsEntryKind::Dir,
                 path,
                 name,
                 parent,
@@ -60,7 +60,7 @@ impl Entry {
             }
         } else if attr.is_file() {
             Self {
-                kind: EntryKind::File(attr.size().into()),
+                kind: FsEntryKind::File(attr.size().into()),
                 path,
                 name,
                 parent,
@@ -71,7 +71,7 @@ impl Entry {
             }
         } else if attr.is_symlink() {
             Self {
-                kind: EntryKind::Link,
+                kind: FsEntryKind::Link,
                 path,
                 name,
                 parent,
@@ -82,7 +82,7 @@ impl Entry {
             }
         } else {
             Self {
-                kind: EntryKind::Other,
+                kind: FsEntryKind::Other,
                 path,
                 name,
                 parent,
@@ -101,7 +101,7 @@ impl Entry {
             let attr = fs::symlink_metadata(&path)?;
             if file_type.is_dir() {
                 Self {
-                    kind: EntryKind::Dir,
+                    kind: FsEntryKind::Dir,
                     path,
                     name,
                     parent,
@@ -112,7 +112,7 @@ impl Entry {
                 }
             } else if file_type.is_file() {
                 Self {
-                    kind: EntryKind::File(attr.size().into()),
+                    kind: FsEntryKind::File(attr.size().into()),
                     path,
                     name,
                     parent,
@@ -123,7 +123,7 @@ impl Entry {
                 }
             } else if file_type.is_symlink() {
                 Self {
-                    kind: EntryKind::Link,
+                    kind: FsEntryKind::Link,
                     path,
                     name,
                     parent,
@@ -135,7 +135,7 @@ impl Entry {
                 }
             } else {
                 Self {
-                    kind: EntryKind::Other,
+                    kind: FsEntryKind::Other,
                     path,
                     name,
                     parent,
@@ -148,7 +148,7 @@ impl Entry {
             }
         } else {
             Self {
-                kind: EntryKind::Other,
+                kind: FsEntryKind::Other,
                 path,
                 name,
                 parent,
@@ -305,16 +305,16 @@ impl DirEntry {
         add_content: &mut Adder,
     ) -> Void
     where
-        F: Fn(Entry) -> Option<Entry>,
+        F: Fn(FsEntry) -> Option<FsEntry>,
         Adder: FnMut(jbk::Reader) -> jbk::Result<jbk::ContentIdx>,
     {
-        let entry = Entry::new(
+        let entry = FsEntry::new(
             path.to_path_buf(),
             name.to_os_string(),
             self.as_parent_idx_generator().into(),
         )?;
 
-        if let EntryKind::Other = entry.kind {
+        if let FsEntryKind::Other = entry.kind {
             return Ok(());
         };
 
@@ -324,7 +324,7 @@ impl DirEntry {
         };
 
         match entry.kind {
-            EntryKind::Dir => {
+            FsEntryKind::Dir => {
                 self.add_directory(path, &entry.name, entry_store)?;
 
                 if recurse {
@@ -350,7 +350,7 @@ impl DirEntry {
                 }
                 Ok(())
             }
-            EntryKind::File(size) => {
+            FsEntryKind::File(size) => {
                 let content_id = add_content(jbk::creator::FileSource::open(path)?.into())?;
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
@@ -377,7 +377,7 @@ impl DirEntry {
                 unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
                 Ok(())
             }
-            EntryKind::Link => {
+            FsEntryKind::Link => {
                 let target = fs::read_link(path)?;
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
@@ -400,7 +400,7 @@ impl DirEntry {
                 unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
                 Ok(())
             }
-            EntryKind::Other => unreachable!(),
+            FsEntryKind::Other => unreachable!(),
         }
     }
 }
@@ -600,7 +600,7 @@ impl Creator {
     pub fn add_from_path_with_filter<P, F>(&mut self, path: P, recurse: bool, filter: &F) -> Void
     where
         P: AsRef<std::path::Path>,
-        F: Fn(Entry) -> Option<Entry>,
+        F: Fn(FsEntry) -> Option<FsEntry>,
     {
         let rel_path = path.as_ref().strip_prefix(&self.strip_prefix).unwrap();
         let dir_cache: &mut DirEntry = if let Some(parents) = rel_path.parent() {
