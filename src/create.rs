@@ -1,8 +1,10 @@
 use jubako as jbk;
 use libarx as arx;
+use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(clap::Args)]
@@ -44,7 +46,6 @@ fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
     }
 }
 
-#[derive(Clone)]
 struct ProgressBar {
     comp_clusters: indicatif::ProgressBar,
     uncomp_clusters: indicatif::ProgressBar,
@@ -92,6 +93,20 @@ impl jbk::creator::Progress for ProgressBar {
     }
 }
 
+struct CachedSize(Cell<u64>);
+
+impl arx::create::Progress for CachedSize {
+    fn cached_data(&self, size: jbk::Size) {
+        self.0.set(self.0.get() + size.into_u64());
+    }
+}
+
+impl CachedSize {
+    fn new() -> Self {
+        Self(Cell::new(0))
+    }
+}
+
 pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
     if verbose_level > 0 {
         println!("Creating archive {:?}", options.outfile);
@@ -111,8 +126,15 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         arx::create::ConcatMode::TwoFiles
     };
 
-    let progress = Arc::new(ProgressBar::new());
-    let mut creator = arx::create::Creator::new(&out_file, strip_prefix, concat_mode, progress)?;
+    let jbk_progress = Arc::new(ProgressBar::new());
+    let progress = Rc::new(CachedSize::new());
+    let mut creator = arx::create::Creator::new(
+        &out_file,
+        strip_prefix,
+        concat_mode,
+        jbk_progress,
+        Rc::clone(&progress) as Rc<dyn arx::create::Progress>,
+    )?;
 
     let files_to_add = get_files_to_add(&options)?;
 
@@ -123,5 +145,7 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         creator.add_from_path(infile, options.recurse)?;
     }
 
-    creator.finalize(&out_file)
+    let ret = creator.finalize(&out_file);
+    println!("Saved place is {}", progress.0.get());
+    ret
 }

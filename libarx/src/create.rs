@@ -496,13 +496,15 @@ impl DirEntry {
 pub struct CachedContentPack {
     content_pack: jbk::creator::ContentPackCreator,
     cache: HashMap<blake3::Hash, jbk::ContentIdx>,
+    progress: Rc<dyn Progress>,
 }
 
 impl CachedContentPack {
-    fn new(content_pack: jbk::creator::ContentPackCreator) -> Self {
+    fn new(content_pack: jbk::creator::ContentPackCreator, progress: Rc<dyn Progress>) -> Self {
         Self {
             content_pack,
             cache: Default::default(),
+            progress,
         }
     }
 
@@ -516,7 +518,10 @@ impl CachedContentPack {
                 e.insert(content_idx);
                 Ok(content_idx)
             }
-            MapEntry::Occupied(e) => Ok(*e.get()),
+            MapEntry::Occupied(e) => {
+                self.progress.cached_data(content.size());
+                Ok(*e.get())
+            }
         }
     }
 
@@ -524,6 +529,12 @@ impl CachedContentPack {
         self.content_pack
     }
 }
+
+pub trait Progress {
+    fn cached_data(&self, _size: jbk::Size) {}
+}
+
+impl Progress for () {}
 
 pub struct Creator {
     content_pack: CachedContentPack,
@@ -541,7 +552,8 @@ impl Creator {
         outfile: P,
         strip_prefix: PathBuf,
         concat_mode: ConcatMode,
-        progress: Arc<dyn jbk::creator::Progress>,
+        jbk_progress: Arc<dyn jbk::creator::Progress>,
+        progress: Rc<dyn Progress>,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap();
@@ -554,7 +566,7 @@ impl Creator {
             VENDOR_ID,
             jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
-            progress,
+            jbk_progress,
         )?;
 
         let (_, tmp_path_directory_pack) = tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
@@ -601,7 +613,7 @@ impl Creator {
         let root_entry = DirEntry::new_root();
 
         Ok(Self {
-            content_pack: CachedContentPack::new(content_pack),
+            content_pack: CachedContentPack::new(content_pack, progress),
             directory_pack,
             entry_store,
             dir_cache: root_entry,
