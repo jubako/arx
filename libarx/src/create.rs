@@ -402,29 +402,17 @@ impl DirEntry {
     {
         let mut values = HashMap::from([
             (
-                String::from("name"),
+                "name",
                 jbk::Value::Array(entry.name().to_os_string().into_vec()),
             ),
             (
-                String::from("parent"),
+                "parent",
                 jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
             ),
-            (
-                String::from("owner"),
-                jbk::Value::Unsigned(entry.uid().into()),
-            ),
-            (
-                String::from("group"),
-                jbk::Value::Unsigned(entry.gid().into()),
-            ),
-            (
-                String::from("rights"),
-                jbk::Value::Unsigned(entry.mode().into()),
-            ),
-            (
-                String::from("mtime"),
-                jbk::Value::Unsigned(entry.mtime().into()),
-            ),
+            ("owner", jbk::Value::Unsigned(entry.uid().into())),
+            ("group", jbk::Value::Unsigned(entry.gid().into())),
+            ("rights", jbk::Value::Unsigned(entry.mode().into())),
+            ("mtime", jbk::Value::Unsigned(entry.mtime().into())),
         ]);
         match entry.kind()? {
             EntryKind::Dir(children) => {
@@ -436,17 +424,17 @@ impl DirEntry {
 
                 {
                     values.insert(
-                        String::from("first_child"),
+                        "first_child",
                         jbk::Value::Unsigned(dir_entry.first_entry_generator().into()),
                     );
                     values.insert(
-                        String::from("nb_children"),
+                        "nb_children",
                         jbk::Value::Unsigned(dir_entry.entry_count_generator().into()),
                     );
                     let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
                         &entry_store.schema,
                         entry_idx,
-                        Some(EntryType::Dir.into()),
+                        Some(EntryType::Dir),
                         values,
                     ));
                     entry_store.add_entry(entry);
@@ -468,16 +456,13 @@ impl DirEntry {
                 let size = reader.size();
                 let content_id = add_content(reader)?;
                 values.insert(
-                    String::from("content"),
+                    "content",
                     jbk::Value::Content(jbk::ContentAddress::new(jbk::PackId::from(1), content_id)),
                 );
-                values.insert(
-                    String::from("size"),
-                    jbk::Value::Unsigned(size.into_u64().into()),
-                );
+                values.insert("size", jbk::Value::Unsigned(size.into_u64().into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
-                    Some(EntryType::File.into()),
+                    Some(EntryType::File),
                     values,
                 ));
                 let current_idx = entry_store.add_entry(entry);
@@ -489,10 +474,10 @@ impl DirEntry {
                 Ok(())
             }
             EntryKind::Link(target) => {
-                values.insert(String::from("target"), jbk::Value::Array(target.into_vec()));
+                values.insert("target", jbk::Value::Array(target.into_vec()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
-                    Some(EntryType::Link.into()),
+                    Some(EntryType::Link),
                     values,
                 ));
                 let current_idx = entry_store.add_entry(entry);
@@ -596,43 +581,39 @@ impl Creator {
         let entry_def = schema::Schema::new(
             // Common part
             schema::CommonProperties::new(vec![
-                schema::Property::new_array(1, Rc::clone(&path_store), String::from("name")), // the path
-                schema::Property::new_uint(String::from("parent")), // index of the parent entry
-                schema::Property::new_uint(String::from("owner")),  // owner
-                schema::Property::new_uint(String::from("group")),  // group
-                schema::Property::new_uint(String::from("rights")), // rights
-                schema::Property::new_uint(String::from("mtime")),  // modification time
+                schema::Property::new_array(1, Rc::clone(&path_store), "name"), // the path
+                schema::Property::new_uint("parent"), // index of the parent entry
+                schema::Property::new_uint("owner"),  // owner
+                schema::Property::new_uint("group"),  // group
+                schema::Property::new_uint("rights"), // rights
+                schema::Property::new_uint("mtime"),  // modification time
             ]),
             vec![
                 // File
                 (
-                    String::from("file"),
+                    "file",
                     schema::VariantProperties::new(vec![
-                        schema::Property::new_content_address(String::from("content")),
-                        schema::Property::new_uint(String::from("size")), // Size
+                        schema::Property::new_content_address("content"),
+                        schema::Property::new_uint("size"), // Size
                     ]),
                 ),
                 // Directory
                 (
-                    String::from("dir"),
+                    "dir",
                     schema::VariantProperties::new(vec![
-                        schema::Property::new_uint(String::from("first_child")), // index of the first entry
-                        schema::Property::new_uint(String::from("nb_children")), // nb entries in the directory
+                        schema::Property::new_uint("first_child"), // index of the first entry
+                        schema::Property::new_uint("nb_children"), // nb entries in the directory
                     ]),
                 ),
                 // Link
                 (
-                    String::from("link"),
+                    "link",
                     schema::VariantProperties::new(vec![
-                        schema::Property::new_array(
-                            1,
-                            Rc::clone(&path_store),
-                            String::from("target"),
-                        ), // Id of the linked entry
+                        schema::Property::new_array(1, Rc::clone(&path_store), "target"), // Id of the linked entry
                     ]),
                 ),
             ],
-            Some(vec![String::from("parent"), String::from("name")]),
+            Some(vec!["parent", "name"]),
         );
 
         let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
