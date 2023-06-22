@@ -19,20 +19,66 @@ pub enum ConcatMode {
     NoConcat,
 }
 
+pub enum EntryKind {
+    Dir(Box<dyn Iterator<Item = jbk::Result<Box<dyn EntryTrait>>>>),
+    File(jbk::Reader),
+    Link(OsString),
+}
+
+pub trait EntryTrait {
+    /// The kind of the entry
+    fn kind(&self) -> jbk::Result<EntryKind>;
+
+    /// Under which name the entry will be stored
+    fn name(&self) -> &OsStr;
+
+    fn uid(&self) -> u64;
+    fn gid(&self) -> u64;
+    fn mode(&self) -> u64;
+    fn mtime(&self) -> u64;
+}
+
+impl<T> EntryTrait for Box<T>
+where
+    T: EntryTrait + ?Sized,
+{
+    fn kind(&self) -> jbk::Result<EntryKind> {
+        self.as_ref().kind()
+    }
+    fn name(&self) -> &OsStr {
+        self.as_ref().name()
+    }
+
+    fn uid(&self) -> u64 {
+        self.as_ref().uid()
+    }
+    fn gid(&self) -> u64 {
+        self.as_ref().gid()
+    }
+    fn mode(&self) -> u64 {
+        self.as_ref().mode()
+    }
+    fn mtime(&self) -> u64 {
+        self.as_ref().mtime()
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum FsEntryKind {
     Dir,
-    File(jbk::Size),
+    File,
     Link,
     Other,
 }
 
-#[derive(Debug)]
+type Filter = Rc<dyn Fn(FsEntry) -> Option<FsEntry>>;
+
 pub struct FsEntry {
     pub kind: FsEntryKind,
     pub path: PathBuf,
     pub name: OsString,
-    parent: jbk::Word<u64>,
+    recurse: bool,
+    filter: Filter,
     uid: u64,
     gid: u64,
     mode: u64,
@@ -40,19 +86,15 @@ pub struct FsEntry {
 }
 
 impl FsEntry {
-    pub fn new_root(path: PathBuf) -> jbk::Result<Self> {
-        let name = path.file_name().unwrap().to_os_string();
-        Self::new(path, name, ((|| 0) as fn() -> u64).into())
-    }
-
-    fn new(path: PathBuf, name: OsString, parent: jbk::Word<u64>) -> jbk::Result<Self> {
+    fn new(path: PathBuf, name: OsString, recurse: bool, filter: Filter) -> jbk::Result<Self> {
         let attr = fs::symlink_metadata(&path)?;
         Ok(if attr.is_dir() {
             Self {
                 kind: FsEntryKind::Dir,
                 path,
                 name,
-                parent,
+                recurse,
+                filter,
                 uid: attr.uid() as u64,
                 gid: attr.gid() as u64,
                 mode: attr.mode() as u64,
@@ -60,10 +102,11 @@ impl FsEntry {
             }
         } else if attr.is_file() {
             Self {
-                kind: FsEntryKind::File(attr.size().into()),
+                kind: FsEntryKind::File,
                 path,
                 name,
-                parent,
+                recurse,
+                filter,
                 uid: attr.uid() as u64,
                 gid: attr.gid() as u64,
                 mode: attr.mode() as u64,
@@ -74,7 +117,8 @@ impl FsEntry {
                 kind: FsEntryKind::Link,
                 path,
                 name,
-                parent,
+                recurse,
+                filter,
                 uid: attr.uid() as u64,
                 gid: attr.gid() as u64,
                 mode: attr.mode() as u64,
@@ -85,7 +129,8 @@ impl FsEntry {
                 kind: FsEntryKind::Other,
                 path,
                 name,
-                parent,
+                recurse,
+                filter,
                 uid: attr.uid() as u64,
                 gid: attr.gid() as u64,
                 mode: attr.mode() as u64,
@@ -94,7 +139,11 @@ impl FsEntry {
         })
     }
 
-    pub fn new_from_fs(dir_entry: fs::DirEntry, parent: jbk::Word<u64>) -> jbk::Result<Self> {
+    pub fn new_from_fs(
+        dir_entry: fs::DirEntry,
+        recurse: bool,
+        filter: Filter,
+    ) -> jbk::Result<Self> {
         let path = dir_entry.path();
         let name = dir_entry.file_name();
         Ok(if let Ok(file_type) = dir_entry.file_type() {
@@ -104,7 +153,8 @@ impl FsEntry {
                     kind: FsEntryKind::Dir,
                     path,
                     name,
-                    parent,
+                    recurse,
+                    filter,
                     uid: attr.uid() as u64,
                     gid: attr.gid() as u64,
                     mode: attr.mode() as u64,
@@ -112,10 +162,11 @@ impl FsEntry {
                 }
             } else if file_type.is_file() {
                 Self {
-                    kind: FsEntryKind::File(attr.size().into()),
+                    kind: FsEntryKind::File,
                     path,
                     name,
-                    parent,
+                    recurse,
+                    filter,
                     uid: attr.uid() as u64,
                     gid: attr.gid() as u64,
                     mode: attr.mode() as u64,
@@ -126,8 +177,8 @@ impl FsEntry {
                     kind: FsEntryKind::Link,
                     path,
                     name,
-                    parent,
-
+                    recurse,
+                    filter,
                     uid: attr.uid() as u64,
                     gid: attr.gid() as u64,
                     mode: attr.mode() as u64,
@@ -138,8 +189,8 @@ impl FsEntry {
                     kind: FsEntryKind::Other,
                     path,
                     name,
-                    parent,
-
+                    recurse,
+                    filter,
                     uid: attr.uid() as u64,
                     gid: attr.gid() as u64,
                     mode: attr.mode() as u64,
@@ -151,7 +202,8 @@ impl FsEntry {
                 kind: FsEntryKind::Other,
                 path,
                 name,
-                parent,
+                recurse,
+                filter,
                 uid: 0,
                 gid: 0,
                 mode: 0,
@@ -161,7 +213,91 @@ impl FsEntry {
     }
 }
 
-type DirCache = HashMap<PathBuf, DirEntry>;
+impl EntryTrait for FsEntry {
+    fn kind(&self) -> jbk::Result<EntryKind> {
+        Ok(match self.kind {
+            FsEntryKind::Dir => {
+                let filter = Rc::clone(&self.filter);
+                let recurse = self.recurse;
+                EntryKind::Dir(Box::new(fs::read_dir(self.path.clone())?.map(
+                    move |dir_entry| {
+                        Ok(Box::new(FsEntry::new_from_fs(
+                            dir_entry?,
+                            recurse,
+                            Rc::clone(&filter),
+                        )?) as Box<dyn EntryTrait + 'static>)
+                    },
+                )))
+            }
+            FsEntryKind::File => {
+                EntryKind::File(jbk::creator::FileSource::open(&self.path)?.into())
+            }
+            FsEntryKind::Link => EntryKind::Link(fs::read_link(&self.path)?.into()),
+            FsEntryKind::Other => unreachable!(),
+        })
+    }
+    fn name(&self) -> &OsStr {
+        &self.name
+    }
+
+    fn uid(&self) -> u64 {
+        self.uid
+    }
+    fn gid(&self) -> u64 {
+        self.gid
+    }
+    fn mode(&self) -> u64 {
+        self.mode
+    }
+    fn mtime(&self) -> u64 {
+        self.mtime
+    }
+}
+
+struct SimpleDir {
+    path: PathBuf,
+    uid: u64,
+    gid: u64,
+    mode: u64,
+    mtime: u64,
+}
+
+impl SimpleDir {
+    fn new(path: PathBuf) -> Self {
+        let attr = fs::symlink_metadata(&path).unwrap();
+        Self {
+            path,
+            uid: attr.uid() as u64,
+            gid: attr.gid() as u64,
+            mode: attr.mode() as u64,
+            mtime: attr.mtime() as u64,
+        }
+    }
+}
+
+impl EntryTrait for SimpleDir {
+    fn kind(&self) -> jbk::Result<EntryKind> {
+        Ok(EntryKind::Dir(Box::new(std::iter::empty())))
+    }
+    fn name(&self) -> &OsStr {
+        self.path.file_name().unwrap()
+    }
+
+    fn uid(&self) -> u64 {
+        self.uid
+    }
+    fn gid(&self) -> u64 {
+        self.gid
+    }
+    fn mode(&self) -> u64 {
+        self.mode
+    }
+    fn mtime(&self) -> u64 {
+        self.mtime
+    }
+}
+
+type DirCache = HashMap<OsString, DirEntry>;
 type EntryIdx = jbk::Bound<jbk::EntryIdx>;
 type Void = jbk::Result<()>;
 
@@ -230,47 +366,6 @@ impl DirEntry {
         }
     }
 
-    fn add_directory(
-        &mut self,
-        path: &Path,
-        name: &OsStr,
-        entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
-    ) -> Void {
-        if self.dir_children.contains_key(&PathBuf::from(name)) {
-            return Ok(());
-        }
-        let metadata = fs::symlink_metadata(path)?;
-        let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
-        let entry_name = jbk::Value::Array(name.to_os_string().into_vec());
-
-        let dir_entry = DirEntry::new(entry_idx.bind());
-
-        let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
-            &entry_store.schema,
-            entry_idx,
-            Some(EntryType::Dir.into()),
-            vec![
-                entry_name,
-                jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
-                jbk::Value::Unsigned((metadata.uid() as u64).into()),
-                jbk::Value::Unsigned((metadata.gid() as u64).into()),
-                jbk::Value::Unsigned((metadata.mode() as u64).into()),
-                jbk::Value::Unsigned((metadata.mtime() as u64).into()),
-                jbk::Value::Unsigned(dir_entry.first_entry_generator().into()),
-                jbk::Value::Unsigned(dir_entry.entry_count_generator().into()),
-            ],
-        ));
-        entry_store.add_entry(entry);
-        /* SAFETY: We already have Rc on `self.dir_children` but it is only used
-          in a second step to get entry_count and min entry_idx.
-          So while we borrow `self.dir_children` we never read it otherwise.
-        */
-        unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
-            .entry(name.into())
-            .or_insert(dir_entry);
-        Ok(())
-    }
-
     fn mk_dirs(
         &mut self,
         mut path: PathBuf,
@@ -279,15 +374,15 @@ impl DirEntry {
     ) -> jbk::Result<&mut Self> {
         if let Some(component) = components.next() {
             path.push(component);
-            if !self.dir_children.contains_key::<Path>(component.as_ref()) {
-                self.add_directory(&path, component.as_os_str(), entry_store)?;
+            let entry = SimpleDir::new(path.clone());
+            if !self
+                .dir_children
+                .contains_key::<OsStr>(component.as_os_str())
+            {
+                self.add(entry, entry_store, &mut |_| unreachable!())?;
             }
-            /* SAFETY: We already have Rc on `self.dir_children` but it is only used
-              in a second step to get entry_count and min entry_idx.
-              So while we borrow `self.dir_children` we never read it otherwise.
-            */
             unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
-                .get_mut::<Path>(component.as_ref())
+                .get_mut::<OsStr>(component.as_os_str())
                 .unwrap()
                 .mk_dirs(path, components, entry_store)
         } else {
@@ -295,73 +390,68 @@ impl DirEntry {
         }
     }
 
-    fn add<F, Adder>(
+    fn add<E, Adder>(
         &mut self,
-        path: &Path,
-        name: &OsStr,
-        recurse: bool,
-        filter: &F,
+        entry: E,
         entry_store: &mut jbk::creator::EntryStore<Box<jbk::creator::BasicEntry>>,
         add_content: &mut Adder,
     ) -> Void
     where
-        F: Fn(FsEntry) -> Option<FsEntry>,
+        E: EntryTrait,
         Adder: FnMut(jbk::Reader) -> jbk::Result<jbk::ContentIdx>,
     {
-        let entry = FsEntry::new(
-            path.to_path_buf(),
-            name.to_os_string(),
-            self.as_parent_idx_generator().into(),
-        )?;
-
-        if let FsEntryKind::Other = entry.kind {
-            return Ok(());
-        };
-
-        let entry = match filter(entry) {
-            Some(e) => e,
-            None => return Ok(()),
-        };
-
-        match entry.kind {
-            FsEntryKind::Dir => {
-                self.add_directory(path, &entry.name, entry_store)?;
-
-                if recurse {
-                    /* SAFETY: We already have Rc on `self.dir_children` but it is only used
-                      in a second step to get entry_count and min entry_idx.
-                      So while we borrow `self.dir_children` we never read it otherwise.
-                    */
-                    let dir_entry = unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
-                        .get_mut::<Path>(entry.name.as_ref())
-                        .unwrap();
-
-                    for sub_entry in fs::read_dir(path)? {
-                        let sub_entry = sub_entry?;
-                        dir_entry.add(
-                            &sub_entry.path(),
-                            &sub_entry.file_name(),
-                            recurse,
-                            filter,
-                            entry_store,
-                            add_content,
-                        )?;
-                    }
+        match entry.kind()? {
+            EntryKind::Dir(children) => {
+                if self.dir_children.contains_key(entry.name()) {
+                    return Ok(());
                 }
+                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
+                let mut dir_entry = DirEntry::new(entry_idx.bind());
+
+                {
+                    let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
+                        &entry_store.schema,
+                        entry_idx,
+                        Some(EntryType::Dir.into()),
+                        vec![
+                            jbk::Value::Array(entry.name().to_os_string().into_vec()),
+                            jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
+                            jbk::Value::Unsigned(entry.uid().into()),
+                            jbk::Value::Unsigned(entry.gid().into()),
+                            jbk::Value::Unsigned(entry.mode().into()),
+                            jbk::Value::Unsigned(entry.mtime().into()),
+                            jbk::Value::Unsigned(dir_entry.first_entry_generator().into()),
+                            jbk::Value::Unsigned(dir_entry.entry_count_generator().into()),
+                        ],
+                    ));
+                    entry_store.add_entry(entry);
+                }
+                for sub_entry in children {
+                    dir_entry.add(sub_entry?, entry_store, add_content)?;
+                }
+
+                /* SAFETY: We already have Rc on `self.dir_children` but it is only used
+                  in a second step to get entry_count and min entry_idx.
+                  So while we borrow `self.dir_children` we never read it otherwise.
+                */
+                unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
+                    .entry(entry.name().into())
+                    .or_insert(dir_entry);
                 Ok(())
             }
-            FsEntryKind::File(size) => {
-                let content_id = add_content(jbk::creator::FileSource::open(path)?.into())?;
+            EntryKind::File(reader) => {
+                let size = reader.size();
+                let content_id = add_content(reader)?;
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::File.into()),
                     vec![
-                        jbk::Value::Array(entry.name.into_vec()),
-                        jbk::Value::Unsigned(entry.parent),
-                        jbk::Value::Unsigned(entry.uid.into()),
-                        jbk::Value::Unsigned(entry.gid.into()),
-                        jbk::Value::Unsigned(entry.mode.into()),
-                        jbk::Value::Unsigned(entry.mtime.into()),
+                        jbk::Value::Array(entry.name().to_os_string().into_vec()),
+                        jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
+                        jbk::Value::Unsigned(entry.uid().into()),
+                        jbk::Value::Unsigned(entry.gid().into()),
+                        jbk::Value::Unsigned(entry.mode().into()),
+                        jbk::Value::Unsigned(entry.mtime().into()),
                         jbk::Value::Content(jbk::ContentAddress::new(
                             jbk::PackId::from(1),
                             content_id,
@@ -377,19 +467,18 @@ impl DirEntry {
                 unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
                 Ok(())
             }
-            FsEntryKind::Link => {
-                let target = fs::read_link(path)?;
+            EntryKind::Link(target) => {
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::Link.into()),
                     vec![
-                        jbk::Value::Array(entry.name.into_vec()),
-                        jbk::Value::Unsigned(entry.parent),
-                        jbk::Value::Unsigned(entry.uid.into()),
-                        jbk::Value::Unsigned(entry.gid.into()),
-                        jbk::Value::Unsigned(entry.mode.into()),
-                        jbk::Value::Unsigned(entry.mtime.into()),
-                        jbk::Value::Array(target.into_os_string().into_vec()),
+                        jbk::Value::Array(entry.name().to_os_string().into_vec()),
+                        jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
+                        jbk::Value::Unsigned(entry.uid().into()),
+                        jbk::Value::Unsigned(entry.gid().into()),
+                        jbk::Value::Unsigned(entry.mode().into()),
+                        jbk::Value::Unsigned(entry.mtime().into()),
+                        jbk::Value::Array(target.into_vec()),
                     ],
                 ));
                 let current_idx = entry_store.add_entry(entry);
@@ -400,7 +489,6 @@ impl DirEntry {
                 unsafe { Rc::get_mut_unchecked(&mut self.file_children) }.push(current_idx);
                 Ok(())
             }
-            FsEntryKind::Other => unreachable!(),
         }
     }
 }
@@ -594,13 +682,12 @@ impl Creator {
     }
 
     pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P, recurse: bool) -> Void {
-        self.add_from_path_with_filter(path, recurse, &Some)
+        self.add_from_path_with_filter(path, recurse, Rc::new(&Some))
     }
 
-    pub fn add_from_path_with_filter<P, F>(&mut self, path: P, recurse: bool, filter: &F) -> Void
+    pub fn add_from_path_with_filter<P>(&mut self, path: P, recurse: bool, filter: Filter) -> Void
     where
         P: AsRef<std::path::Path>,
-        F: Fn(FsEntry) -> Option<FsEntry>,
     {
         let rel_path = path.as_ref().strip_prefix(&self.strip_prefix).unwrap();
         let dir_cache: &mut DirEntry = if let Some(parents) = rel_path.parent() {
@@ -617,10 +704,7 @@ impl Creator {
                 for sub_entry in fs::read_dir(path)? {
                     let sub_entry = sub_entry?;
                     dir_cache.add(
-                        &sub_entry.path(),
-                        &sub_entry.file_name(),
-                        recurse,
-                        filter,
+                        FsEntry::new_from_fs(sub_entry, recurse, Rc::clone(&filter))?,
                         &mut self.entry_store,
                         &mut |r| self.content_pack.add_content(r),
                     )?;
@@ -629,13 +713,24 @@ impl Creator {
             Ok(())
         } else {
             dir_cache.add(
-                path.as_ref(),
-                path.as_ref().file_name().unwrap(),
-                recurse,
-                filter,
+                FsEntry::new(
+                    path.as_ref().to_path_buf(),
+                    path.as_ref().file_name().unwrap().to_os_string(),
+                    recurse,
+                    filter,
+                )?,
                 &mut self.entry_store,
                 &mut |r| self.content_pack.add_content(r),
             )
         }
+    }
+
+    pub fn add_entry<E>(&mut self, entry: E) -> Void
+    where
+        E: EntryTrait,
+    {
+        self.dir_cache.add(entry, &mut self.entry_store, &mut |r| {
+            self.content_pack.add_content(r)
+        })
     }
 }
