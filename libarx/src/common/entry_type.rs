@@ -19,9 +19,13 @@ impl TryFrom<jbk::VariantIdx> for EntryType {
     }
 }
 
-impl From<EntryType> for jbk::VariantIdx {
+impl From<EntryType> for String {
     fn from(t: EntryType) -> Self {
-        (t as u8).into()
+        match &t {
+            EntryType::File => String::from("file"),
+            EntryType::Dir => String::from("dir"),
+            EntryType::Link => String::from("link"),
+        }
     }
 }
 
