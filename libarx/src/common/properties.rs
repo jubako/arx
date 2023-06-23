@@ -1,5 +1,41 @@
 use jubako as jbk;
 
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+pub enum Property {
+    Name,
+    Parent,
+    Owner,
+    Group,
+    Rights,
+    Mtime,
+    Content,
+    Size,
+    FirstChild,
+    NbChildren,
+    Target,
+}
+
+impl ToString for Property {
+    fn to_string(&self) -> String {
+        use Property::*;
+        String::from(match self {
+            Name => "name",
+            Parent => "parent",
+            Owner => "owner",
+            Group => "group",
+            Rights => "rights",
+            Mtime => "mtime",
+            Content => "content",
+            Size => "size",
+            FirstChild => "first_child",
+            NbChildren => "nb_children",
+            Target => "target",
+        })
+    }
+}
+
+impl jbk::creator::PropertyName for Property {}
+
 pub struct AllProperties {
     pub store: jbk::reader::EntryStore,
     pub path_property: jbk::reader::builder::ArrayProperty,
