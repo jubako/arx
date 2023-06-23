@@ -1,5 +1,6 @@
 use jubako as jbk;
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
 pub enum EntryType {
     File = 0,
@@ -28,6 +29,8 @@ impl ToString for EntryType {
         }
     }
 }
+
+impl jbk::creator::VariantName for EntryType {}
 
 impl From<EntryType> for fuser::FileType {
     fn from(t: EntryType) -> Self {

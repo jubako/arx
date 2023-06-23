@@ -12,8 +12,19 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
+/*
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+enum VariantName {
+    Dir,
+    File,
+    Link,
+}*/
 
-type EntryStore = jbk::creator::EntryStore<Box<jbk::creator::BasicEntry<Property>>, Property>;
+type EntryStore = jbk::creator::EntryStore<
+    Property,
+    EntryType,
+    Box<jbk::creator::BasicEntry<Property, EntryType>>,
+>;
 
 pub enum ConcatMode {
     OneFile,
@@ -593,7 +604,7 @@ impl Creator {
             vec![
                 // File
                 (
-                    "file",
+                    EntryType::File,
                     schema::VariantProperties::new(vec![
                         schema::Property::new_content_address(Property::Content),
                         schema::Property::new_uint(Property::Size), // Size
@@ -601,7 +612,7 @@ impl Creator {
                 ),
                 // Directory
                 (
-                    "dir",
+                    EntryType::Dir,
                     schema::VariantProperties::new(vec![
                         schema::Property::new_uint(Property::FirstChild), // index of the first entry
                         schema::Property::new_uint(Property::NbChildren), // nb entries in the directory
@@ -609,7 +620,7 @@ impl Creator {
                 ),
                 // Link
                 (
-                    "link",
+                    EntryType::Link,
                     schema::VariantProperties::new(vec![
                         schema::Property::new_array(1, Rc::clone(&path_store), Property::Target), // Id of the linked entry
                     ]),
@@ -618,7 +629,7 @@ impl Creator {
             Some(vec![Property::Parent, Property::Name]),
         );
 
-        let entry_store = Box::new(jbk::creator::EntryStore::new(entry_def));
+        let entry_store = Box::new(EntryStore::new(entry_def));
 
         let root_entry = DirEntry::new_root();
 
