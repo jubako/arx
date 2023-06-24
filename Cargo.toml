@@ -35,5 +35,5 @@ indicatif = "0.17.3"
 lto = true
 
 [dev-dependencies]
-arx_test_dir = { path = "../arx_test_dir" }
+arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
 tempfile = "3.5.0"
