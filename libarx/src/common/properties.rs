@@ -1,5 +1,41 @@
 use jubako as jbk;
 
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+pub enum Property {
+    Name,
+    Parent,
+    Owner,
+    Group,
+    Rights,
+    Mtime,
+    Content,
+    Size,
+    FirstChild,
+    NbChildren,
+    Target,
+}
+
+impl ToString for Property {
+    fn to_string(&self) -> String {
+        use Property::*;
+        String::from(match self {
+            Name => "name",
+            Parent => "parent",
+            Owner => "owner",
+            Group => "group",
+            Rights => "rights",
+            Mtime => "mtime",
+            Content => "content",
+            Size => "size",
+            FirstChild => "first_child",
+            NbChildren => "nb_children",
+            Target => "target",
+        })
+    }
+}
+
+impl jbk::creator::PropertyName for Property {}
+
 pub struct AllProperties {
     pub store: jbk::reader::EntryStore,
     pub path_property: jbk::reader::builder::ArrayProperty,
@@ -22,20 +58,37 @@ impl AllProperties {
         value_storage: &jbk::reader::ValueStorage,
     ) -> jbk::Result<Self> {
         let layout = store.layout();
-        let (variant_offset, variants) = layout.variant_part.as_ref().unwrap();
+        let (variant_offset, variants, variants_map) = layout.variant_part.as_ref().unwrap();
         assert_eq!(variants.len(), 3);
-        let path_property = (&layout.common[0], value_storage).try_into()?;
-        let parent_property = (&layout.common[1], value_storage).try_into()?;
-        let owner_property = (&layout.common[2], value_storage).try_into()?;
-        let group_property = (&layout.common[3], value_storage).try_into()?;
-        let rigths_property = (&layout.common[4], value_storage).try_into()?;
-        let mtime_property = (&layout.common[5], value_storage).try_into()?;
+        let path_property = (&layout.common["name"], value_storage).try_into()?;
+        let parent_property = (&layout.common["parent"], value_storage).try_into()?;
+        let owner_property = (&layout.common["owner"], value_storage).try_into()?;
+        let group_property = (&layout.common["group"], value_storage).try_into()?;
+        let rigths_property = (&layout.common["rights"], value_storage).try_into()?;
+        let mtime_property = (&layout.common["mtime"], value_storage).try_into()?;
         let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_offset);
-        let file_content_address_property = (&variants[0][0]).try_into()?;
-        let file_size_property = (&variants[0][1], value_storage).try_into()?;
-        let dir_first_child_property = (&variants[1][0], value_storage).try_into()?;
-        let dir_nb_children_property = (&variants[1][1], value_storage).try_into()?;
-        let link_target_property = (&variants[2][0], value_storage).try_into()?;
+        let file_content_address_property =
+            (&variants[variants_map["file"] as usize]["content"]).try_into()?;
+        let file_size_property = (
+            &variants[variants_map["file"] as usize]["size"],
+            value_storage,
+        )
+            .try_into()?;
+        let dir_first_child_property = (
+            &variants[variants_map["dir"] as usize]["first_child"],
+            value_storage,
+        )
+            .try_into()?;
+        let dir_nb_children_property = (
+            &variants[variants_map["dir"] as usize]["nb_children"],
+            value_storage,
+        )
+            .try_into()?;
+        let link_target_property = (
+            &variants[variants_map["link"] as usize]["target"],
+            value_storage,
+        )
+            .try_into()?;
         Ok(Self {
             store,
             path_property,
