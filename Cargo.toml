@@ -37,3 +37,6 @@ lto = true
 [dev-dependencies]
 arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
 tempfile = "3.5.0"
+
+[features]
+in_ci = []

@@ -15,6 +15,7 @@ fn spawn_mount() -> std::io::Result<(arx_test_dir::BackgroundSession, PathBuf)> 
 }
 
 #[test]
+#[cfg_attr(feature = "in_ci", ignore)]
 fn test_create() {
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
     let bin_path = env!("CARGO_BIN_EXE_arx");

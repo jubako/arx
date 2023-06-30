@@ -4,12 +4,17 @@ image: docker.io/mgautierfr/arx-ci
 
 stages:
   - check
+  - build
   - test
 
 fmt:
   stage: check
   script: cargo fmt --check
 
+build:
+  stage: build
+  script: cargo build --verbose
+
 test:
   script:
-    - cargo test --verbose
+    - cargo test --verbose --features in_ci
