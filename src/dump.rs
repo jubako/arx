@@ -1,6 +1,6 @@
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
-use std::path::Path;
+use std::path::PathBuf;
 
 struct FileBuilder {
     content_address_property: jbk::reader::builder::ContentProperty,
@@ -41,7 +41,22 @@ fn dump_entry(
     }
 }
 
-pub fn dump<P: AsRef<Path>>(infile: P, path: P) -> jbk::Result<()> {
-    let arx = libarx::Arx::new(infile)?;
-    dump_entry(&arx, arx.get_entry::<FullBuilder, _>(path)?)
+#[derive(clap::Args)]
+pub struct Options {
+    #[clap(value_parser)]
+    infile: PathBuf,
+
+    #[clap(value_parser)]
+    path: String,
+}
+
+pub fn dump(options: Options, verbose_level: u8) -> jbk::Result<()> {
+    if verbose_level > 0 {
+        println!(
+            "Dump entry {} in archive {:?}",
+            options.path, options.infile
+        );
+    }
+    let arx = libarx::Arx::new(options.infile)?;
+    dump_entry(&arx, arx.get_entry::<FullBuilder, _>(options.path)?)
 }

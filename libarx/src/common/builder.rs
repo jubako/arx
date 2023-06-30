@@ -3,7 +3,6 @@ use super::entry_type::EntryType;
 use super::{AllProperties, Reader};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jubako as jbk;
-use std::rc::Rc;
 
 pub trait Builder {
     type Entry;
@@ -20,7 +19,7 @@ impl Builder for () {
     }
 }
 
-pub trait FullBuilder {
+pub trait FullBuilderTrait {
     type Entry: EntryDef;
 
     fn new(properties: &AllProperties) -> Self;
@@ -41,7 +40,7 @@ pub trait FullBuilder {
     ) -> jbk::Result<<Self::Entry as EntryDef>::Dir>;
 }
 
-impl<F, L, D> FullBuilder for (F, L, D)
+impl<F, L, D> FullBuilderTrait for (F, L, D)
 where
     F: Builder,
     L: Builder,
@@ -81,8 +80,8 @@ where
     }
 }
 
-pub(crate) struct RealBuilder<B: FullBuilder> {
-    store: Rc<jbk::reader::EntryStore>,
+pub(crate) struct RealBuilder<B: FullBuilderTrait> {
+    store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdProperty,
     first_child_property: jbk::reader::builder::IntProperty,
     nb_children_property: jbk::reader::builder::IntProperty,
@@ -91,12 +90,12 @@ pub(crate) struct RealBuilder<B: FullBuilder> {
 
 impl<B> RealBuilder<B>
 where
-    B: FullBuilder,
+    B: FullBuilderTrait,
 {
     pub fn new(properties: &AllProperties) -> Self {
         let builder = B::new(properties);
         Self {
-            store: Rc::clone(&properties.store),
+            store: properties.store.clone(),
             variant_id_property: properties.variant_id_property,
             first_child_property: properties.dir_first_child_property.clone(),
             nb_children_property: properties.dir_nb_children_property.clone(),
@@ -107,7 +106,7 @@ where
 
 impl<B> jbk::reader::builder::BuilderTrait for RealBuilder<B>
 where
-    B: FullBuilder,
+    B: FullBuilderTrait,
 {
     type Entry = Entry<B::Entry>;
 

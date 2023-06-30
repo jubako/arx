@@ -1,0 +1,20 @@
+# Official language image. Look for the different tagged releases at:
+# https://hub.docker.com/r/library/rust/tags/
+image: docker.io/mgautierfr/arx-ci
+
+stages:
+  - check
+  - build
+  - test
+
+fmt:
+  stage: check
+  script: cargo fmt --check
+
+build:
+  stage: build
+  script: cargo build --verbose
+
+test:
+  script:
+    - cargo test --verbose --features in_ci

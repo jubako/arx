@@ -1,4 +1,5 @@
 use jubako as jbk;
+use std::path::PathBuf;
 
 pub struct StatCounter {
     nb_lookup: u64,
@@ -87,16 +88,27 @@ impl std::fmt::Display for StatCounter {
     }
 }
 
-pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
-where
-    INP: AsRef<std::path::Path>,
-    OUTP: AsRef<std::path::Path>,
-{
+#[derive(clap::Args)]
+pub struct Options {
+    #[clap(value_parser)]
+    infile: PathBuf,
+
+    #[clap(value_parser)]
+    mountdir: PathBuf,
+}
+
+pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
+    if verbose_level > 0 {
+        println!(
+            "Mount archive {:?} in {:?}",
+            options.infile, options.mountdir
+        );
+    }
     let mut stats = StatCounter::new();
-    let arx = libarx::Arx::new(infile)?;
+    let arx = libarx::Arx::new(options.infile)?;
     let arxfs = libarx::ArxFs::new_with_stats(arx, &mut stats)?;
 
-    arxfs.mount(&outdir)?;
+    arxfs.mount(&options.mountdir)?;
 
     println!("Stats:\n {stats}");
     Ok(())
