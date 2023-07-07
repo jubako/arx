@@ -95,7 +95,7 @@ impl jbk::creator::Progress for ProgressBar {
 
 struct CachedSize(Cell<u64>);
 
-impl arx::create::Progress for CachedSize {
+impl jbk::creator::CacheProgress for CachedSize {
     fn cached_data(&self, size: jbk::Size) {
         self.0.set(self.0.get() + size.into_u64());
     }
@@ -133,7 +133,7 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         strip_prefix,
         concat_mode,
         jbk_progress,
-        Rc::clone(&progress) as Rc<dyn arx::create::Progress>,
+        Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
     )?;
 
     let files_to_add = get_files_to_add(&options)?;

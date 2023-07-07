@@ -2,7 +2,7 @@ use jubako as jbk;
 
 use crate::common::{EntryType, Property};
 use jbk::creator::schema;
-use std::collections::{hash_map::Entry as MapEntry, HashMap};
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
@@ -505,51 +505,8 @@ impl DirEntry {
     }
 }
 
-pub struct CachedContentPack {
-    content_pack: jbk::creator::ContentPackCreator,
-    cache: HashMap<blake3::Hash, jbk::ContentIdx>,
-    progress: Rc<dyn Progress>,
-}
-
-impl CachedContentPack {
-    fn new(content_pack: jbk::creator::ContentPackCreator, progress: Rc<dyn Progress>) -> Self {
-        Self {
-            content_pack,
-            cache: Default::default(),
-            progress,
-        }
-    }
-
-    fn add_content(&mut self, content: jbk::Reader) -> jbk::Result<jbk::ContentIdx> {
-        let mut hasher = blake3::Hasher::new();
-        std::io::copy(&mut content.create_flux_all(), &mut hasher)?;
-        let hash = hasher.finalize();
-        match self.cache.entry(hash) {
-            MapEntry::Vacant(e) => {
-                let content_idx = self.content_pack.add_content(content)?;
-                e.insert(content_idx);
-                Ok(content_idx)
-            }
-            MapEntry::Occupied(e) => {
-                self.progress.cached_data(content.size());
-                Ok(*e.get())
-            }
-        }
-    }
-
-    fn into_inner(self) -> jbk::creator::ContentPackCreator {
-        self.content_pack
-    }
-}
-
-pub trait Progress {
-    fn cached_data(&self, _size: jbk::Size) {}
-}
-
-impl Progress for () {}
-
 pub struct Creator {
-    content_pack: CachedContentPack,
+    content_pack: jbk::creator::CachedContentPackCreator,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store: Box<EntryStore>,
     dir_cache: DirEntry,
@@ -564,8 +521,8 @@ impl Creator {
         outfile: P,
         strip_prefix: PathBuf,
         concat_mode: ConcatMode,
-        jbk_progress: Arc<dyn jbk::creator::Progress>,
-        progress: Rc<dyn Progress>,
+        progress: Arc<dyn jbk::creator::Progress>,
+        cache_progress: Rc<dyn jbk::creator::CacheProgress>,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap();
@@ -578,7 +535,7 @@ impl Creator {
             VENDOR_ID,
             jbk::FreeData40::clone_from_slice(&[0x00; 40]),
             jbk::CompressionType::Zstd,
-            jbk_progress,
+            progress,
         )?;
 
         let (_, tmp_path_directory_pack) = tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
@@ -634,7 +591,7 @@ impl Creator {
         let root_entry = DirEntry::new_root();
 
         Ok(Self {
-            content_pack: CachedContentPack::new(content_pack, progress),
+            content_pack: jbk::creator::CachedContentPackCreator::new(content_pack, cache_progress),
             directory_pack,
             entry_store,
             dir_cache: root_entry,
