@@ -134,7 +134,7 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
         jbk_progress,
         Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
     )?;
-    let mut fs_adder = arx::fs_adder::FsAdder::new(&mut creator, strip_prefix);
+    let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
 
     let files_to_add = get_files_to_add(&options)?;
 

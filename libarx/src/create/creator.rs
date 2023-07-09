@@ -3,11 +3,13 @@ use jubako as jbk;
 use crate::common::{EntryType, Property};
 use jbk::creator::schema;
 use std::collections::HashMap;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+
+use super::{ConcatMode, EntryKind, EntryTrait, Void};
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
@@ -17,34 +19,8 @@ type EntryStore = jbk::creator::EntryStore<
     Box<jbk::creator::BasicEntry<Property, EntryType>>,
 >;
 
-pub enum ConcatMode {
-    OneFile,
-    TwoFiles,
-    NoConcat,
-}
-
-pub enum EntryKind {
-    Dir(Box<dyn Iterator<Item = jbk::Result<Box<dyn EntryTrait>>>>),
-    File(jbk::Reader),
-    Link(OsString),
-}
-
-pub trait EntryTrait {
-    /// The kind of the entry
-    fn kind(self: Box<Self>) -> jbk::Result<EntryKind>;
-
-    /// Under which name the entry will be stored
-    fn name(&self) -> &OsStr;
-
-    fn uid(&self) -> u64;
-    fn gid(&self) -> u64;
-    fn mode(&self) -> u64;
-    fn mtime(&self) -> u64;
-}
-
 type DirCache = HashMap<OsString, DirEntry>;
 type EntryIdx = jbk::Bound<jbk::EntryIdx>;
-pub type Void = jbk::Result<()>;
 
 /// A DirEntry structure to keep track of added direcotry in the archive.
 /// This is needed as we may adde file without recursion, and so we need
