@@ -4,21 +4,12 @@ use crate::common::{EntryType, Property};
 use jbk::creator::schema;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
-use std::fs;
 use std::os::unix::ffi::OsStringExt;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
-/*
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
-enum VariantName {
-    Dir,
-    File,
-    Link,
-}*/
 
 type EntryStore = jbk::creator::EntryStore<
     Property,
@@ -40,7 +31,7 @@ pub enum EntryKind {
 
 pub trait EntryTrait {
     /// The kind of the entry
-    fn kind(&self) -> jbk::Result<EntryKind>;
+    fn kind(self: Box<Self>) -> jbk::Result<EntryKind>;
 
     /// Under which name the entry will be stored
     fn name(&self) -> &OsStr;
@@ -51,268 +42,9 @@ pub trait EntryTrait {
     fn mtime(&self) -> u64;
 }
 
-impl<T> EntryTrait for Box<T>
-where
-    T: EntryTrait + ?Sized,
-{
-    fn kind(&self) -> jbk::Result<EntryKind> {
-        self.as_ref().kind()
-    }
-    fn name(&self) -> &OsStr {
-        self.as_ref().name()
-    }
-
-    fn uid(&self) -> u64 {
-        self.as_ref().uid()
-    }
-    fn gid(&self) -> u64 {
-        self.as_ref().gid()
-    }
-    fn mode(&self) -> u64 {
-        self.as_ref().mode()
-    }
-    fn mtime(&self) -> u64 {
-        self.as_ref().mtime()
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum FsEntryKind {
-    Dir,
-    File,
-    Link,
-    Other,
-}
-
-type Filter = Rc<dyn Fn(FsEntry) -> Option<FsEntry>>;
-
-pub struct FsEntry {
-    pub kind: FsEntryKind,
-    pub path: PathBuf,
-    pub name: OsString,
-    recurse: bool,
-    filter: Filter,
-    uid: u64,
-    gid: u64,
-    mode: u64,
-    mtime: u64,
-}
-
-impl FsEntry {
-    fn new(path: PathBuf, name: OsString, recurse: bool, filter: Filter) -> jbk::Result<Self> {
-        let attr = fs::symlink_metadata(&path)?;
-        Ok(if attr.is_dir() {
-            Self {
-                kind: FsEntryKind::Dir,
-                path,
-                name,
-                recurse,
-                filter,
-                uid: attr.uid() as u64,
-                gid: attr.gid() as u64,
-                mode: attr.mode() as u64,
-                mtime: attr.mtime() as u64,
-            }
-        } else if attr.is_file() {
-            Self {
-                kind: FsEntryKind::File,
-                path,
-                name,
-                recurse,
-                filter,
-                uid: attr.uid() as u64,
-                gid: attr.gid() as u64,
-                mode: attr.mode() as u64,
-                mtime: attr.mtime() as u64,
-            }
-        } else if attr.is_symlink() {
-            Self {
-                kind: FsEntryKind::Link,
-                path,
-                name,
-                recurse,
-                filter,
-                uid: attr.uid() as u64,
-                gid: attr.gid() as u64,
-                mode: attr.mode() as u64,
-                mtime: attr.mtime() as u64,
-            }
-        } else {
-            Self {
-                kind: FsEntryKind::Other,
-                path,
-                name,
-                recurse,
-                filter,
-                uid: attr.uid() as u64,
-                gid: attr.gid() as u64,
-                mode: attr.mode() as u64,
-                mtime: attr.mtime() as u64,
-            }
-        })
-    }
-
-    pub fn new_from_fs(
-        dir_entry: fs::DirEntry,
-        recurse: bool,
-        filter: Filter,
-    ) -> jbk::Result<Self> {
-        let path = dir_entry.path();
-        let name = dir_entry.file_name();
-        Ok(if let Ok(file_type) = dir_entry.file_type() {
-            let attr = fs::symlink_metadata(&path)?;
-            if file_type.is_dir() {
-                Self {
-                    kind: FsEntryKind::Dir,
-                    path,
-                    name,
-                    recurse,
-                    filter,
-                    uid: attr.uid() as u64,
-                    gid: attr.gid() as u64,
-                    mode: attr.mode() as u64,
-                    mtime: attr.mtime() as u64,
-                }
-            } else if file_type.is_file() {
-                Self {
-                    kind: FsEntryKind::File,
-                    path,
-                    name,
-                    recurse,
-                    filter,
-                    uid: attr.uid() as u64,
-                    gid: attr.gid() as u64,
-                    mode: attr.mode() as u64,
-                    mtime: attr.mtime() as u64,
-                }
-            } else if file_type.is_symlink() {
-                Self {
-                    kind: FsEntryKind::Link,
-                    path,
-                    name,
-                    recurse,
-                    filter,
-                    uid: attr.uid() as u64,
-                    gid: attr.gid() as u64,
-                    mode: attr.mode() as u64,
-                    mtime: attr.mtime() as u64,
-                }
-            } else {
-                Self {
-                    kind: FsEntryKind::Other,
-                    path,
-                    name,
-                    recurse,
-                    filter,
-                    uid: attr.uid() as u64,
-                    gid: attr.gid() as u64,
-                    mode: attr.mode() as u64,
-                    mtime: attr.mtime() as u64,
-                }
-            }
-        } else {
-            Self {
-                kind: FsEntryKind::Other,
-                path,
-                name,
-                recurse,
-                filter,
-                uid: 0,
-                gid: 0,
-                mode: 0,
-                mtime: 0,
-            }
-        })
-    }
-}
-
-impl EntryTrait for FsEntry {
-    fn kind(&self) -> jbk::Result<EntryKind> {
-        Ok(match self.kind {
-            FsEntryKind::Dir => {
-                let filter = Rc::clone(&self.filter);
-                let recurse = self.recurse;
-                EntryKind::Dir(Box::new(fs::read_dir(self.path.clone())?.map(
-                    move |dir_entry| {
-                        Ok(Box::new(FsEntry::new_from_fs(
-                            dir_entry?,
-                            recurse,
-                            Rc::clone(&filter),
-                        )?) as Box<dyn EntryTrait + 'static>)
-                    },
-                )))
-            }
-            FsEntryKind::File => {
-                EntryKind::File(jbk::creator::FileSource::open(&self.path)?.into())
-            }
-            FsEntryKind::Link => EntryKind::Link(fs::read_link(&self.path)?.into()),
-            FsEntryKind::Other => unreachable!(),
-        })
-    }
-    fn name(&self) -> &OsStr {
-        &self.name
-    }
-
-    fn uid(&self) -> u64 {
-        self.uid
-    }
-    fn gid(&self) -> u64 {
-        self.gid
-    }
-    fn mode(&self) -> u64 {
-        self.mode
-    }
-    fn mtime(&self) -> u64 {
-        self.mtime
-    }
-}
-
-struct SimpleDir {
-    path: PathBuf,
-    uid: u64,
-    gid: u64,
-    mode: u64,
-    mtime: u64,
-}
-
-impl SimpleDir {
-    fn new(path: PathBuf) -> Self {
-        let attr = fs::symlink_metadata(&path).unwrap();
-        Self {
-            path,
-            uid: attr.uid() as u64,
-            gid: attr.gid() as u64,
-            mode: attr.mode() as u64,
-            mtime: attr.mtime() as u64,
-        }
-    }
-}
-
-impl EntryTrait for SimpleDir {
-    fn kind(&self) -> jbk::Result<EntryKind> {
-        Ok(EntryKind::Dir(Box::new(std::iter::empty())))
-    }
-    fn name(&self) -> &OsStr {
-        self.path.file_name().unwrap()
-    }
-
-    fn uid(&self) -> u64 {
-        self.uid
-    }
-    fn gid(&self) -> u64 {
-        self.gid
-    }
-    fn mode(&self) -> u64 {
-        self.mode
-    }
-    fn mtime(&self) -> u64 {
-        self.mtime
-    }
-}
-
 type DirCache = HashMap<OsString, DirEntry>;
 type EntryIdx = jbk::Bound<jbk::EntryIdx>;
-type Void = jbk::Result<()>;
+pub type Void = jbk::Result<()>;
 
 /// A DirEntry structure to keep track of added direcotry in the archive.
 /// This is needed as we may adde file without recursion, and so we need
@@ -379,44 +111,21 @@ impl DirEntry {
         }
     }
 
-    fn mk_dirs(
-        &mut self,
-        mut path: PathBuf,
-        mut components: std::path::Components,
-        entry_store: &mut EntryStore,
-    ) -> jbk::Result<&mut Self> {
-        if let Some(component) = components.next() {
-            path.push(component);
-            let entry = SimpleDir::new(path.clone());
-            if !self
-                .dir_children
-                .contains_key::<OsStr>(component.as_os_str())
-            {
-                self.add(entry, entry_store, &mut |_| unreachable!())?;
-            }
-            unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
-                .get_mut::<OsStr>(component.as_os_str())
-                .unwrap()
-                .mk_dirs(path, components, entry_store)
-        } else {
-            Ok(self)
-        }
-    }
-
     fn add<E, Adder>(
         &mut self,
-        entry: E,
+        entry: Box<E>,
         entry_store: &mut EntryStore,
         add_content: &mut Adder,
     ) -> Void
     where
-        E: EntryTrait,
+        E: EntryTrait + ?Sized,
         Adder: FnMut(jbk::Reader) -> jbk::Result<jbk::ContentIdx>,
     {
+        let entry_name = entry.name().to_os_string();
         let mut values = HashMap::from([
             (
                 Property::Name,
-                jbk::Value::Array(entry.name().to_os_string().into_vec()),
+                jbk::Value::Array(entry_name.clone().into_vec()),
             ),
             (
                 Property::Parent,
@@ -427,9 +136,10 @@ impl DirEntry {
             (Property::Rights, jbk::Value::Unsigned(entry.mode().into())),
             (Property::Mtime, jbk::Value::Unsigned(entry.mtime().into())),
         ]);
+
         match entry.kind()? {
             EntryKind::Dir(children) => {
-                if self.dir_children.contains_key(entry.name()) {
+                if self.dir_children.contains_key(&entry_name) {
                     return Ok(());
                 }
                 let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
@@ -461,7 +171,7 @@ impl DirEntry {
                   So while we borrow `self.dir_children` we never read it otherwise.
                 */
                 unsafe { Rc::get_mut_unchecked(&mut self.dir_children) }
-                    .entry(entry.name().into())
+                    .entry(entry_name)
                     .or_insert(dir_entry);
                 Ok(())
             }
@@ -510,7 +220,6 @@ pub struct Creator {
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store: Box<EntryStore>,
     dir_cache: DirEntry,
-    strip_prefix: PathBuf,
     concat_mode: ConcatMode,
     tmp_path_content_pack: tempfile::TempPath,
     tmp_path_directory_pack: tempfile::TempPath,
@@ -519,7 +228,6 @@ pub struct Creator {
 impl Creator {
     pub fn new<P: AsRef<Path>>(
         outfile: P,
-        strip_prefix: PathBuf,
         concat_mode: ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
@@ -595,7 +303,6 @@ impl Creator {
             directory_pack,
             entry_store,
             dir_cache: root_entry,
-            strip_prefix,
             concat_mode,
             tmp_path_content_pack,
             tmp_path_directory_pack,
@@ -671,51 +378,7 @@ impl Creator {
         Ok(())
     }
 
-    pub fn add_from_path<P: AsRef<std::path::Path>>(&mut self, path: P, recurse: bool) -> Void {
-        self.add_from_path_with_filter(path, recurse, Rc::new(&Some))
-    }
-
-    pub fn add_from_path_with_filter<P>(&mut self, path: P, recurse: bool, filter: Filter) -> Void
-    where
-        P: AsRef<std::path::Path>,
-    {
-        let rel_path = path.as_ref().strip_prefix(&self.strip_prefix).unwrap();
-        let dir_cache: &mut DirEntry = if let Some(parents) = rel_path.parent() {
-            self.dir_cache.mk_dirs(
-                self.strip_prefix.clone(),
-                parents.components(),
-                &mut self.entry_store,
-            )?
-        } else {
-            &mut self.dir_cache
-        };
-        if rel_path.as_os_str().is_empty() {
-            if recurse {
-                for sub_entry in fs::read_dir(path)? {
-                    let sub_entry = sub_entry?;
-                    dir_cache.add(
-                        FsEntry::new_from_fs(sub_entry, recurse, Rc::clone(&filter))?,
-                        &mut self.entry_store,
-                        &mut |r| self.content_pack.add_content(r),
-                    )?;
-                }
-            }
-            Ok(())
-        } else {
-            dir_cache.add(
-                FsEntry::new(
-                    path.as_ref().to_path_buf(),
-                    path.as_ref().file_name().unwrap().to_os_string(),
-                    recurse,
-                    filter,
-                )?,
-                &mut self.entry_store,
-                &mut |r| self.content_pack.add_content(r),
-            )
-        }
-    }
-
-    pub fn add_entry<E>(&mut self, entry: E) -> Void
+    pub fn add_entry<E>(&mut self, entry: Box<E>) -> Void
     where
         E: EntryTrait,
     {

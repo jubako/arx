@@ -5,6 +5,7 @@ mod arx_fs;
 mod common;
 pub mod create;
 mod entry;
+pub mod fs_adder;
 mod tools;
 pub mod walk;
 
