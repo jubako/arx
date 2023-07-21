@@ -1,10 +1,13 @@
 mod creator;
+mod entry_store_creator;
 mod fs_adder;
 
-pub use creator::Creator;
-pub use fs_adder::FsAdder;
+pub use creator::FsCreator;
+pub use entry_store_creator::EntryStoreCreator;
+pub use fs_adder::{Adder, FsAdder};
+use std::path::Path;
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 
 pub enum ConcatMode {
     OneFile,
@@ -13,17 +16,17 @@ pub enum ConcatMode {
 }
 
 pub enum EntryKind {
-    Dir(Box<dyn Iterator<Item = jubako::Result<Box<dyn EntryTrait>>>>),
-    File(jubako::Reader),
+    Dir,
+    File(jubako::Size, jubako::ContentAddress),
     Link(OsString),
 }
 
 pub trait EntryTrait {
     /// The kind of the entry
-    fn kind(self: Box<Self>) -> jubako::Result<EntryKind>;
+    fn kind(&self) -> jubako::Result<Option<EntryKind>>;
 
     /// Under which name the entry will be stored
-    fn name(&self) -> &OsStr;
+    fn path(&self) -> &Path;
 
     fn uid(&self) -> u64;
     fn gid(&self) -> u64;
