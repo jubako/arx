@@ -1,9 +1,9 @@
 use jubako as jbk;
 
-use crate::create::{EntryKind, EntryStoreCreator, EntryTrait, Void};
+use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub enum FsEntryKind {
     Dir,
@@ -89,37 +89,29 @@ impl EntryTrait for FsEntry {
 }
 
 pub struct FsAdder<'a> {
-    creator: &'a mut EntryStoreCreator,
-    strip_prefix: &'a Path,
+    creator: &'a mut SimpleCreator,
+    strip_prefix: PathBuf,
 }
 
 impl<'a> FsAdder<'a> {
-    pub fn new(creator: &'a mut EntryStoreCreator, strip_prefix: &'a Path) -> Self {
+    pub fn new(creator: &'a mut SimpleCreator, strip_prefix: PathBuf) -> Self {
         Self {
             creator,
             strip_prefix,
         }
     }
 
-    pub fn add_from_path<P, A>(&mut self, path: P, recurse: bool, adder: &mut A) -> Void
+    pub fn add_from_path<P>(&mut self, path: P, recurse: bool) -> Void
     where
         P: AsRef<std::path::Path>,
-        A: Adder,
     {
-        self.add_from_path_with_filter(path, recurse, |_e| true, adder)
+        self.add_from_path_with_filter(path, recurse, |_e| true)
     }
 
-    pub fn add_from_path_with_filter<P, F, A>(
-        &mut self,
-        path: P,
-        recurse: bool,
-        filter: F,
-        adder: &mut A,
-    ) -> Void
+    pub fn add_from_path_with_filter<P, F>(&mut self, path: P, recurse: bool, filter: F) -> Void
     where
         P: AsRef<std::path::Path>,
         F: FnMut(&walkdir::DirEntry) -> bool,
-        A: Adder,
     {
         let mut walker = walkdir::WalkDir::new(path);
         if !recurse {
@@ -130,13 +122,13 @@ impl<'a> FsAdder<'a> {
             let entry = entry.unwrap();
             let arx_path = entry
                 .path()
-                .strip_prefix(self.strip_prefix)
+                .strip_prefix(&self.strip_prefix)
                 .unwrap()
                 .to_path_buf();
             if arx_path.as_os_str().is_empty() {
                 continue;
             }
-            let entry = FsEntry::new_from_walk_entry(entry, arx_path, adder)?;
+            let entry = FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder())?;
             self.creator.add_entry(entry.as_ref())?;
         }
         Ok(())

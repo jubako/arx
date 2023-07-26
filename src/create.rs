@@ -128,9 +128,8 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
 
     let jbk_progress = Arc::new(ProgressBar::new());
     let progress = Rc::new(CachedSize::new());
-    let mut creator = arx::create::FsCreator::new(
+    let mut creator = arx::create::SimpleCreator::new(
         &out_file,
-        strip_prefix,
         concat_mode,
         jbk_progress,
         Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
@@ -141,8 +140,10 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
     if let Some(base_dir) = &options.base_dir {
         std::env::set_current_dir(base_dir)?;
     };
+
+    let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
     for infile in files_to_add {
-        creator.add_from_path(&infile, options.recurse)?;
+        fs_adder.add_from_path(&infile, options.recurse)?;
     }
 
     let ret = creator.finalize(&out_file);

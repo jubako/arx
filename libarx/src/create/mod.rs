@@ -2,7 +2,7 @@ mod creator;
 mod entry_store_creator;
 mod fs_adder;
 
-pub use creator::FsCreator;
+pub use creator::SimpleCreator;
 pub use entry_store_creator::EntryStoreCreator;
 pub use fs_adder::{Adder, FsAdder};
 use std::path::Path;

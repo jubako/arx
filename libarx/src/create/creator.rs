@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::{Adder, ConcatMode, EntryStoreCreator, FsAdder, Void};
+use super::{Adder, ConcatMode, EntryStoreCreator, EntryTrait, Void};
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
@@ -29,20 +29,18 @@ impl Adder for ContentAdder {
     }
 }
 
-pub struct FsCreator {
+pub struct SimpleCreator {
     adder: ContentAdder,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_creator: EntryStoreCreator,
-    strip_prefix: PathBuf,
     concat_mode: ConcatMode,
     tmp_path_content_pack: tempfile::TempPath,
     tmp_path_directory_pack: tempfile::TempPath,
 }
 
-impl FsCreator {
+impl SimpleCreator {
     pub fn new<P: AsRef<Path>>(
         outfile: P,
-        strip_prefix: PathBuf,
         concat_mode: ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
@@ -78,7 +76,6 @@ impl FsCreator {
             )),
             directory_pack,
             entry_store_creator,
-            strip_prefix,
             concat_mode,
             tmp_path_content_pack,
             tmp_path_directory_pack,
@@ -138,8 +135,11 @@ impl FsCreator {
         Ok(())
     }
 
-    pub fn add_from_path(&mut self, path: &Path, recurse: bool) -> Void {
-        let mut fs_adder = FsAdder::new(&mut self.entry_store_creator, &self.strip_prefix);
-        fs_adder.add_from_path(path, recurse, &mut self.adder)
+    pub fn adder(&mut self) -> &mut ContentAdder {
+        &mut self.adder
+    }
+
+    pub fn add_entry<E: EntryTrait>(&mut self, entry: &E) -> Void {
+        self.entry_store_creator.add_entry(entry)
     }
 }
