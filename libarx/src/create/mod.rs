@@ -9,12 +9,14 @@ use std::path::Path;
 
 use std::ffi::OsString;
 
+#[derive(Clone, Copy)]
 pub enum ConcatMode {
     OneFile,
     TwoFiles,
     NoConcat,
 }
 
+#[derive(Clone)]
 pub enum EntryKind {
     Dir,
     File(jubako::Size, jubako::ContentAddress),
