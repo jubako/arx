@@ -1,5 +1,5 @@
 [workspace]
-members = ["libarx", "arx", "tar2arx"]
+members = ["libarx", "arx", "tar2arx", "zip2arx"]
 resolver = "2"
 
 [workspace.package]
