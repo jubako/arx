@@ -1,6 +1,6 @@
 use crate::light_path::LightPath;
+use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
-use libarx::CommonEntry;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
@@ -11,20 +11,16 @@ struct PathBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
 }
 
-impl libarx::Builder for PathBuilder {
+impl arx::Builder for PathBuilder {
     type Entry = Path;
 
-    fn new(properties: &libarx::AllProperties) -> Self {
+    fn new(properties: &arx::AllProperties) -> Self {
         Self {
             path_property: properties.path_property.clone(),
         }
     }
 
-    fn create_entry(
-        &self,
-        _idx: jbk::EntryIdx,
-        reader: &libarx::Reader,
-    ) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &arx::Reader) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
@@ -36,7 +32,7 @@ type LightBuilder = (PathBuilder, PathBuilder, PathBuilder);
 
 struct Lister {}
 
-impl libarx::walk::Operator<LightPath, LightBuilder> for Lister {
+impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
     fn on_start(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
         Ok(())
     }
@@ -62,27 +58,23 @@ impl libarx::walk::Operator<LightPath, LightBuilder> for Lister {
 
 struct StableLister {}
 
-impl libarx::walk::Operator<PathBuf, libarx::FullBuilder> for StableLister {
+impl arx::walk::Operator<PathBuf, arx::FullBuilder> for StableLister {
     fn on_start(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
         Ok(())
     }
     fn on_stop(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_directory_enter(
-        &self,
-        current_path: &mut PathBuf,
-        dir: &libarx::Dir,
-    ) -> jbk::Result<bool> {
+    fn on_directory_enter(&self, current_path: &mut PathBuf, dir: &arx::Dir) -> jbk::Result<bool> {
         current_path.push(OsString::from_vec(dir.path().clone()));
         println!("d {} {}", dir.mtime(), current_path.display());
         Ok(true)
     }
-    fn on_directory_exit(&self, current_path: &mut PathBuf, _dir: &libarx::Dir) -> jbk::Result<()> {
+    fn on_directory_exit(&self, current_path: &mut PathBuf, _dir: &arx::Dir) -> jbk::Result<()> {
         current_path.pop();
         Ok(())
     }
-    fn on_file(&self, current_path: &mut PathBuf, file: &libarx::FileEntry) -> jbk::Result<()> {
+    fn on_file(&self, current_path: &mut PathBuf, file: &arx::FileEntry) -> jbk::Result<()> {
         current_path.push(OsString::from_vec(file.path().clone()));
         println!(
             "f {} {} {}",
@@ -93,7 +85,7 @@ impl libarx::walk::Operator<PathBuf, libarx::FullBuilder> for StableLister {
         current_path.pop();
         Ok(())
     }
-    fn on_link(&self, current_path: &mut PathBuf, link: &libarx::Link) -> jbk::Result<()> {
+    fn on_link(&self, current_path: &mut PathBuf, link: &arx::Link) -> jbk::Result<()> {
         current_path.push(OsString::from_vec(link.path().clone()));
         let target: PathBuf = OsString::from_vec(link.target().clone()).into();
         println!(
@@ -120,17 +112,17 @@ pub fn list(options: Options, verbose_level: u8) -> jbk::Result<()> {
     if verbose_level > 0 {
         println!("Listing entries in archive {:?}", options.infile);
     }
-    let arx = libarx::Arx::new(options.infile)?;
+    let arx = arx::Arx::new(options.infile)?;
     if let Some(version) = options.stable_output {
         match version {
             1 => {
-                let mut walker = libarx::walk::Walker::new(&arx, Default::default());
+                let mut walker = arx::walk::Walker::new(&arx, Default::default());
                 walker.run(&StableLister {})
             }
             _ => Err(format!("Stable version {version} not supported").into()),
         }
     } else {
-        let mut walker = libarx::walk::Walker::new(&arx, Default::default());
+        let mut walker = arx::walk::Walker::new(&arx, Default::default());
         walker.run(&Lister {})
     }
 }
