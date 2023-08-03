@@ -45,7 +45,7 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
     fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
         let reader = self.comparator.store.get_entry_reader(idx);
         let entry_path = self.comparator.path_property.create(&reader)?;
-        match entry_path.partial_cmp(self.path_value) {
+        match entry_path.partial_cmp(self.path_value)? {
             Some(c) => Ok(c),
             None => Err("Cannot compare".into()),
         }
