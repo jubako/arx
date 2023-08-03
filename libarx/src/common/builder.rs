@@ -2,7 +2,6 @@ use super::entry::*;
 use super::entry_type::EntryType;
 use super::{AllProperties, Reader};
 use jbk::reader::builder::PropertyBuilderTrait;
-use jubako as jbk;
 
 pub trait Builder {
     type Entry;

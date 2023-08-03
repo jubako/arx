@@ -12,7 +12,7 @@ license.workspace = true
 
 [dependencies]
 libarx = { path = "../libarx", version = "0.2.0" }
-jubako.workspace = true
+jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
 env_logger = "0.10.0"

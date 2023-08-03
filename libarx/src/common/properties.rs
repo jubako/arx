@@ -1,5 +1,3 @@
-use jubako as jbk;
-
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub enum Property {
     Name,

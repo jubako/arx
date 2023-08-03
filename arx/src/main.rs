@@ -1,5 +1,3 @@
-use jubako as jbk;
-
 mod create;
 mod dump;
 mod extract;

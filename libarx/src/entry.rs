@@ -1,6 +1,5 @@
 use crate::common::{AllProperties, Builder, Reader};
 use jbk::reader::builder::PropertyBuilderTrait;
-use jubako as jbk;
 
 pub struct CommonPart {
     idx: jbk::EntryIdx,

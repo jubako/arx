@@ -13,5 +13,5 @@ impl<F, L, D> EntryDef for (F, L, D) {
 pub enum Entry<E: EntryDef> {
     File(E::File),
     Link(E::Link),
-    Dir(jubako::EntryRange, E::Dir),
+    Dir(jbk::EntryRange, E::Dir),
 }

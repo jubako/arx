@@ -1,4 +1,3 @@
-use jubako as jbk;
 use libarx as arx;
 
 use clap::Parser;

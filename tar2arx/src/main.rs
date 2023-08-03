@@ -1,5 +1,4 @@
 use clap::Parser;
-use jubako as jbk;
 
 use arx::create::Adder;
 use std::io::Read;

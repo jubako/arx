@@ -1,6 +1,5 @@
 use crate::light_path::LightPath;
 use jbk::reader::builder::PropertyBuilderTrait;
-use jubako as jbk;
 use libarx::CommonEntry;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;

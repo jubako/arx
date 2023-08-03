@@ -3,7 +3,6 @@ use crate::common::{AllProperties, Comparator, EntryResult, EntryType, ReadEntry
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
-use jubako as jbk;
 use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;

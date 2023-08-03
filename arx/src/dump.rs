@@ -1,5 +1,4 @@
 use jbk::reader::builder::PropertyBuilderTrait;
-use jubako as jbk;
 use std::path::PathBuf;
 
 struct FileBuilder {
