@@ -1,5 +1,6 @@
 use jubako as jbk;
 
+use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -34,8 +35,8 @@ pub struct SimpleCreator {
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_creator: EntryStoreCreator,
     concat_mode: ConcatMode,
+    out_dir: PathBuf,
     tmp_path_content_pack: tempfile::TempPath,
-    tmp_path_directory_pack: tempfile::TempPath,
 }
 
 impl SimpleCreator {
@@ -46,25 +47,23 @@ impl SimpleCreator {
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
-        let out_dir = outfile.parent().unwrap();
+        let out_dir = outfile.parent().unwrap().to_path_buf();
 
         let (tmp_content_pack, tmp_path_content_pack) =
-            tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
+            tempfile::NamedTempFile::new_in(&out_dir)?.into_parts();
         let content_pack = jbk::creator::ContentPackCreator::new_from_file_with_progress(
             tmp_content_pack,
             jbk::PackId::from(1),
             VENDOR_ID,
-            jbk::FreeData40::clone_from_slice(&[0x00; 40]),
+            Default::default(),
             jbk::CompressionType::Zstd,
             progress,
         )?;
 
-        let (_, tmp_path_directory_pack) = tempfile::NamedTempFile::new_in(out_dir)?.into_parts();
         let directory_pack = jbk::creator::DirectoryPackCreator::new(
-            &tmp_path_directory_pack,
             jbk::PackId::from(0),
             VENDOR_ID,
-            jbk::FreeData31::clone_from_slice(&[0x00; 31]),
+            Default::default(),
         );
 
         let entry_store_creator = EntryStoreCreator::new();
@@ -77,61 +76,94 @@ impl SimpleCreator {
             directory_pack,
             entry_store_creator,
             concat_mode,
+            out_dir,
             tmp_path_content_pack,
-            tmp_path_directory_pack,
         })
     }
 
     pub fn finalize(mut self, outfile: &Path) -> Void {
         self.entry_store_creator.finalize(&mut self.directory_pack);
 
-        let directory_pack_info = match self.concat_mode {
+        let mut container = match self.concat_mode {
+            ConcatMode::NoConcat => None,
+            _ => Some(jbk::creator::ContainerPackCreator::new(outfile)?),
+        };
+
+        let mut tmpfile = tempfile::NamedTempFile::new_in(&self.out_dir)?;
+        let directory_pack_info = self.directory_pack.finalize(&mut tmpfile)?;
+
+        let directory_locator = match self.concat_mode {
             ConcatMode::NoConcat => {
                 let mut outfilename = outfile.file_name().unwrap().to_os_string();
                 outfilename.push(".jbkd");
                 let mut directory_pack_path = PathBuf::new();
                 directory_pack_path.push(outfile);
-                directory_pack_path.set_file_name(outfilename);
-                let directory_pack_info = self
-                    .directory_pack
-                    .finalize(Some(directory_pack_path.clone()))?;
-                if let Err(e) = self.tmp_path_directory_pack.persist(&directory_pack_path) {
+                directory_pack_path.set_file_name(&outfilename);
+
+                if let Err(e) = tmpfile.persist(directory_pack_path) {
                     return Err(e.error.into());
                 };
-                directory_pack_info
+                outfilename.into_vec()
             }
-            _ => self.directory_pack.finalize(None)?,
+            _ => {
+                let (file, _path) = tmpfile.into_parts();
+                container
+                    .as_mut()
+                    .unwrap()
+                    .add_pack(directory_pack_info.uuid, jbk::FileSource::new(file)?.into())?;
+                vec![]
+            }
         };
 
-        let content_pack_info = match self.concat_mode {
-            ConcatMode::OneFile => self.adder.into_inner().into_inner().finalize(None)?,
+        let (content_pack_file, content_pack_info) =
+            self.adder.into_inner().into_inner().finalize()?;
+        let content_locator = match self.concat_mode {
+            ConcatMode::OneFile => {
+                container.as_mut().unwrap().add_pack(
+                    content_pack_info.uuid,
+                    jbk::FileSource::new(content_pack_file)?.into(),
+                )?;
+                vec![]
+            }
             _ => {
                 let mut outfilename = outfile.file_name().unwrap().to_os_string();
                 outfilename.push(".jbkc");
                 let mut content_pack_path = PathBuf::new();
                 content_pack_path.push(outfile);
-                content_pack_path.set_file_name(outfilename);
-                let content_pack_info = self
-                    .adder
-                    .into_inner()
-                    .into_inner()
-                    .finalize(Some(content_pack_path.clone()))?;
+                content_pack_path.set_file_name(&outfilename);
+
                 if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
                     return Err(e.error.into());
                 }
-                content_pack_info
+                outfilename.into_vec()
             }
         };
 
-        let mut manifest_creator = jbk::creator::ManifestPackCreator::new(
-            outfile,
-            VENDOR_ID,
-            jbk::FreeData63::clone_from_slice(&[0x00; 63]),
-        );
+        let mut manifest_creator =
+            jbk::creator::ManifestPackCreator::new(VENDOR_ID, Default::default());
 
-        manifest_creator.add_pack(directory_pack_info);
-        manifest_creator.add_pack(content_pack_info);
-        manifest_creator.finalize()?;
+        manifest_creator.add_pack(directory_pack_info, directory_locator);
+        manifest_creator.add_pack(content_pack_info, content_locator);
+
+        let mut tmpfile = tempfile::NamedTempFile::new_in(self.out_dir)?;
+        let manifest_uuid = manifest_creator.finalize(&mut tmpfile)?;
+
+        match self.concat_mode {
+            ConcatMode::NoConcat => {
+                if let Err(e) = tmpfile.persist(outfile) {
+                    return Err(e.error.into());
+                };
+            }
+            _ => {
+                let (file, _path) = tmpfile.into_parts();
+                container
+                    .as_mut()
+                    .unwrap()
+                    .add_pack(manifest_uuid, jbk::FileSource::new(file)?.into())?;
+                container.unwrap().finalize()?;
+            }
+        };
+
         Ok(())
     }
 

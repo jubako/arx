@@ -200,18 +200,18 @@ impl DirEntry {
 
 pub struct EntryStoreCreator {
     entry_store: Box<EntryStore>,
-    path_store: Rc<RefCell<jbk::creator::ValueStore>>,
+    path_store: jbk::creator::ValueStore,
     root_entry: DirEntry,
 }
 
 impl EntryStoreCreator {
     pub fn new() -> Self {
-        let path_store = jbk::creator::ValueStore::new(jbk::creator::ValueStoreKind::Plain);
+        let path_store = jbk::creator::ValueStore::new_plain();
 
         let entry_def = schema::Schema::new(
             // Common part
             schema::CommonProperties::new(vec![
-                schema::Property::new_array(1, Rc::clone(&path_store), Property::Name), // the path
+                schema::Property::new_array(1, path_store.clone(), Property::Name), // the path
                 schema::Property::new_uint(Property::Parent), // index of the parent entry
                 schema::Property::new_uint(Property::Owner),  // owner
                 schema::Property::new_uint(Property::Group),  // group
@@ -239,7 +239,7 @@ impl EntryStoreCreator {
                 (
                     EntryType::Link,
                     schema::VariantProperties::new(vec![
-                        schema::Property::new_array(1, Rc::clone(&path_store), Property::Target), // Id of the linked entry
+                        schema::Property::new_array(1, path_store.clone(), Property::Target), // Id of the linked entry
                     ]),
                 ),
             ],
@@ -315,22 +315,18 @@ mod tests {
 
     #[test]
     fn test_empty() -> jbk::Result<()> {
-        let arx_file =
-            tempfile::TempPath::from_path(Path::new(&std::env::temp_dir()).join("test_empty.arx"));
-        let mut creator = jbk::creator::DirectoryPackCreator::new(
-            &arx_file,
-            jbk::PackId::from(0),
-            0,
-            jbk::FreeData31::clone_from_slice(&[0x00; 31]),
-        );
+        let mut arx_file = tempfile::NamedTempFile::new_in(&std::env::temp_dir())?;
+        let mut creator =
+            jbk::creator::DirectoryPackCreator::new(jbk::PackId::from(0), 0, Default::default());
 
         let entry_store_creator = EntryStoreCreator::new();
         entry_store_creator.finalize(&mut creator);
-        creator.finalize(Some(arx_file.to_path_buf()))?;
-        assert!(arx_file.is_file());
+        creator.finalize(&mut arx_file)?;
+        assert!(arx_file.path().is_file());
 
-        let directory_pack =
-            jbk::reader::DirectoryPack::new(jbk::creator::FileSource::open(&arx_file)?.into())?;
+        let directory_pack = jbk::reader::DirectoryPack::new(
+            jbk::creator::FileSource::open(arx_file.path())?.into(),
+        )?;
         let index = directory_pack.get_index_from_name("arx_entries")?;
         assert!(index.is_empty());
         Ok(())
@@ -369,26 +365,21 @@ mod tests {
 
     #[test]
     fn test_one_content() -> jbk::Result<()> {
-        let arx_file = tempfile::TempPath::from_path(
-            Path::new(&std::env::temp_dir()).join("test_one_content.arx"),
-        );
+        let mut arx_file = tempfile::NamedTempFile::new_in(&std::env::temp_dir())?;
 
-        let mut creator = jbk::creator::DirectoryPackCreator::new(
-            &arx_file,
-            jbk::PackId::from(0),
-            0,
-            jbk::FreeData31::clone_from_slice(&[0x00; 31]),
-        );
+        let mut creator =
+            jbk::creator::DirectoryPackCreator::new(jbk::PackId::from(0), 0, Default::default());
 
         let mut entry_store_creator = EntryStoreCreator::new();
         let entry = SimpleEntry("foo.txt".into());
         entry_store_creator.add_entry(&entry)?;
         entry_store_creator.finalize(&mut creator);
-        creator.finalize(Some(arx_file.to_path_buf()))?;
-        assert!(arx_file.is_file());
+        creator.finalize(&mut arx_file)?;
+        assert!(arx_file.path().is_file());
 
-        let directory_pack =
-            jbk::reader::DirectoryPack::new(jbk::creator::FileSource::open(&arx_file)?.into())?;
+        let directory_pack = jbk::reader::DirectoryPack::new(
+            jbk::creator::FileSource::open(arx_file.path())?.into(),
+        )?;
         let index = directory_pack.get_index_from_name("arx_entries")?;
         assert!(!index.is_empty());
         Ok(())

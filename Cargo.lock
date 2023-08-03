@@ -553,13 +553,11 @@ version = "0.1.0"
 dependencies = [
  "blake3 0.3.8",
  "clap 3.2.25",
- "generic-array",
  "log",
  "lru",
  "memmap2",
  "pathdiff",
  "spmc",
- "typenum",
  "uuid",
  "zstd",
 ]
@@ -1155,9 +1153,9 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "libwpack"
+name = "libwaj"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "wpack"
+name = "waj"
 version = "0.1.0"
