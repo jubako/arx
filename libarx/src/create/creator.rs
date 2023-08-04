@@ -1,5 +1,3 @@
-use jubako as jbk;
-
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;

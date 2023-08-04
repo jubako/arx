@@ -1,6 +1,5 @@
 use super::common::{AllProperties, Comparator, Entry, FullBuilderTrait, RealBuilder};
-use jubako as jbk;
-use jubako::reader::Range;
+use jbk::reader::Range;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 

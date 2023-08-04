@@ -1,5 +1,3 @@
-use jubako as jbk;
-
 use crate::common::{EntryType, Property};
 use jbk::creator::schema;
 use std::cell::RefCell;
@@ -264,19 +262,19 @@ impl EntryStoreCreator {
         let entry_store_id = directory_pack.add_entry_store(self.entry_store);
         directory_pack.create_index(
             "arx_entries",
-            jubako::ContentAddress::new(0.into(), 0.into()),
+            jbk::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
             entry_store_id,
             jbk::EntryCount::from(entry_count as u32),
-            jubako::EntryIdx::from(0).into(),
+            jbk::EntryIdx::from(0).into(),
         );
         directory_pack.create_index(
             "arx_root",
-            jubako::ContentAddress::new(0.into(), 0.into()),
+            jbk::ContentAddress::new(0.into(), 0.into()),
             jbk::PropertyIdx::from(0),
             entry_store_id,
             root_count,
-            jubako::EntryIdx::from(0).into(),
+            jbk::EntryIdx::from(0).into(),
         );
     }
 
@@ -310,7 +308,6 @@ impl Default for EntryStoreCreator {
 mod tests {
     use super::super::*;
     use super::*;
-    use jubako as jbk;
     use std::path::{Path, PathBuf};
 
     #[test]

@@ -1,7 +1,6 @@
 use super::common::*;
 use super::Arx;
 use jbk::reader::Range;
-use jubako as jbk;
 
 pub trait Operator<Context, Builder: FullBuilderTrait> {
     fn on_start(&self, context: &mut Context) -> jbk::Result<()>;

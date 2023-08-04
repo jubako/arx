@@ -1,4 +1,3 @@
-use jubako as jbk;
 use std::path::PathBuf;
 
 pub struct StatCounter {
@@ -29,7 +28,7 @@ impl StatCounter {
     }
 }
 
-impl libarx::Stats for StatCounter {
+impl arx::Stats for StatCounter {
     fn lookup(&mut self) {
         self.nb_lookup += 1;
     }
@@ -105,8 +104,8 @@ pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
         );
     }
     let mut stats = StatCounter::new();
-    let arx = libarx::Arx::new(options.infile)?;
-    let arxfs = libarx::ArxFs::new_with_stats(arx, &mut stats)?;
+    let arx = arx::Arx::new(options.infile)?;
+    let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
 
     arxfs.mount(&options.mountdir)?;
 

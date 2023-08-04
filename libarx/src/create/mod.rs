@@ -19,13 +19,13 @@ pub enum ConcatMode {
 #[derive(Clone)]
 pub enum EntryKind {
     Dir,
-    File(jubako::Size, jubako::ContentAddress),
+    File(jbk::Size, jbk::ContentAddress),
     Link(OsString),
 }
 
 pub trait EntryTrait {
     /// The kind of the entry
-    fn kind(&self) -> jubako::Result<Option<EntryKind>>;
+    fn kind(&self) -> jbk::Result<Option<EntryKind>>;
 
     /// Under which name the entry will be stored
     fn path(&self) -> &Path;
@@ -36,4 +36,4 @@ pub trait EntryTrait {
     fn mtime(&self) -> u64;
 }
 
-pub type Void = jubako::Result<()>;
+pub type Void = jbk::Result<()>;

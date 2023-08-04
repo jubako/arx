@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use crate::{AllProperties, Arx, Builder, Reader, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
-use jubako as jbk;
 
 type U8Path = Vec<u8>;
 

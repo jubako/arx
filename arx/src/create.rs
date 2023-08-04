@@ -1,5 +1,3 @@
-use jubako as jbk;
-use libarx as arx;
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};

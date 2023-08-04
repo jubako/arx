@@ -1,4 +1,3 @@
-use jubako as jbk;
 use std::collections::HashSet;
 use std::env::current_dir;
 use std::fs::File;
@@ -45,5 +44,5 @@ pub fn extract(options: Options, verbose_level: u8) -> jbk::Result<()> {
     if verbose_level > 0 {
         println!("Extract archive {:?} in {:?}", &options.infile, outdir);
     }
-    libarx::extract(&options.infile, &outdir, files_to_extract, options.progress)
+    arx::extract(&options.infile, &outdir, files_to_extract, options.progress)
 }

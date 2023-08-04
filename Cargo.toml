@@ -1,5 +1,6 @@
 [workspace]
-members = ["libarx"]
+members = ["libarx", "arx", "tar2arx", "zip2arx"]
+resolver = "2"
 
 [workspace.package]
 edition = "2021"
@@ -9,34 +10,12 @@ repository = "https://framagit.org/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]
-jubako = { git = "https://framagit.org/jubako/jubako.git" }
-
-[package]
-name = "arx"
-description = "A file archive based on Jubako container"
-categories = ["command-line-utilities", "compression", "filesystem"]
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
-repository.workspace = true
-license.workspace = true
+jbk = { git = "https://framagit.org/jubako/jubako.git", package = "jubako" }
+clap = { version = "4.3.19", features = ["derive"] }
+indicatif = "0.17.5"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-clap = { version = "3.2.15", features = ["derive"] }
-libarx = { path = "libarx", version = "0.2.0" }
-jubako.workspace = true
-env_logger = "0.10.0"
-indicatif = "0.17.3"
 
 [profile.release]
 #debug = 1
 lto = true
-
-[dev-dependencies]
-arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
-tempfile = "3.5.0"
-
-[features]
-in_ci = []
