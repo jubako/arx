@@ -13,7 +13,9 @@ fmt:
 
 build:
   stage: build
-  script: cargo build --verbose
+  script:
+    - rustup --version && cargo --version && rustc --version
+    - cargo build --verbose
 
 test:
   script:
