@@ -1,4 +1,5 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
+use jbk::creator::InputReader;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
@@ -11,7 +12,7 @@ pub enum FsEntryKind {
 }
 
 pub trait Adder {
-    fn add(&mut self, reader: jbk::Reader) -> jbk::Result<jbk::ContentAddress>;
+    fn add<R: jbk::creator::InputReader>(&mut self, reader: R) -> jbk::Result<jbk::ContentAddress>;
 }
 
 pub struct FsEntry {
@@ -25,17 +26,17 @@ pub struct FsEntry {
 }
 
 impl FsEntry {
-    pub fn new_from_walk_entry(
+    pub fn new_from_walk_entry<A: Adder>(
         dir_entry: walkdir::DirEntry,
         arx_path: PathBuf,
-        adder: &mut dyn Adder,
+        adder: &mut A,
     ) -> jbk::Result<Box<Self>> {
         let fs_path = dir_entry.path().to_path_buf();
         let attr = dir_entry.metadata().unwrap();
         let kind = if attr.is_dir() {
             FsEntryKind::Dir
         } else if attr.is_file() {
-            let reader: jbk::Reader = jbk::creator::FileSource::open(&fs_path)?.into();
+            let reader = jbk::creator::InputFile::open(&fs_path)?;
             let size = reader.size();
             let content_address = adder.add(reader)?;
             FsEntryKind::File(size, content_address)

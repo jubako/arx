@@ -106,9 +106,9 @@ struct TarEntry {
 }
 
 impl TarEntry {
-    pub fn new<'a, R: 'a + Read>(
+    pub fn new<'a, R: 'a + Read, A: Adder>(
         mut entry: tar::Entry<'a, R>,
-        adder: &mut dyn Adder,
+        adder: &mut A,
     ) -> jbk::Result<Self> {
         let header = entry.header();
         let uid = header.uid()?;
@@ -138,7 +138,7 @@ impl TarEntry {
                 } else {
                     let mut data = vec![];
                     let size = entry.read_to_end(&mut data)?;
-                    let content_address = adder.add(data.into())?;
+                    let content_address = adder.add(std::io::Cursor::new(data))?;
                     Self {
                         path,
                         kind: arx::create::EntryKind::File(size.into(), content_address),
