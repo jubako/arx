@@ -513,7 +513,7 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         match self.reader_cache.get_mut(&ino) {
             Some((_r, c)) => {
                 *c += 1;
-                reply.opened(0, 0);
+                reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
             }
             None => match ino.try_into() {
                 Err(_) => reply.error(libc::EISDIR),
@@ -526,7 +526,7 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                         Ok(content_address) => {
                             let reader = self.arx.get_reader(*content_address).unwrap();
                             self.reader_cache.insert(ino, (reader, 1));
-                            reply.opened(0, 0);
+                            reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
                         }
                         Err(EntryType::Dir) => reply.error(libc::EISDIR),
                         Err(EntryType::Link) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
@@ -591,14 +591,14 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         self.stats.opendir();
         let ino = Ino::from(ino);
         match ino.try_into() {
-            Err(_) => reply.opened(0, 0),
+            Err(_) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
             Ok(idx) => {
                 let entry = self
                     .entry_index
                     .get_entry(&self.light_dir_builder, idx)
                     .unwrap();
                 match &entry {
-                    Ok(_) => reply.opened(0, 0),
+                    Ok(_) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
                     Err(_) => reply.error(libc::ENOTDIR),
                 }
             }
