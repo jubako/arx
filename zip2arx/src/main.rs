@@ -82,6 +82,7 @@ impl jbk::creator::Progress for ProgressBar {
 
 pub struct Converter<R: Read + Seek> {
     arx_creator: arx::create::SimpleCreator,
+    archive_path: PathBuf,
     archive: zip::ZipArchive<R>,
     progress: Arc<ProgressBar>,
 }
@@ -94,7 +95,11 @@ struct ZipEntry {
 }
 
 impl ZipEntry {
-    pub fn new<A: Adder>(mut entry: zip::read::ZipFile<'_>, adder: &mut A) -> jbk::Result<Self> {
+    pub fn new<A: Adder>(
+        mut entry: zip::read::ZipFile<'_>,
+        adder: &mut A,
+        archive_path: &Path,
+    ) -> jbk::Result<Self> {
         let mtime = entry.last_modified().to_time().unwrap().unix_timestamp() as u64;
         let mode = entry.unix_mode().unwrap_or(0o644) as u64;
         let path = entry.enclosed_name();
@@ -111,12 +116,21 @@ impl ZipEntry {
                 mode,
             }
         } else {
-            let mut data = vec![];
-            let size = entry.read_to_end(&mut data)?;
-            let content_address = adder.add(std::io::Cursor::new(data))?;
+            let content_address = if let zip::CompressionMethod::Stored = entry.compression() {
+                let reader = jbk::creator::InputFile::new_range(
+                    std::fs::File::open(archive_path)?,
+                    entry.data_start(),
+                    Some(entry.size()),
+                )?;
+                adder.add(reader)?
+            } else {
+                let mut data = vec![];
+                entry.read_to_end(&mut data)?;
+                adder.add(std::io::Cursor::new(data))?
+            };
             Self {
                 path,
-                kind: arx::create::EntryKind::File(size.into(), content_address),
+                kind: arx::create::EntryKind::File(entry.size().into(), content_address),
                 mtime,
                 mode,
             }
@@ -146,9 +160,34 @@ impl arx::create::EntryTrait for ZipEntry {
     }
 }
 
+struct Directory<'a>(&'a Path);
+
+impl<'a> arx::create::EntryTrait for Directory<'a> {
+    fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
+        Ok(Some(arx::create::EntryKind::Dir))
+    }
+    fn path(&self) -> &std::path::Path {
+        self.0
+    }
+
+    fn uid(&self) -> u64 {
+        0
+    }
+    fn gid(&self) -> u64 {
+        0
+    }
+    fn mode(&self) -> u64 {
+        0
+    }
+    fn mtime(&self) -> u64 {
+        0
+    }
+}
+
 impl<R: Read + Seek> Converter<R> {
     pub fn new<P: AsRef<Path>>(
         archive: zip::ZipArchive<R>,
+        archive_path: PathBuf,
         outfile: P,
         concat_mode: arx::create::ConcatMode,
     ) -> jbk::Result<Self> {
@@ -163,6 +202,7 @@ impl<R: Read + Seek> Converter<R> {
         Ok(Self {
             arx_creator,
             archive,
+            archive_path,
             progress,
         })
     }
@@ -175,7 +215,17 @@ impl<R: Read + Seek> Converter<R> {
         for idx in 0..self.archive.len() {
             self.progress.entries.inc(1);
             let entry = self.archive.by_index(idx).unwrap();
-            let entry = ZipEntry::new(entry, self.arx_creator.adder())?;
+            if let Some(parent) = entry.enclosed_name().unwrap().parent() {
+                let mut parents: Vec<&Path> = parent.ancestors().collect();
+                parents.reverse();
+                for parent in parents {
+                    if parent.file_name().is_some() {
+                        let directory = Directory(parent);
+                        self.arx_creator.add_entry(&directory)?;
+                    }
+                }
+            }
+            let entry = ZipEntry::new(entry, self.arx_creator.adder(), &self.archive_path)?;
             self.arx_creator.add_entry(&entry)?;
         }
         self.finalize(outfile)
@@ -187,6 +237,11 @@ fn main() -> jbk::Result<()> {
 
     let file = std::fs::File::open(&args.zip_file)?;
     let archive = zip::ZipArchive::new(file).unwrap();
-    let converter = Converter::new(archive, &args.outfile, arx::create::ConcatMode::OneFile)?;
+    let converter = Converter::new(
+        archive,
+        args.zip_file,
+        &args.outfile,
+        arx::create::ConcatMode::OneFile,
+    )?;
     converter.run(&args.outfile)
 }
