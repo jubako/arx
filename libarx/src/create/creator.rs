@@ -54,7 +54,7 @@ impl SimpleCreator {
             jbk::PackId::from(1),
             VENDOR_ID,
             Default::default(),
-            jbk::CompressionType::Zstd,
+            jbk::creator::Compression::zstd(),
             progress,
         )?;
 
