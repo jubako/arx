@@ -22,7 +22,7 @@ impl ContentAdder {
 }
 
 impl Adder for ContentAdder {
-    fn add(&mut self, reader: jbk::Reader) -> jbk::Result<jbk::ContentAddress> {
+    fn add<R: jbk::creator::InputReader>(&mut self, reader: R) -> jbk::Result<jbk::ContentAddress> {
         let content_id = self.content_pack.add_content(reader)?;
         Ok(jbk::ContentAddress::new(1.into(), content_id))
     }

@@ -94,7 +94,7 @@ struct ZipEntry {
 }
 
 impl ZipEntry {
-    pub fn new(mut entry: zip::read::ZipFile<'_>, adder: &mut dyn Adder) -> jbk::Result<Self> {
+    pub fn new<A: Adder>(mut entry: zip::read::ZipFile<'_>, adder: &mut A) -> jbk::Result<Self> {
         let mtime = entry.last_modified().to_time().unwrap().unix_timestamp() as u64;
         let mode = entry.unix_mode().unwrap_or(0o644) as u64;
         let path = entry.enclosed_name();
@@ -113,7 +113,7 @@ impl ZipEntry {
         } else {
             let mut data = vec![];
             let size = entry.read_to_end(&mut data)?;
-            let content_address = adder.add(data.into())?;
+            let content_address = adder.add(std::io::Cursor::new(data))?;
             Self {
                 path,
                 kind: arx::create::EntryKind::File(size.into(), content_address),
