@@ -262,7 +262,7 @@ impl EntryStoreCreator {
         let entry_store_id = directory_pack.add_entry_store(self.entry_store);
         directory_pack.create_index(
             "arx_entries",
-            jbk::ContentAddress::new(0.into(), 0.into()),
+            Default::default(),
             jbk::PropertyIdx::from(0),
             entry_store_id,
             jbk::EntryCount::from(entry_count as u32),
@@ -270,7 +270,7 @@ impl EntryStoreCreator {
         );
         directory_pack.create_index(
             "arx_root",
-            jbk::ContentAddress::new(0.into(), 0.into()),
+            Default::default(),
             jbk::PropertyIdx::from(0),
             entry_store_id,
             root_count,
