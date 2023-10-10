@@ -1,27 +1,29 @@
+use std::io::Seek;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use super::{Adder, ConcatMode, EntryStoreCreator, EntryTrait, Void};
+use jbk::creator::OutStream;
 
 const VENDOR_ID: u32 = 0x41_52_58_00;
 
-pub struct ContentAdder {
-    content_pack: jbk::creator::CachedContentPackCreator,
+pub struct ContentAdder<O: OutStream + 'static> {
+    content_pack: jbk::creator::CachedContentPackCreator<O>,
 }
 
-impl ContentAdder {
-    fn new(content_pack: jbk::creator::CachedContentPackCreator) -> Self {
+impl<O: OutStream> ContentAdder<O> {
+    fn new(content_pack: jbk::creator::CachedContentPackCreator<O>) -> Self {
         Self { content_pack }
     }
 
-    fn into_inner(self) -> jbk::creator::CachedContentPackCreator {
+    fn into_inner(self) -> jbk::creator::CachedContentPackCreator<O> {
         self.content_pack
     }
 }
 
-impl Adder for ContentAdder {
+impl<O: OutStream> Adder for ContentAdder<O> {
     fn add<R: jbk::creator::InputReader>(&mut self, reader: R) -> jbk::Result<jbk::ContentAddress> {
         let content_id = self.content_pack.add_content(reader)?;
         Ok(jbk::ContentAddress::new(1.into(), content_id))
@@ -29,7 +31,7 @@ impl Adder for ContentAdder {
 }
 
 pub struct SimpleCreator {
-    adder: ContentAdder,
+    adder: ContentAdder<std::fs::File>,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_creator: EntryStoreCreator,
     concat_mode: ConcatMode,
@@ -49,7 +51,7 @@ impl SimpleCreator {
 
         let (tmp_content_pack, tmp_path_content_pack) =
             tempfile::NamedTempFile::new_in(&out_dir)?.into_parts();
-        let content_pack = jbk::creator::ContentPackCreator::new_from_file_with_progress(
+        let content_pack = jbk::creator::ContentPackCreator::new_from_output_with_progress(
             tmp_content_pack,
             jbk::PackId::from(1),
             VENDOR_ID,
@@ -87,7 +89,8 @@ impl SimpleCreator {
             _ => Some(jbk::creator::ContainerPackCreator::new(outfile)?),
         };
 
-        let mut tmpfile = tempfile::NamedTempFile::new_in(&self.out_dir)?;
+        let tmpfile = tempfile::NamedTempFile::new_in(&self.out_dir)?;
+        let (mut tmpfile, tmpname) = tmpfile.into_parts();
         let directory_pack_info = self.directory_pack.finalize(&mut tmpfile)?;
 
         let directory_locator = match self.concat_mode {
@@ -98,29 +101,30 @@ impl SimpleCreator {
                 directory_pack_path.push(outfile);
                 directory_pack_path.set_file_name(&outfilename);
 
-                if let Err(e) = tmpfile.persist(directory_pack_path) {
+                if let Err(e) = tmpname.persist(directory_pack_path) {
                     return Err(e.error.into());
                 };
                 outfilename.into_vec()
             }
             _ => {
-                let (file, _path) = tmpfile.into_parts();
+                tmpfile.rewind()?;
                 container
                     .as_mut()
                     .unwrap()
-                    .add_pack(directory_pack_info.uuid, jbk::FileSource::new(file)?.into())?;
+                    .add_pack(directory_pack_info.uuid, &mut tmpfile)?;
                 vec![]
             }
         };
 
-        let (content_pack_file, content_pack_info) =
+        let (mut content_pack_file, content_pack_info) =
             self.adder.into_inner().into_inner().finalize()?;
         let content_locator = match self.concat_mode {
             ConcatMode::OneFile => {
-                container.as_mut().unwrap().add_pack(
-                    content_pack_info.uuid,
-                    jbk::FileSource::new(content_pack_file)?.into(),
-                )?;
+                content_pack_file.rewind()?;
+                container
+                    .as_mut()
+                    .unwrap()
+                    .add_pack(content_pack_info.uuid, &mut content_pack_file)?;
                 vec![]
             }
             _ => {
@@ -143,21 +147,22 @@ impl SimpleCreator {
         manifest_creator.add_pack(directory_pack_info, directory_locator);
         manifest_creator.add_pack(content_pack_info, content_locator);
 
-        let mut tmpfile = tempfile::NamedTempFile::new_in(self.out_dir)?;
+        let tmpfile = tempfile::NamedTempFile::new_in(self.out_dir)?;
+        let (mut tmpfile, tmpname) = tmpfile.into_parts();
         let manifest_uuid = manifest_creator.finalize(&mut tmpfile)?;
 
         match self.concat_mode {
             ConcatMode::NoConcat => {
-                if let Err(e) = tmpfile.persist(outfile) {
+                if let Err(e) = tmpname.persist(outfile) {
                     return Err(e.error.into());
                 };
             }
             _ => {
-                let (file, _path) = tmpfile.into_parts();
+                tmpfile.rewind()?;
                 container
                     .as_mut()
                     .unwrap()
-                    .add_pack(manifest_uuid, jbk::FileSource::new(file)?.into())?;
+                    .add_pack(manifest_uuid, &mut tmpfile)?;
                 container.unwrap().finalize()?;
             }
         };
@@ -165,7 +170,7 @@ impl SimpleCreator {
         Ok(())
     }
 
-    pub fn adder(&mut self) -> &mut ContentAdder {
+    pub fn adder(&mut self) -> &mut ContentAdder<std::fs::File> {
         &mut self.adder
     }
 
