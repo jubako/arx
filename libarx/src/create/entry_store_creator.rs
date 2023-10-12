@@ -129,12 +129,12 @@ impl DirEntry {
             ),
             (
                 Property::Parent,
-                jbk::Value::Unsigned(self.as_parent_idx_generator().into()),
+                jbk::Value::UnsignedWord(self.as_parent_idx_generator().into()),
             ),
-            (Property::Owner, jbk::Value::Unsigned(entry.uid().into())),
-            (Property::Group, jbk::Value::Unsigned(entry.gid().into())),
-            (Property::Rights, jbk::Value::Unsigned(entry.mode().into())),
-            (Property::Mtime, jbk::Value::Unsigned(entry.mtime().into())),
+            (Property::Owner, jbk::Value::Unsigned(entry.uid())),
+            (Property::Group, jbk::Value::Unsigned(entry.gid())),
+            (Property::Rights, jbk::Value::Unsigned(entry.mode())),
+            (Property::Mtime, jbk::Value::Unsigned(entry.mtime())),
         ]);
 
         match entry_kind {
@@ -153,11 +153,11 @@ impl DirEntry {
                 {
                     values.insert(
                         Property::FirstChild,
-                        jbk::Value::Unsigned(dir_entry.first_entry_generator().into()),
+                        jbk::Value::UnsignedWord(dir_entry.first_entry_generator().into()),
                     );
                     values.insert(
                         Property::NbChildren,
-                        jbk::Value::Unsigned(dir_entry.entry_count_generator().into()),
+                        jbk::Value::UnsignedWord(dir_entry.entry_count_generator().into()),
                     );
                     let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
                         &entry_store.schema,
@@ -177,7 +177,7 @@ impl DirEntry {
             }
             EntryKind::File(size, content_address) => {
                 values.insert(Property::Content, jbk::Value::Content(content_address));
-                values.insert(Property::Size, jbk::Value::Unsigned(size.into_u64().into()));
+                values.insert(Property::Size, jbk::Value::Unsigned(size.into_u64()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::File),
