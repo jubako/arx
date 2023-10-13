@@ -15,6 +15,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
+const BLOCK_SIZE: u32 = 512;
 
 pub trait Stats {
     fn lookup(&mut self) {}
@@ -293,11 +294,16 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
             }
         };
         let rigths = (self.rights_property.create(&reader)? as u16) & 0b1111_1111_0110_1101;
+        // Make kernel sync we allocate by block of 4KB.
+        let allocated_size = match &kind {
+            EntryType::Dir => 0,
+            _ => size.div_ceil(4 * 1024) * 4 * 1024,
+        };
         Ok(fuser::FileAttr {
             ino: Ino::from(idx).get(),
             size,
             kind: kind.into(),
-            blocks: 1,
+            blocks: allocated_size.div_ceil(BLOCK_SIZE as u64),
             atime: std::time::UNIX_EPOCH,
             mtime: std::time::UNIX_EPOCH
                 + std::time::Duration::from_secs(self.mtime_property.create(&reader)?),
@@ -308,7 +314,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
             uid: self.owner_property.create(&reader)? as u32,
             gid: self.group_property.create(&reader)? as u32,
             rdev: 0,
-            blksize: 0,
+            blksize: BLOCK_SIZE,
             flags: 0,
         })
     }
