@@ -389,11 +389,17 @@ impl<'a, S: Stats> ArxFs<'a, S> {
         }
     }
 
-    pub fn mount<P: AsRef<Path>>(self, mount_point: P) -> jbk::Result<()> {
-        let options = vec![
+    fn mount_options(&self, name: String) -> Vec<fuser::MountOption> {
+        vec![
             fuser::MountOption::RO,
-            fuser::MountOption::FSName("arx".into()),
-        ];
+            fuser::MountOption::FSName(name),
+            fuser::MountOption::Subtype("arx".into()),
+            fuser::MountOption::DefaultPermissions,
+        ]
+    }
+
+    pub fn mount<P: AsRef<Path>>(self, name: String, mount_point: P) -> jbk::Result<()> {
+        let options = self.mount_options(name);
         fuser::mount2(self, &mount_point, &options)?;
         Ok(())
     }
@@ -402,12 +408,10 @@ impl<'a, S: Stats> ArxFs<'a, S> {
 impl<S: Stats + Send> ArxFs<'static, S> {
     pub fn spawn_mount<P: AsRef<Path>>(
         self,
+        name: String,
         mount_point: P,
     ) -> jbk::Result<fuser::BackgroundSession> {
-        let options = vec![
-            fuser::MountOption::RO,
-            fuser::MountOption::FSName("arx".into()),
-        ];
+        let options = self.mount_options(name);
         Ok(fuser::spawn_mount2(self, &mount_point, &options)?)
     }
 }
