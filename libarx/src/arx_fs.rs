@@ -310,7 +310,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
             ctime: std::time::UNIX_EPOCH,
             crtime: std::time::UNIX_EPOCH,
             perm: rigths,
-            nlink: 2,
+            nlink: 1,
             uid: self.owner_property.create(&reader)? as u32,
             gid: self.group_property.create(&reader)? as u32,
             rdev: 0,
