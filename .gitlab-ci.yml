@@ -9,7 +9,9 @@ stages:
 
 fmt:
   stage: check
-  script: cargo fmt --check
+  script:
+   - rustup component add rustfmt
+   - cargo fmt --check
 
 build:
   stage: build
