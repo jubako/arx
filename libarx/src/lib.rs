@@ -1,4 +1,4 @@
-#![feature(get_mut_unchecked)]
+//#![feature(get_mut_unchecked)]
 
 mod arx;
 mod arx_fs;

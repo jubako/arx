@@ -271,6 +271,14 @@ impl AttrBuilder {
     }
 }
 
+fn div_ceil(value: u64, rhs: u64) -> u64 {
+    let mut ret = value / rhs;
+    if (value % rhs) != 0 {
+        ret += 1;
+    }
+    ret
+}
+
 impl jbk::reader::builder::BuilderTrait for AttrBuilder {
     type Entry = fuser::FileAttr;
 
@@ -297,13 +305,13 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
         // Make kernel sync we allocate by block of 4KB.
         let allocated_size = match &kind {
             EntryType::Dir => 0,
-            _ => size.div_ceil(4 * 1024) * 4 * 1024,
+            _ => div_ceil(size, 4 * 1024) * (4 * 1024),
         };
         Ok(fuser::FileAttr {
             ino: Ino::from(idx).get(),
             size,
             kind: kind.into(),
-            blocks: allocated_size.div_ceil(BLOCK_SIZE as u64),
+            blocks: div_ceil(allocated_size, BLOCK_SIZE as u64),
             atime: std::time::UNIX_EPOCH,
             mtime: std::time::UNIX_EPOCH
                 + std::time::Duration::from_secs(self.mtime_property.create(&reader)?),
