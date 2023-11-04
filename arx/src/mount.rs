@@ -107,13 +107,9 @@ pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
     let arx = arx::Arx::new(&options.infile)?;
     let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
 
-
     let mut abs_path = std::env::current_dir().unwrap();
     abs_path = abs_path.join(options.infile);
-    arxfs.mount(
-        abs_path.to_str().unwrap().to_string(),
-        &options.mountdir,
-    )?;
+    arxfs.mount(abs_path.to_str().unwrap().to_string(), &options.mountdir)?;
 
     println!("Stats:\n {stats}");
     Ok(())
