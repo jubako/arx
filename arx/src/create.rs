@@ -27,8 +27,21 @@ pub struct Options {
     #[clap(short, long, required = false, default_value_t = false, action)]
     recurse: bool,
 
-    #[clap(short = '1', long, required = false, default_value_t = false, action)]
+    #[command(flatten)]
+    concat_mode: Option<ConcatMode>,
+}
+
+#[derive(clap::Args)]
+#[group(required = false, multiple = false)]
+struct ConcatMode {
+    #[arg(short = '1', long, required = false, default_value_t = false, action)]
     one_file: bool,
+
+    #[arg(short = '2', long, required = false, default_value_t = false, action)]
+    two_files: bool,
+
+    #[arg(short = 'N', long, required = false, default_value_t = false, action)]
+    multiple_files: bool,
 }
 
 fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
@@ -118,10 +131,17 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
 
     let out_file = std::env::current_dir()?.join(&options.outfile);
 
-    let concat_mode = if options.one_file {
-        arx::create::ConcatMode::OneFile
-    } else {
-        arx::create::ConcatMode::TwoFiles
+    let concat_mode = match &options.concat_mode {
+        None => arx::create::ConcatMode::OneFile,
+        Some(opt) => {
+            let (one, two, multiple) = (opt.one_file, opt.two_files, opt.multiple_files);
+            match (one, two, multiple) {
+                (true, _, _) => arx::create::ConcatMode::OneFile,
+                (_, true, _) => arx::create::ConcatMode::TwoFiles,
+                (_, _, true) => arx::create::ConcatMode::NoConcat,
+                _ => unreachable!(),
+            }
+        }
     };
 
     let jbk_progress = Arc::new(ProgressBar::new());
