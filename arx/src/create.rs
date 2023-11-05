@@ -8,23 +8,23 @@ use std::sync::Arc;
 #[derive(clap::Args)]
 pub struct Options {
     // Archive name to create
-    #[clap(short = 'f', long = "file", value_parser)]
+    #[arg(short = 'f', long = "file", value_parser)]
     outfile: PathBuf,
 
-    #[clap(long, required = false)]
+    #[arg(long, required = false)]
     strip_prefix: Option<PathBuf>,
 
-    #[clap(short = 'C', required = false)]
+    #[arg(short = 'C', required = false)]
     base_dir: Option<PathBuf>,
 
     // Input
-    #[clap(value_parser)]
+    #[arg(value_parser, group = "input")]
     infiles: Vec<PathBuf>,
 
-    #[clap(short = 'L', long = "file-list")]
+    #[arg(short = 'L', long = "file-list", group = "input")]
     file_list: Option<PathBuf>,
 
-    #[clap(short, long, required = false, default_value_t = false, action)]
+    #[arg(short, long, required = false, default_value_t = false, action)]
     recurse: bool,
 
     #[command(flatten)]
