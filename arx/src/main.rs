@@ -5,7 +5,9 @@ mod light_path;
 mod list;
 mod mount;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[clap(name = "arx")]
@@ -46,15 +48,25 @@ fn configure_log() {
         .init();
 }
 
-fn main() -> jbk::Result<()> {
+fn run() -> Result<()> {
     configure_log();
     let args = Cli::parse();
 
     match args.command {
         Commands::Create(options) => create::create(options, args.verbose),
-        Commands::List(options) => list::list(options, args.verbose),
-        Commands::Dump(options) => dump::dump(options, args.verbose),
-        Commands::Extract(options) => extract::extract(options, args.verbose),
-        Commands::Mount(options) => mount::mount(options, args.verbose),
+        Commands::List(options) => Ok(list::list(options, args.verbose)?),
+        Commands::Dump(options) => Ok(dump::dump(options, args.verbose)?),
+        Commands::Extract(options) => Ok(extract::extract(options, args.verbose)?),
+        Commands::Mount(options) => Ok(mount::mount(options, args.verbose)?),
+    }
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("Error : {e:#}");
+            ExitCode::FAILURE
+        }
     }
 }

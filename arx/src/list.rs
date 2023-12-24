@@ -5,6 +5,8 @@ use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 
+use anyhow::{anyhow, Context, Result};
+
 type Path = Vec<u8>;
 
 struct PathBuilder {
@@ -108,21 +110,22 @@ pub struct Options {
     stable_output: Option<u8>,
 }
 
-pub fn list(options: Options, verbose_level: u8) -> jbk::Result<()> {
+pub fn list(options: Options, verbose_level: u8) -> Result<()> {
     if verbose_level > 0 {
         println!("Listing entries in archive {:?}", options.infile);
     }
-    let arx = arx::Arx::new(options.infile)?;
+    let arx =
+        arx::Arx::new(&options.infile).with_context(|| format!("Opening {:?}", options.infile))?;
     if let Some(version) = options.stable_output {
         match version {
             1 => {
                 let mut walker = arx::walk::Walker::new(&arx, Default::default());
-                walker.run(&StableLister {})
+                Ok(walker.run(&StableLister {})?)
             }
-            _ => Err(format!("Stable version {version} not supported").into()),
+            _ => Err(anyhow!("Stable version {version} not supported")),
         }
     } else {
         let mut walker = arx::walk::Walker::new(&arx, Default::default());
-        walker.run(&Lister {})
+        Ok(walker.run(&Lister {})?)
     }
 }

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -44,9 +45,9 @@ struct ConcatMode {
     multiple_files: bool,
 }
 
-fn get_files_to_add(options: &Options) -> jbk::Result<Vec<PathBuf>> {
+fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
     if let Some(file_list) = &options.file_list {
-        let file = File::open(file_list)?;
+        let file = File::open(file_list).with_context(|| format!("Cannot open {:?}", file_list))?;
         let mut files = Vec::new();
         for line in BufReader::new(file).lines() {
             files.push(line?.into());
@@ -118,7 +119,7 @@ impl CachedSize {
     }
 }
 
-pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
+pub fn create(options: Options, verbose_level: u8) -> Result<()> {
     if verbose_level > 0 {
         println!("Creating archive {:?}", options.outfile);
         println!("With files {:?}", options.infiles);
@@ -166,5 +167,5 @@ pub fn create(options: Options, verbose_level: u8) -> jbk::Result<()> {
 
     let ret = creator.finalize(&out_file);
     println!("Saved place is {}", progress.0.get());
-    ret
+    Ok(ret?)
 }
