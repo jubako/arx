@@ -182,8 +182,13 @@ impl<R: Read> Converter<R> {
         concat_mode: arx::create::ConcatMode,
     ) -> jbk::Result<Self> {
         let progress = Arc::new(ProgressBar::new()?);
-        let arx_creator =
-            arx::create::SimpleCreator::new(outfile, concat_mode, progress, Rc::new(()))?;
+        let arx_creator = arx::create::SimpleCreator::new(
+            outfile,
+            concat_mode,
+            progress,
+            Rc::new(()),
+            jbk::creator::Compression::zstd(),
+        )?;
 
         Ok(Self {
             arx_creator,

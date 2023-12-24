@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::cell::Cell;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -30,7 +31,60 @@ pub struct Options {
 
     #[command(flatten)]
     concat_mode: Option<ConcatMode>,
+
+    #[arg(short,long, value_parser=compression_arg_parser, required=false, default_value = "zstd")]
+    compression: jbk::creator::Compression,
 }
+
+fn compression_arg_parser(s: &str) -> Result<jbk::creator::Compression, InvalidCompression> {
+    let mut iter = s.splitn(2, '=');
+    let compression = iter.next().unwrap().to_ascii_lowercase();
+    let level = iter.next();
+    Ok(match compression.as_str() {
+        "none" => jbk::creator::Compression::None,
+        #[cfg(feature = "lz4")]
+        "lz4" => match level {
+            None => jbk::creator::Compression::lz4(),
+            Some(l) => jbk::creator::Compression::Lz4(match l.parse() {
+                Ok(l) => l,
+                Err(e) => return Err(InvalidCompression::Level(e.to_string())),
+            }),
+        },
+        #[cfg(feature = "lzma")]
+        "lzma" => match level {
+            None => jbk::creator::Compression::lzma(),
+            Some(l) => jbk::creator::Compression::Lzma(match l.parse() {
+                Ok(l) => l,
+                Err(e) => return Err(InvalidCompression::Level(e.to_string())),
+            }),
+        },
+        #[cfg(feature = "zstd")]
+        "zstd" => match level {
+            None => jbk::creator::Compression::zstd(),
+            Some(l) => jbk::creator::Compression::Zstd(match l.parse() {
+                Ok(l) => l,
+                Err(e) => return Err(InvalidCompression::Level(e.to_string())),
+            }),
+        },
+        _ => return Err(InvalidCompression::Algorithm(compression)),
+    })
+}
+
+#[derive(Debug)]
+enum InvalidCompression {
+    Level(String),
+    Algorithm(String),
+}
+
+impl fmt::Display for InvalidCompression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Level(e) => write!(f, "Invalid compression level: {}", e),
+            Self::Algorithm(e) => write!(f, "Invalid compression algorithm: {}", e),
+        }
+    }
+}
+impl std::error::Error for InvalidCompression {}
 
 #[derive(clap::Args)]
 #[group(required = false, multiple = false)]
@@ -152,6 +206,7 @@ pub fn create(options: Options, verbose_level: u8) -> Result<()> {
         concat_mode,
         jbk_progress,
         Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
+        options.compression,
     )?;
 
     let files_to_add = get_files_to_add(&options)?;

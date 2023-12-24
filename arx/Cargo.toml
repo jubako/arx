@@ -23,4 +23,8 @@ arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
 tempfile = "3.8.0"
 
 [features]
+default = ["zstd"]
 in_ci = []
+lz4 = ["jbk/lz4"]
+zstd = ["jbk/zstd"]
+lzma = ["jbk/lzma"]

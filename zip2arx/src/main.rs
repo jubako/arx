@@ -197,6 +197,7 @@ impl<R: Read + Seek> Converter<R> {
             concat_mode,
             Arc::clone(&progress) as Arc<dyn jbk::creator::Progress>,
             Rc::new(()),
+            jbk::creator::Compression::zstd(),
         )?;
 
         Ok(Self {

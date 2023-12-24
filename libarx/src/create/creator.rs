@@ -43,6 +43,7 @@ impl SimpleCreator {
         concat_mode: ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
+        compression: jbk::creator::Compression,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap().to_path_buf();
@@ -54,7 +55,7 @@ impl SimpleCreator {
             jbk::PackId::from(1),
             crate::VENDOR_ID,
             Default::default(),
-            jbk::creator::Compression::zstd(),
+            compression,
             progress,
         )?;
 
