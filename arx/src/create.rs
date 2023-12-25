@@ -10,8 +10,13 @@ use std::sync::Arc;
 #[derive(clap::Args)]
 pub struct Options {
     // Archive name to create
-    #[arg(short = 'f', long = "file", value_parser)]
-    outfile: PathBuf,
+    #[arg(
+        short = 'f',
+        long = "file",
+        value_parser,
+        required_unless_present("list_compressions")
+    )]
+    outfile: Option<PathBuf>,
 
     #[arg(long, required = false)]
     strip_prefix: Option<PathBuf>,
@@ -34,6 +39,20 @@ pub struct Options {
 
     #[arg(short,long, value_parser=compression_arg_parser, required=false, default_value = "zstd")]
     compression: jbk::creator::Compression,
+
+    #[arg(long, default_value_t = false, action)]
+    list_compressions: bool,
+}
+
+fn list_compressions() {
+    println!("Available compressions :");
+    println!(" - None");
+    #[cfg(feature = "lz4")]
+    println!(" - lz4 (level 0->15)");
+    #[cfg(feature = "lzma")]
+    println!(" - lzma (level 0->9)");
+    #[cfg(feature = "zstd")]
+    println!(" - zstd (level -22->22)")
 }
 
 fn compression_arg_parser(s: &str) -> Result<jbk::creator::Compression, InvalidCompression> {
@@ -174,6 +193,11 @@ impl CachedSize {
 }
 
 pub fn create(options: Options, verbose_level: u8) -> Result<()> {
+    if options.list_compressions {
+        list_compressions();
+        return Ok(());
+    }
+
     if verbose_level > 0 {
         println!("Creating archive {:?}", options.outfile);
         println!("With files {:?}", options.infiles);
@@ -184,7 +208,7 @@ pub fn create(options: Options, verbose_level: u8) -> Result<()> {
         None => PathBuf::new(),
     };
 
-    let out_file = std::env::current_dir()?.join(&options.outfile);
+    let out_file = std::env::current_dir()?.join(options.outfile.as_ref().unwrap());
 
     let concat_mode = match &options.concat_mode {
         None => arx::create::ConcatMode::OneFile,
