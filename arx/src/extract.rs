@@ -16,7 +16,7 @@ pub struct Options {
     outdir: Option<PathBuf>,
 
     /// Files to extract
-    #[clap(value_parser)]
+    #[clap(value_parser, group = "input")]
     extract_files: Vec<PathBuf>,
 
     /// Print a progress bar of the extraction
@@ -24,7 +24,7 @@ pub struct Options {
     progress: bool,
 
     /// Get the list of files/directories to extract from the FILE_LIST (incompatible with EXTRACT_FILES)
-    #[clap(short = 'L', long = "file-list")]
+    #[clap(short = 'L', long = "file-list", group = "input")]
     file_list: Option<PathBuf>,
 }
 
