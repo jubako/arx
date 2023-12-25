@@ -4,20 +4,26 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+/// Extract the content of an archive
 #[derive(clap::Args)]
 pub struct Options {
+    /// Archive to read
     #[clap(short = 'f', long = "file")]
     infile: PathBuf,
 
+    /// Directory in which extract the archive. (Default to current directory)
     #[clap(short = 'C', required = false)]
     outdir: Option<PathBuf>,
 
+    /// Files to extract
     #[clap(value_parser)]
     extract_files: Vec<PathBuf>,
 
+    /// Print a progress bar of the extraction
     #[clap(short = 'p', long = "progress", default_value_t = false, action)]
     progress: bool,
 
+    /// Get the list of files/directories to extract from the FILE_LIST (incompatible with EXTRACT_FILES)
     #[clap(short = 'L', long = "file-list")]
     file_list: Option<PathBuf>,
 }

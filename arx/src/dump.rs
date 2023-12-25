@@ -36,11 +36,14 @@ fn dump_entry(
     }
 }
 
+/// Print the content of an entry in the archive.
 #[derive(clap::Args)]
 pub struct Options {
+    /// Archive to read
     #[clap(value_parser)]
     infile: PathBuf,
 
+    /// Path of the entry to print
     #[clap(value_parser)]
     path: String,
 }

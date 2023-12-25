@@ -7,9 +7,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+/// Create an archive.
 #[derive(clap::Args)]
 pub struct Options {
-    // Archive name to create
+    /// Archive name to create
     #[arg(
         short = 'f',
         long = "file",
@@ -18,19 +19,23 @@ pub struct Options {
     )]
     outfile: Option<PathBuf>,
 
+    /// Remove STRIP_PREFIX from the entries' name added to the archive.
     #[arg(long, required = false)]
     strip_prefix: Option<PathBuf>,
 
+    /// Move to BASE_DIR before starting adding content to arx archive.
     #[arg(short = 'C', required = false)]
     base_dir: Option<PathBuf>,
 
-    // Input
+    /// Input files/directories
     #[arg(value_parser, group = "input")]
     infiles: Vec<PathBuf>,
 
+    /// Get the list of files/directories to add from the FILE_LIST (incompatible with INFILES)
     #[arg(short = 'L', long = "file-list", group = "input")]
     file_list: Option<PathBuf>,
 
+    /// Recurse in directories
     #[arg(short, long, required = false, default_value_t = false, action)]
     recurse: bool,
 
@@ -40,6 +45,7 @@ pub struct Options {
     #[arg(short,long, value_parser=compression_arg_parser, required=false, default_value = "zstd")]
     compression: jbk::creator::Compression,
 
+    /// List available compression algorithms
     #[arg(long, default_value_t = false, action)]
     list_compressions: bool,
 }
@@ -109,12 +115,15 @@ impl std::error::Error for InvalidCompression {}
 #[group(required = false, multiple = false)]
 struct ConcatMode {
     #[arg(short = '1', long, required = false, default_value_t = false, action)]
+    /// Create only one file
     one_file: bool,
 
     #[arg(short = '2', long, required = false, default_value_t = false, action)]
+    /// Create two files (a content pack and other)
     two_files: bool,
 
     #[arg(short = 'N', long, required = false, default_value_t = false, action)]
+    /// Create mulitples files (one per pack)
     multiple_files: bool,
 }
 

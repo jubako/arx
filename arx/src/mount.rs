@@ -87,11 +87,14 @@ impl std::fmt::Display for StatCounter {
     }
 }
 
+/// Mount an archive in a directory.
 #[derive(clap::Args)]
 pub struct Options {
+    /// Archive to read
     #[clap(value_parser)]
     infile: PathBuf,
 
+    /// Target directory
     #[clap(value_parser)]
     mountdir: PathBuf,
 }

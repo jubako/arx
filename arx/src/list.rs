@@ -101,11 +101,14 @@ impl arx::walk::Operator<PathBuf, arx::FullBuilder> for StableLister {
     }
 }
 
+/// List the content in an archive.
 #[derive(clap::Args)]
 pub struct Options {
+    /// Archive to read
     #[clap(value_parser)]
     infile: PathBuf,
 
+    /// Use stable output (for scripting)
     #[clap(long = "stable-output", action)]
     stable_output: Option<u8>,
 }
