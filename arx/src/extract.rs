@@ -8,23 +8,23 @@ use std::path::PathBuf;
 #[derive(clap::Args)]
 pub struct Options {
     /// Archive to read
-    #[clap(short = 'f', long = "file")]
+    #[arg(short = 'f', long = "file")]
     infile: PathBuf,
 
     /// Directory in which extract the archive. (Default to current directory)
-    #[clap(short = 'C', required = false)]
+    #[arg(short = 'C', required = false)]
     outdir: Option<PathBuf>,
 
     /// Files to extract
-    #[clap(value_parser, group = "input")]
+    #[arg(value_parser, group = "input")]
     extract_files: Vec<PathBuf>,
 
     /// Print a progress bar of the extraction
-    #[clap(short = 'p', long = "progress", default_value_t = false, action)]
+    #[arg(short = 'p', long = "progress", default_value_t = false, action)]
     progress: bool,
 
     /// Get the list of files/directories to extract from the FILE_LIST (incompatible with EXTRACT_FILES)
-    #[clap(short = 'L', long = "file-list", group = "input")]
+    #[arg(short = 'L', long = "file-list", group = "input")]
     file_list: Option<PathBuf>,
 }
 

@@ -4,13 +4,12 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[clap(name = "arx")]
-#[clap(author, version, about, long_about=None)]
+#[command(name = "arx", author, version, about, long_about=None)]
 struct Cli {
-    #[clap(short, long, action=clap::ArgAction::Count)]
+    #[arg(short, long, action=clap::ArgAction::Count)]
     verbose: u8,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     mountdir: PathBuf,
 }
 

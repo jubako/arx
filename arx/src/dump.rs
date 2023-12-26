@@ -40,11 +40,11 @@ fn dump_entry(
 #[derive(clap::Args)]
 pub struct Options {
     /// Archive to read
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     infile: PathBuf,
 
     /// Path of the entry to print
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     path: String,
 }
 

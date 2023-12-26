@@ -7,11 +7,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Parser)]
-#[clap(name = "tar2arx")]
-#[clap(author, version, about, long_about=None)]
+#[command(name = "tar2arx", author, version, about, long_about=None)]
 struct Cli {
     // Archive name to create
-    #[clap(short, long, value_parser)]
+    #[arg(short, long, value_parser)]
     outfile: PathBuf,
 }
 

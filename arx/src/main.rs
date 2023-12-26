@@ -6,35 +6,34 @@ mod list;
 mod mount;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[clap(name = "arx")]
-#[clap(author, version, about, long_about=None)]
+#[command(name = "arx", author, version, about, long_about=None)]
 struct Cli {
-    #[clap(short, long, action=clap::ArgAction::Count)]
+    #[arg(short, long, action=clap::ArgAction::Count)]
     verbose: u8,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(clap::Subcommand)]
 enum Commands {
-    #[clap(arg_required_else_help = true)]
+    #[command(arg_required_else_help = true)]
     Create(create::Options),
 
-    #[clap(arg_required_else_help = true)]
+    #[command(arg_required_else_help = true)]
     List(list::Options),
 
-    #[clap(arg_required_else_help = true)]
+    #[command(arg_required_else_help = true)]
     Dump(dump::Options),
 
-    #[clap(arg_required_else_help = true)]
+    #[command(arg_required_else_help = true)]
     Extract(extract::Options),
 
-    #[clap(arg_required_else_help = true)]
+    #[command(arg_required_else_help = true)]
     Mount(mount::Options),
 }
 

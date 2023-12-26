@@ -91,11 +91,11 @@ impl std::fmt::Display for StatCounter {
 #[derive(clap::Args)]
 pub struct Options {
     /// Archive to read
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     infile: PathBuf,
 
     /// Target directory
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     mountdir: PathBuf,
 }
 
