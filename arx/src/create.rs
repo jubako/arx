@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Create an archive.
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct Options {
     /// Archive name to create
     #[arg(
@@ -111,7 +111,7 @@ impl fmt::Display for InvalidCompression {
 }
 impl std::error::Error for InvalidCompression {}
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 #[group(required = false, multiple = false)]
 struct ConcatMode {
     #[arg(short = '1', long, required = false, default_value_t = false, action)]

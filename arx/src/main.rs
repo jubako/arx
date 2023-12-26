@@ -9,7 +9,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::process::ExitCode;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "arx", author, version, about, long_about=None)]
 struct Cli {
     #[arg(short, long, action=clap::ArgAction::Count)]
@@ -19,7 +19,7 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(clap::Subcommand, Debug)]
 enum Commands {
     #[command(arg_required_else_help = true)]
     Create(create::Options),

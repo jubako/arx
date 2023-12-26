@@ -37,7 +37,7 @@ fn dump_entry(
 }
 
 /// Print the content of an entry in the archive.
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser)]

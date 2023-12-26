@@ -102,7 +102,7 @@ impl arx::walk::Operator<PathBuf, arx::FullBuilder> for StableLister {
 }
 
 /// List the content in an archive.
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser)]

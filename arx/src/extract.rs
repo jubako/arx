@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 /// Extract the content of an archive
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct Options {
     /// Archive to read
     #[arg(short = 'f', long = "file")]
