@@ -7,6 +7,7 @@ mod mount;
 
 use anyhow::Result;
 use clap::Parser;
+use log::error;
 use std::process::ExitCode;
 
 #[derive(Parser, Debug)]
@@ -38,19 +39,28 @@ enum Commands {
     Mount(mount::Options),
 }
 
-fn configure_log() {
+fn configure_log(verbose: u8) {
     let env = env_logger::Env::default()
         .filter("ARX_LOG")
         .write_style("ARX_LOG_STYLE");
     env_logger::Builder::from_env(env)
+        .filter_module(
+            "arx",
+            match verbose {
+                0 => log::LevelFilter::Warn,
+                1 => log::LevelFilter::Info,
+                2 => log::LevelFilter::Debug,
+                _ => log::LevelFilter::Trace,
+            },
+        )
         .format_module_path(false)
         .format_timestamp(None)
         .init();
 }
 
 fn run() -> Result<()> {
-    configure_log();
     let args = Cli::parse();
+    configure_log(args.verbose);
 
     match args.command {
         Commands::Create(options) => create::create(options),
@@ -65,7 +75,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("Error : {e:#}");
+            error!("Error : {e:#}");
             ExitCode::FAILURE
         }
     }

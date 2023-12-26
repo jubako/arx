@@ -1,3 +1,4 @@
+use log::info;
 use std::collections::HashSet;
 use std::env::current_dir;
 use std::fs::File;
@@ -50,8 +51,6 @@ pub fn extract(options: Options) -> jbk::Result<()> {
         Some(o) => o,
         None => current_dir()?,
     };
-    if options.verbose > 0 {
-        println!("Extract archive {:?} in {:?}", &options.infile, outdir);
-    }
+    info!("Extract archive {:?} in {:?}", &options.infile, outdir);
     arx::extract(&options.infile, &outdir, files_to_extract, options.progress)
 }

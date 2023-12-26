@@ -1,3 +1,4 @@
+use log::info;
 use std::path::PathBuf;
 
 pub struct StatCounter {
@@ -103,12 +104,10 @@ pub struct Options {
 }
 
 pub fn mount(options: Options) -> jbk::Result<()> {
-    if options.verbose > 0 {
-        println!(
-            "Mount archive {:?} in {:?}",
-            options.infile, options.mountdir
-        );
-    }
+    info!(
+        "Mount archive {:?} in {:?}",
+        options.infile, options.mountdir
+    );
     let mut stats = StatCounter::new();
     let arx = arx::Arx::new(&options.infile)?;
     let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
@@ -117,6 +116,6 @@ pub fn mount(options: Options) -> jbk::Result<()> {
     abs_path = abs_path.join(options.infile);
     arxfs.mount(abs_path.to_str().unwrap().to_string(), &options.mountdir)?;
 
-    println!("Stats:\n {stats}");
+    info!("Stats:\n {stats}");
     Ok(())
 }

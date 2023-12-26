@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::{debug, info};
 use std::cell::Cell;
 use std::fmt;
 use std::fs::File;
@@ -210,10 +211,8 @@ pub fn create(options: Options) -> Result<()> {
         return Ok(());
     }
 
-    if options.verbose > 0 {
-        println!("Creating archive {:?}", options.outfile);
-        println!("With files {:?}", options.infiles);
-    }
+    info!("Creating archive {:?}", options.outfile);
+    info!("With files {:?}", options.infiles);
 
     let strip_prefix = match &options.strip_prefix {
         Some(s) => s.clone(),
@@ -257,6 +256,6 @@ pub fn create(options: Options) -> Result<()> {
     }
 
     let ret = creator.finalize(&out_file);
-    println!("Saved place is {}", progress.0.get());
+    debug!("Saved place is {}", progress.0.get());
     Ok(ret?)
 }

@@ -1,6 +1,7 @@
 use crate::light_path::LightPath;
 use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
+use log::info;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
@@ -117,9 +118,7 @@ pub struct Options {
 }
 
 pub fn list(options: Options) -> Result<()> {
-    if options.verbose > 0 {
-        println!("Listing entries in archive {:?}", options.infile);
-    }
+    info!("Listing entries in archive {:?}", options.infile);
     let arx =
         arx::Arx::new(&options.infile).with_context(|| format!("Opening {:?}", options.infile))?;
     if let Some(version) = options.stable_output {

@@ -17,6 +17,7 @@ clap.workspace = true
 indicatif.workspace = true
 env_logger = "0.10.0"
 anyhow = "1.0.75"
+log = "0.4.20"
 
 [dev-dependencies]
 arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
