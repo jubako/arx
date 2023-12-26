@@ -46,10 +46,13 @@ pub struct Options {
     /// Path of the entry to print
     #[arg(value_parser)]
     path: String,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn dump(options: Options, verbose_level: u8) -> jbk::Result<()> {
-    if verbose_level > 0 {
+pub fn dump(options: Options) -> jbk::Result<()> {
+    if options.verbose > 0 {
         println!(
             "Dump entry {} in archive {:?}",
             options.path, options.infile

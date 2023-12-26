@@ -97,10 +97,13 @@ pub struct Options {
     /// Target directory
     #[arg(value_parser)]
     mountdir: PathBuf,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
-    if verbose_level > 0 {
+pub fn mount(options: Options) -> jbk::Result<()> {
+    if options.verbose > 0 {
         println!(
             "Mount archive {:?} in {:?}",
             options.infile, options.mountdir

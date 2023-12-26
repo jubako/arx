@@ -111,10 +111,13 @@ pub struct Options {
     /// Use stable output (for scripting)
     #[arg(long = "stable-output", action)]
     stable_output: Option<u8>,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn list(options: Options, verbose_level: u8) -> Result<()> {
-    if verbose_level > 0 {
+pub fn list(options: Options) -> Result<()> {
+    if options.verbose > 0 {
         println!("Listing entries in archive {:?}", options.infile);
     }
     let arx =

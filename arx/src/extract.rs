@@ -26,6 +26,9 @@ pub struct Options {
     /// Get the list of files/directories to extract from the FILE_LIST (incompatible with EXTRACT_FILES)
     #[arg(short = 'L', long = "file-list", group = "input")]
     file_list: Option<PathBuf>,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
 fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<PathBuf>> {
@@ -41,13 +44,13 @@ fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<PathBuf>> {
     }
 }
 
-pub fn extract(options: Options, verbose_level: u8) -> jbk::Result<()> {
+pub fn extract(options: Options) -> jbk::Result<()> {
     let files_to_extract = get_files_to_extract(&options)?;
     let outdir = match options.outdir {
         Some(o) => o,
         None => current_dir()?,
     };
-    if verbose_level > 0 {
+    if options.verbose > 0 {
         println!("Extract archive {:?} in {:?}", &options.infile, outdir);
     }
     arx::extract(&options.infile, &outdir, files_to_extract, options.progress)

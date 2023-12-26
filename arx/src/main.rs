@@ -12,7 +12,8 @@ use std::process::ExitCode;
 #[derive(Parser, Debug)]
 #[command(name = "arx", author, version, about, long_about=None)]
 struct Cli {
-    #[arg(short, long, action=clap::ArgAction::Count)]
+    /// Set verbose level. Can be specify several times to augment verbose level.
+    #[arg(short, long, action=clap::ArgAction::Count, global=true)]
     verbose: u8,
 
     #[command(subcommand)]
@@ -52,11 +53,11 @@ fn run() -> Result<()> {
     let args = Cli::parse();
 
     match args.command {
-        Commands::Create(options) => create::create(options, args.verbose),
-        Commands::List(options) => Ok(list::list(options, args.verbose)?),
-        Commands::Dump(options) => Ok(dump::dump(options, args.verbose)?),
-        Commands::Extract(options) => Ok(extract::extract(options, args.verbose)?),
-        Commands::Mount(options) => Ok(mount::mount(options, args.verbose)?),
+        Commands::Create(options) => create::create(options),
+        Commands::List(options) => Ok(list::list(options)?),
+        Commands::Dump(options) => Ok(dump::dump(options)?),
+        Commands::Extract(options) => Ok(extract::extract(options)?),
+        Commands::Mount(options) => Ok(mount::mount(options)?),
     }
 }
 

@@ -48,6 +48,9 @@ pub struct Options {
     /// List available compression algorithms
     #[arg(long, default_value_t = false, action)]
     list_compressions: bool,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
 fn list_compressions() {
@@ -201,13 +204,13 @@ impl CachedSize {
     }
 }
 
-pub fn create(options: Options, verbose_level: u8) -> Result<()> {
+pub fn create(options: Options) -> Result<()> {
     if options.list_compressions {
         list_compressions();
         return Ok(());
     }
 
-    if verbose_level > 0 {
+    if options.verbose > 0 {
         println!("Creating archive {:?}", options.outfile);
         println!("With files {:?}", options.infiles);
     }
