@@ -37,8 +37,25 @@ pub struct Options {
     file_list: Option<PathBuf>,
 
     /// Recurse in directories
-    #[arg(short, long, required = false, default_value_t = false, action)]
+    ///
+    /// Default value is true if `INFILES` is passed and false is `FILE_LIST` is passed.
+    #[arg(
+        short,
+        long,
+        required = false,
+        default_value_t = false,
+        default_value_ifs([
+            ("no_recurse", clap::builder::ArgPredicate::IsPresent, "false"),
+            ("infiles", clap::builder::ArgPredicate::IsPresent, "true")
+        ]),
+        conflicts_with = "no_recurse",
+        action
+    )]
     recurse: bool,
+
+    /// Force `--recurse` to be false.
+    #[arg(long)]
+    no_recurse: bool,
 
     #[command(flatten)]
     concat_mode: Option<ConcatMode>,
