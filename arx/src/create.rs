@@ -11,7 +11,10 @@ use std::sync::Arc;
 /// Create an archive.
 #[derive(clap::Args, Debug)]
 pub struct Options {
-    /// Archive name to create
+    /// File path of the archive to create.
+    ///
+    /// Relative path are relative to the current working dir.
+    /// `BASE_DIR` option is used after resolving relative path.
     #[arg(
         short = 'f',
         long = "file",
@@ -25,15 +28,28 @@ pub struct Options {
     strip_prefix: Option<PathBuf>,
 
     /// Move to BASE_DIR before starting adding content to arx archive.
+    ///
+    /// Argument `INFILES` or `STRIP_PREFIX` must be relative to `BASE_DIR`.
     #[arg(short = 'C', required = false)]
     base_dir: Option<PathBuf>,
 
     /// Input files/directories
+    ///
+    /// This is an option incompatible with `FILE_LIST.`
+    ///
+    /// In this mode `recurse` is true by default.
+    /// Use `--no-recurse` to avoid recursion.
     #[arg(value_parser, group = "input")]
     infiles: Vec<PathBuf>,
 
     /// Get the list of files/directories to add from the FILE_LIST (incompatible with INFILES)
-    #[arg(short = 'L', long = "file-list", group = "input")]
+    ///
+    /// This is an option incompatible with `INFILES`.
+    ///
+    /// In this mode, `recurse` is false by default.
+    /// This allow FILE_LIST listing both the directory and (subset of) files in the given directory.
+    /// Use `--recurse` to activate recursion.
+    #[arg(short = 'L', long = "file-list", group = "input", verbatim_doc_comment)]
     file_list: Option<PathBuf>,
 
     /// Recurse in directories
@@ -136,7 +152,7 @@ impl std::error::Error for InvalidCompression {}
 #[group(required = false, multiple = false)]
 struct ConcatMode {
     #[arg(short = '1', long, required = false, default_value_t = false, action)]
-    /// Create only one file
+    /// Create only one file (default)
     one_file: bool,
 
     #[arg(short = '2', long, required = false, default_value_t = false, action)]
