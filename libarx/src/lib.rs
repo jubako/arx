@@ -10,7 +10,7 @@ pub mod walk;
 
 pub use arx::Arx;
 pub use arx_fs::{ArxFs, Stats};
-pub use common::{AllProperties, Builder, Entry, FullBuilderTrait, Reader};
+pub use common::{AllProperties, Builder, Entry, FullBuilderTrait, Reader, VENDOR_ID};
 pub use entry::*;
 pub use tools::extract;
 pub use walk::*;
