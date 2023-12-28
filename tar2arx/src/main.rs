@@ -6,12 +6,31 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+/// Convert a tar archive into an Arx archive.
+///
+/// The tar content (uncompressed) must be passed to stdin.
 #[derive(Parser)]
 #[command(name = "tar2arx", author, version, about, long_about=None)]
 struct Cli {
-    // Archive name to create
-    #[arg(short, long, value_parser)]
-    outfile: PathBuf,
+    /// Archive name to create
+    #[arg(
+        short,
+        long,
+        value_parser,
+        required_unless_present("list_compressions")
+    )]
+    outfile: Option<PathBuf>,
+
+    #[command(flatten)]
+    concat_mode: Option<arx::cmd_utils::ConcatMode>,
+
+    /// Set compression algorithm to use
+    #[arg(short, long, value_parser=arx::cmd_utils::compression_arg_parser, required=false, default_value = "zstd")]
+    compression: jbk::creator::Compression,
+
+    /// List available compression algorithms
+    #[arg(long, default_value_t = false, action)]
+    list_compressions: bool,
 }
 
 #[derive(Clone)]
@@ -213,8 +232,17 @@ impl<R: Read> Converter<R> {
 fn main() -> jbk::Result<()> {
     let args = Cli::parse();
 
+    if args.list_compressions {
+        arx::cmd_utils::list_compressions();
+        return Ok(());
+    }
+
     let stdin = std::io::stdin();
     let archive = tar::Archive::new(stdin.lock());
-    let converter = Converter::new(archive, &args.outfile, arx::create::ConcatMode::OneFile)?;
-    converter.run(&args.outfile)
+    let converter = Converter::new(
+        archive,
+        args.outfile.as_ref().unwrap(),
+        args.concat_mode.into(),
+    )?;
+    converter.run(args.outfile.as_ref().unwrap())
 }

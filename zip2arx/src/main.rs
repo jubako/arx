@@ -6,16 +6,33 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+/// Convert a zip archive into an Arx archive.
 #[derive(Parser)]
 #[command(name = "tar2arx", author, version, about, long_about=None)]
 struct Cli {
-    // Input
-    #[arg(value_parser)]
-    zip_file: PathBuf,
+    /// Zip file to convert
+    #[arg(value_parser, required_unless_present("list_compressions"))]
+    zip_file: Option<PathBuf>,
 
-    // Archive name to create
-    #[arg(short, long, value_parser)]
-    outfile: PathBuf,
+    /// Archive name to create
+    #[arg(
+        short,
+        long,
+        value_parser,
+        required_unless_present("list_compressions")
+    )]
+    outfile: Option<PathBuf>,
+
+    #[command(flatten)]
+    concat_mode: Option<arx::cmd_utils::ConcatMode>,
+
+    /// Set compression algorithm to use
+    #[arg(short, long, value_parser=arx::cmd_utils::compression_arg_parser, required=false, default_value = "zstd")]
+    compression: jbk::creator::Compression,
+
+    /// List available compression algorithms
+    #[arg(long, default_value_t = false, action)]
+    list_compressions: bool,
 }
 
 #[derive(Clone)]
@@ -235,13 +252,18 @@ impl<R: Read + Seek> Converter<R> {
 fn main() -> jbk::Result<()> {
     let args = Cli::parse();
 
-    let file = std::fs::File::open(&args.zip_file)?;
+    if args.list_compressions {
+        arx::cmd_utils::list_compressions();
+        return Ok(());
+    }
+
+    let file = std::fs::File::open(args.zip_file.as_ref().unwrap())?;
     let archive = zip::ZipArchive::new(file).unwrap();
     let converter = Converter::new(
         archive,
-        args.zip_file,
-        &args.outfile,
-        arx::create::ConcatMode::OneFile,
+        args.zip_file.unwrap(),
+        args.outfile.as_ref().unwrap(),
+        args.concat_mode.into(),
     )?;
-    converter.run(&args.outfile)
+    converter.run(args.outfile.as_ref().unwrap())
 }
