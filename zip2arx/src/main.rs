@@ -104,7 +104,7 @@ pub struct Converter<R: Read + Seek> {
 }
 
 struct ZipEntry {
-    path: PathBuf,
+    path: arx::PathBuf,
     kind: arx::create::EntryKind,
     mode: u64,
     mtime: u64,
@@ -122,7 +122,8 @@ impl ZipEntry {
         if path.is_none() {
             return Err("Invalid path".into());
         }
-        let path = path.unwrap().to_owned();
+        let path = arx::PathBuf::from_path(path.unwrap())
+            .unwrap_or_else(|_| panic!("{path:?} must be utf8"));
 
         Ok(if entry.is_dir() {
             Self {
@@ -158,7 +159,7 @@ impl arx::create::EntryTrait for ZipEntry {
     fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
         Ok(Some(self.kind.clone()))
     }
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &arx::Path {
         &self.path
     }
 
@@ -176,13 +177,13 @@ impl arx::create::EntryTrait for ZipEntry {
     }
 }
 
-struct Directory<'a>(&'a Path);
+struct Directory<'a>(&'a arx::Path);
 
 impl<'a> arx::create::EntryTrait for Directory<'a> {
     fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
         Ok(Some(arx::create::EntryKind::Dir))
     }
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &arx::Path {
         self.0
     }
 
@@ -232,12 +233,15 @@ impl<R: Read + Seek> Converter<R> {
         for idx in 0..self.archive.len() {
             self.progress.entries.inc(1);
             let entry = self.archive.by_index(idx).unwrap();
-            if let Some(parent) = entry.enclosed_name().unwrap().parent() {
-                let mut parents: Vec<&Path> = parent.ancestors().collect();
-                parents.reverse();
-                for parent in parents {
-                    if parent.file_name().is_some() {
-                        let directory = Directory(parent);
+            if let Some(parent) = arx::PathBuf::from_path(entry.enclosed_name().unwrap())
+                .unwrap()
+                .parent()
+            {
+                let mut current = arx::PathBuf::new();
+                for component in parent.components() {
+                    current.push(component);
+                    if current.file_name().is_some() {
+                        let directory = Directory(&current);
                         self.arx_creator.add_entry(&directory)?;
                     }
                 }

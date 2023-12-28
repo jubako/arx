@@ -18,7 +18,7 @@ pub struct Options {
 
     /// Files to extract
     #[arg(value_parser, group = "input")]
-    extract_files: Vec<PathBuf>,
+    extract_files: Vec<arx::PathBuf>,
 
     /// Print a progress bar of the extraction
     #[arg(short = 'p', long = "progress", default_value_t = false, action)]
@@ -32,10 +32,10 @@ pub struct Options {
     verbose: u8,
 }
 
-fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<PathBuf>> {
+fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>> {
     if let Some(file_list) = &options.file_list {
         let file = File::open(file_list)?;
-        let mut files: HashSet<PathBuf> = Default::default();
+        let mut files: HashSet<arx::PathBuf> = Default::default();
         for line in BufReader::new(file).lines() {
             files.insert(line?.into());
         }

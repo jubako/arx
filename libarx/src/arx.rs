@@ -1,6 +1,5 @@
 use super::common::{AllProperties, Comparator, Entry, FullBuilderTrait, RealBuilder};
 use jbk::reader::Range;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 pub use jbk::SubReader as Reader;
@@ -46,15 +45,14 @@ impl Arx {
         create_properties(&self.container, index)
     }
 
-    pub fn get_entry<B, P>(&self, path: P) -> jbk::Result<Entry<B::Entry>>
+    pub fn get_entry<B>(&self, path: &crate::Path) -> jbk::Result<Entry<B::Entry>>
     where
-        P: AsRef<Path>,
         B: FullBuilderTrait,
     {
         let comparator = Comparator::new(&self.properties);
         let builder = RealBuilder::<B>::new(&self.properties);
         let mut current_range: jbk::EntryRange = (&self.root_index).into();
-        let mut components = path.as_ref().iter().peekable();
+        let mut components = path.iter().peekable();
         while let Some(component) = components.next() {
             // Search for the current component.
             // All children of a parent are stored concatened.

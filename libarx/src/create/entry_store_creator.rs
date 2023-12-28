@@ -1,8 +1,6 @@
 use crate::common::{EntryType, Property};
 use jbk::creator::schema;
 use std::collections::HashMap;
-use std::ffi::OsString;
-use std::os::unix::ffi::OsStringExt;
 use std::sync::{Arc, RwLock};
 
 use super::{EntryKind, EntryTrait, Void};
@@ -13,7 +11,7 @@ type EntryStore = jbk::creator::EntryStore<
     Box<jbk::creator::BasicEntry<Property, EntryType>>,
 >;
 
-type DirCache = HashMap<OsString, DirEntry>;
+type DirCache = HashMap<String, DirEntry>;
 type EntryIdx = jbk::Bound<jbk::EntryIdx>;
 
 /// A DirEntry structure to keep track of added direcotry in the archive.
@@ -93,7 +91,7 @@ impl DirEntry {
     fn add<'a, E, C>(&mut self, entry: &E, mut components: C, entry_store: &mut EntryStore) -> Void
     where
         E: EntryTrait + ?Sized,
-        C: Iterator<Item = std::path::Component<'a>>,
+        C: Iterator<Item = relative_path::Component<'a>>,
     {
         match components.next() {
             None => self.add_entry(entry, entry_store),
@@ -101,7 +99,7 @@ impl DirEntry {
                 .dir_children
                 .try_write()
                 .unwrap()
-                .get_mut(component.as_os_str())
+                .get_mut(component.as_str())
                 .unwrap()
                 .add(entry, components, entry_store),
         }
@@ -120,12 +118,11 @@ impl DirEntry {
         let entry_name = entry
             .path()
             .file_name()
-            .unwrap_or_else(|| panic!("{:?} has no file name", entry.path()))
-            .to_os_string();
+            .unwrap_or_else(|| panic!("{:?} has no file name", entry.path()));
         let mut values = HashMap::from([
             (
                 Property::Name,
-                jbk::Value::Array(entry_name.clone().into_vec()),
+                jbk::Value::Array(entry_name.as_bytes().into()),
             ),
             (
                 Property::Parent,
@@ -143,7 +140,7 @@ impl DirEntry {
                     .dir_children
                     .try_read()
                     .unwrap()
-                    .contains_key(&entry_name)
+                    .contains_key(entry_name)
                 {
                     return Ok(());
                 }
@@ -171,7 +168,7 @@ impl DirEntry {
                 self.dir_children
                     .try_write()
                     .unwrap()
-                    .entry(entry_name)
+                    .entry(entry_name.into())
                     .or_insert(dir_entry);
                 Ok(())
             }
@@ -188,7 +185,7 @@ impl DirEntry {
                 Ok(())
             }
             EntryKind::Link(target) => {
-                values.insert(Property::Target, jbk::Value::Array(target.into_vec()));
+                values.insert(Property::Target, jbk::Value::Array(target.as_str().into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::Link),
@@ -292,7 +289,7 @@ impl EntryStoreCreator {
     where
         E: EntryTrait,
     {
-        let path = entry.path().to_path_buf();
+        let path = entry.path();
         match path.parent() {
             None => self
                 .root_entry
@@ -314,7 +311,6 @@ impl Default for EntryStoreCreator {
 mod tests {
     use super::super::*;
     use super::*;
-    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_empty() -> jbk::Result<()> {
@@ -338,10 +334,10 @@ mod tests {
         Ok(())
     }
 
-    struct SimpleEntry(PathBuf);
+    struct SimpleEntry(crate::PathBuf);
 
     impl EntryTrait for SimpleEntry {
-        fn path(&self) -> &Path {
+        fn path(&self) -> &crate::Path {
             &self.0
         }
 

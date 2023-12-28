@@ -46,7 +46,7 @@ pub struct Options {
 
     /// Path of the entry to print
     #[arg(value_parser)]
-    path: String,
+    path: arx::PathBuf,
 
     #[arg(from_global)]
     verbose: u8,
@@ -58,5 +58,5 @@ pub fn dump(options: Options) -> jbk::Result<()> {
         options.path, options.infile
     );
     let arx = arx::Arx::new(options.infile)?;
-    dump_entry(&arx, arx.get_entry::<FullBuilder, _>(options.path)?)
+    dump_entry(&arx, arx.get_entry::<FullBuilder>(&options.path)?)
 }
