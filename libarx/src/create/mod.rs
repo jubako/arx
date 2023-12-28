@@ -5,9 +5,6 @@ mod fs_adder;
 pub use creator::SimpleCreator;
 pub use entry_store_creator::EntryStoreCreator;
 pub use fs_adder::{Adder, FsAdder};
-use std::path::Path;
-
-use std::ffi::OsString;
 
 #[derive(Clone, Copy)]
 pub enum ConcatMode {
@@ -20,7 +17,7 @@ pub enum ConcatMode {
 pub enum EntryKind {
     Dir,
     File(jbk::Size, jbk::ContentAddress),
-    Link(OsString),
+    Link(crate::PathBuf),
 }
 
 pub trait EntryTrait {
@@ -28,7 +25,7 @@ pub trait EntryTrait {
     fn kind(&self) -> jbk::Result<Option<EntryKind>>;
 
     /// Under which name the entry will be stored
-    fn path(&self) -> &Path;
+    fn path(&self) -> &crate::Path;
 
     fn uid(&self) -> u64;
     fn gid(&self) -> u64;
