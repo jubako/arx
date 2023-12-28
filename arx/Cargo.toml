@@ -11,7 +11,7 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arx = { path = "../libarx", version = "0.2.0", package="libarx" }
+arx = { path = "../libarx", version = "0.2.0", package="libarx", features=["cmd_utils"] }
 jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
@@ -26,6 +26,6 @@ tempfile = "3.8.0"
 [features]
 default = ["zstd"]
 in_ci = []
-lz4 = ["jbk/lz4"]
-zstd = ["jbk/zstd"]
-lzma = ["jbk/lzma"]
+lz4 = ["arx/lz4"]
+zstd = ["arx/zstd"]
+lzma = ["arx/lzma"]
