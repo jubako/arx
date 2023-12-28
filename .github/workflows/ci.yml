@@ -22,6 +22,16 @@ jobs:
           - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Install dependencies
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt-get install -y libfuse-dev
+
+      - name: Install dependencies
+        if: ${{ matrix.os == 'macos-latest'}}
+        run: |
+          brew install macfuse
+
       - name: Checkout code
         uses: actions/checkout@v3
 
