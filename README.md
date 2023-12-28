@@ -4,10 +4,11 @@ What is arx
 Arx is a file archive format based on the
 [jubako container format](https://framagit.org/jubako/jubako).
 
-It allow you to create, read, extract file archive (as zip or tar do).
+It allow you to create, read, extract file archive (as zip or tar does).
 
-Arx (and Jubako) is still in active development. It is NOT ready for production
-use (do not backup your files with arx).
+Arx (and Jubako) is in active development.
+While it works pretty well, I do not recommand to use it to do backups.
+However, you can use it to transfer data or explore archives.
 
 
 How it works
@@ -19,7 +20,6 @@ not in a structured way. It main advantage (apart from its versability) is
 that is designed to allow quick retrieval of data fro the archive without
 needing to uncompress the whole archive.
 
-
 Arx use the jubako format and create arx archive which:
 - Store file's data compressed.
 - Store files using a directory/tree structure.
@@ -27,26 +27,14 @@ Arx use the jubako format and create arx archive which:
 - Allow to mount the archive to explore and use (read only) the files in the
   archive without decompressing it.
 
-
-Few things are not yet implemented (but it is planned):
-- Store files uncompressed. It is useless to store already compressed files
-  (videos, images, binary data, ...) in a compressed way in the arcĥive.
-- Do not store metadata of the files (owner/group, rigth, xattr, ...)
-
 Try arx
 =======
 
 Install arx
 -----------
 
-Jubako need the nigthly toolchain (and so arx), to install arx :
 ```
-cargo +nigthly install arx
-```
-
-It may be usefull (but not mandatory) to also install basic jubako tools:
-```
-cargo +nigthly install jubako
+cargo install --git https://framagit.org/jubako/arx
 ```
 
 
@@ -57,22 +45,11 @@ Creating an archive is simple :
 
 
 ```
-arx create --outfile my_archive.arx my_directory
+arx create --file my_archive.arx -1r my_directory
 ```
 
-It will create three files : `my_archive.arx`, `my_archive.arxd`, `my_archive.arxc`.
-This is a feature of Jubako format, data are split in different pack.
+It will one file : `my_archive.arx`, which will contains the `my_directory` directory.
 
-You keep the three files separated (but you need to keep them all together in
-the same directory) or you can use the `concat` tools (if you have install
-jubako) to merge them in one file :
-
-```
-concat --outfile my_one_archive.arx my_archive.arx*
-```
-
-All the following commands in this readme will use `my_archive.arx`, but if you
-have merge all parts in one, you can use `my_one_archive.arx` as you which.
 
 Extract an archive
 ------------------
@@ -80,7 +57,7 @@ Extract an archive
 Extracting (decompressing) an archive is done with :
 
 ```
-arx extract my_archive.arx my_out_dir
+arx extract -f my_archive.arx -C my_out_dir
 ```
 
 
@@ -111,6 +88,25 @@ arx mount my_archive.arx mount_point
 
 `arx` will be running until you unmount `mount_point`.
 
+Converting a zip archive to an arx archive
+------------------------------------------
+
+```
+zip2ar -o my_archive.arx my_zip_archive.zip
+```
+
+Converting a tar archive to an arx archive
+------------------------------------------
+
+The tool `tar2arx` works on uncompressed tar file.
+Most of the time, you will have a copmressed tar file (`tar.gz`, ...)
+`tar2arx` expect the tar content to be given on its standard input.
+
+```
+gzip -d my_archive.tar.gz | tar2arx -o my_archive.arx
+```
+
+
 
 Performance
 ===========
@@ -120,11 +116,10 @@ The following compare the performance of arx and tar, depending of different
 use cases.
 
 Arx is compressing the content using zstd.
-By default, most of the time, tar is compressed using gz. And even when asked
-to compress with zstd, tar do not use the same compression level.
+By default, most of the time, tar is compressed using gz.
 
 To compress create a tar archive with the same compression level, we use
-`tar c <directory> | zstd -19 -TN -o <archive>.tar.zst`
+`tar c <directory> | zstd -TN -o <archive>.tar.zst`
 (N of `-TN` being the number of thread to use when compression).
 I have use `-T8` in my tests.
 

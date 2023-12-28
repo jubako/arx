@@ -1,9 +1,12 @@
 use crate::light_path::LightPath;
 use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
+use log::info;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
+
+use anyhow::{anyhow, Context, Result};
 
 type Path = Vec<u8>;
 
@@ -99,30 +102,35 @@ impl arx::walk::Operator<PathBuf, arx::FullBuilder> for StableLister {
     }
 }
 
-#[derive(clap::Args)]
+/// List the content in an archive.
+#[derive(clap::Args, Debug)]
 pub struct Options {
-    #[clap(value_parser)]
+    /// Archive to read
+    #[arg(value_parser)]
     infile: PathBuf,
 
-    #[clap(long = "stable-output", action)]
+    /// Use stable output (for scripting)
+    #[arg(long = "stable-output", action)]
     stable_output: Option<u8>,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn list(options: Options, verbose_level: u8) -> jbk::Result<()> {
-    if verbose_level > 0 {
-        println!("Listing entries in archive {:?}", options.infile);
-    }
-    let arx = arx::Arx::new(options.infile)?;
+pub fn list(options: Options) -> Result<()> {
+    info!("Listing entries in archive {:?}", options.infile);
+    let arx =
+        arx::Arx::new(&options.infile).with_context(|| format!("Opening {:?}", options.infile))?;
     if let Some(version) = options.stable_output {
         match version {
             1 => {
                 let mut walker = arx::walk::Walker::new(&arx, Default::default());
-                walker.run(&StableLister {})
+                Ok(walker.run(&StableLister {})?)
             }
-            _ => Err(format!("Stable version {version} not supported").into()),
+            _ => Err(anyhow!("Stable version {version} not supported")),
         }
     } else {
         let mut walker = arx::walk::Walker::new(&arx, Default::default());
-        walker.run(&Lister {})
+        Ok(walker.run(&Lister {})?)
     }
 }

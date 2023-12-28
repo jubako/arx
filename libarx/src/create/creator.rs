@@ -7,8 +7,6 @@ use std::sync::Arc;
 use super::{Adder, ConcatMode, EntryStoreCreator, EntryTrait, Void};
 use jbk::creator::OutStream;
 
-const VENDOR_ID: u32 = 0x41_52_58_00;
-
 pub struct ContentAdder<O: OutStream + 'static> {
     content_pack: jbk::creator::CachedContentPackCreator<O>,
 }
@@ -45,6 +43,7 @@ impl SimpleCreator {
         concat_mode: ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
+        compression: jbk::creator::Compression,
     ) -> jbk::Result<Self> {
         let outfile = outfile.as_ref();
         let out_dir = outfile.parent().unwrap().to_path_buf();
@@ -54,15 +53,15 @@ impl SimpleCreator {
         let content_pack = jbk::creator::ContentPackCreator::new_from_output_with_progress(
             tmp_content_pack,
             jbk::PackId::from(1),
-            VENDOR_ID,
+            crate::VENDOR_ID,
             Default::default(),
-            jbk::creator::Compression::zstd(),
+            compression,
             progress,
         )?;
 
         let directory_pack = jbk::creator::DirectoryPackCreator::new(
             jbk::PackId::from(0),
-            VENDOR_ID,
+            crate::VENDOR_ID,
             Default::default(),
         );
 
@@ -142,7 +141,7 @@ impl SimpleCreator {
         };
 
         let mut manifest_creator =
-            jbk::creator::ManifestPackCreator::new(VENDOR_ID, Default::default());
+            jbk::creator::ManifestPackCreator::new(crate::VENDOR_ID, Default::default());
 
         manifest_creator.add_pack(directory_pack_info, directory_locator);
         manifest_creator.add_pack(content_pack_info, content_locator);

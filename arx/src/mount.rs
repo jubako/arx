@@ -1,3 +1,4 @@
+use log::info;
 use std::path::PathBuf;
 
 pub struct StatCounter {
@@ -87,22 +88,26 @@ impl std::fmt::Display for StatCounter {
     }
 }
 
-#[derive(clap::Args)]
+/// Mount an archive in a directory.
+#[derive(clap::Args, Debug)]
 pub struct Options {
-    #[clap(value_parser)]
+    /// Archive to read
+    #[arg(value_parser)]
     infile: PathBuf,
 
-    #[clap(value_parser)]
+    /// Target directory
+    #[arg(value_parser)]
     mountdir: PathBuf,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
-    if verbose_level > 0 {
-        println!(
-            "Mount archive {:?} in {:?}",
-            options.infile, options.mountdir
-        );
-    }
+pub fn mount(options: Options) -> jbk::Result<()> {
+    info!(
+        "Mount archive {:?} in {:?}",
+        options.infile, options.mountdir
+    );
     let mut stats = StatCounter::new();
     let arx = arx::Arx::new(&options.infile)?;
     let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
@@ -111,6 +116,6 @@ pub fn mount(options: Options, verbose_level: u8) -> jbk::Result<()> {
     abs_path = abs_path.join(options.infile);
     arxfs.mount(abs_path.to_str().unwrap().to_string(), &options.mountdir)?;
 
-    println!("Stats:\n {stats}");
+    info!("Stats:\n {stats}");
     Ok(())
 }

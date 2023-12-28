@@ -1,4 +1,5 @@
 use jbk::reader::builder::PropertyBuilderTrait;
+use log::info;
 use std::path::PathBuf;
 
 struct FileBuilder {
@@ -36,22 +37,26 @@ fn dump_entry(
     }
 }
 
-#[derive(clap::Args)]
+/// Print the content of an entry in the archive.
+#[derive(clap::Args, Debug)]
 pub struct Options {
-    #[clap(value_parser)]
+    /// Archive to read
+    #[arg(value_parser)]
     infile: PathBuf,
 
-    #[clap(value_parser)]
+    /// Path of the entry to print
+    #[arg(value_parser)]
     path: String,
+
+    #[arg(from_global)]
+    verbose: u8,
 }
 
-pub fn dump(options: Options, verbose_level: u8) -> jbk::Result<()> {
-    if verbose_level > 0 {
-        println!(
-            "Dump entry {} in archive {:?}",
-            options.path, options.infile
-        );
-    }
+pub fn dump(options: Options) -> jbk::Result<()> {
+    info!(
+        "Dump entry {} in archive {:?}",
+        options.path, options.infile
+    );
     let arx = arx::Arx::new(options.infile)?;
     dump_entry(&arx, arx.get_entry::<FullBuilder, _>(options.path)?)
 }

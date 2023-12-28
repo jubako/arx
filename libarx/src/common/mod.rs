@@ -14,6 +14,8 @@ pub use properties::{AllProperties, Property};
 pub type EntryResult<T> = Result<T, EntryType>;
 pub use jbk::SubReader as Reader;
 
+pub const VENDOR_ID: jbk::VendorId = jbk::VendorId::new([0x41, 0x52, 0x58, 0x00]);
+
 pub struct Comparator {
     store: jbk::reader::EntryStore,
     path_property: jbk::reader::builder::ArrayProperty,

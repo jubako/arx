@@ -1,16 +1,16 @@
 use clap::Parser;
+use log::{error, info};
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[clap(name = "arx")]
-#[clap(author, version, about, long_about=None)]
+#[command(name = "arx", author, version, about, long_about=None)]
 struct Cli {
-    #[clap(short, long, action=clap::ArgAction::Count)]
+    #[arg(short, long, action=clap::ArgAction::Count)]
     verbose: u8,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     mountdir: PathBuf,
 }
 
@@ -34,18 +34,18 @@ fn main() -> ExitCode {
     match env::current_exe() {
         Ok(exe_path) => {
             if args.verbose > 0 {
-                println!("Auto Mount archive {:?} in {:?}", exe_path, args.mountdir);
+                info!("Auto Mount archive {:?} in {:?}", exe_path, args.mountdir);
             }
             match mount(exe_path, args.mountdir) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => match e.error {
                     jbk::ErrorKind::NotAJbk => {
-                        eprintln!("Impossible to locate a Jubako archive in the executable.");
-                        eprintln!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
+                        error!("Impossible to locate a Jubako archive in the executable.");
+                        error!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
                         ExitCode::FAILURE
                     }
                     _ => {
-                        eprintln!("Error: {e}");
+                        error!("Error: {e}");
                         ExitCode::FAILURE
                     }
                 },
