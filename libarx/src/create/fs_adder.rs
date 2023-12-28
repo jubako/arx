@@ -1,7 +1,10 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
 use jbk::creator::InputReader;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
 
 pub enum FsEntryKind {
@@ -49,10 +52,23 @@ impl FsEntry {
             kind,
             fs_path,
             arx_path,
+            #[cfg(unix)]
             uid: attr.uid() as u64,
+            #[cfg(windows)]
+            uid: 1000,
+            #[cfg(unix)]
             gid: attr.gid() as u64,
+            #[cfg(windows)]
+            gid: 1000,
+            #[cfg(unix)]
             mode: attr.mode() as u64,
+            #[cfg(windows)]
+            mode: 755,
+            #[cfg(unix)]
             mtime: attr.mtime() as u64,
+            #[cfg(windows)]
+            mtime: epochs::to_unix(epochs::windows_file(attr.last_write_time() as i64).unwrap())
+                as u64,
         }))
     }
 }
