@@ -3,6 +3,7 @@ mod dump;
 mod extract;
 mod light_path;
 mod list;
+#[cfg(not(windows))]
 mod mount;
 
 use anyhow::Result;
@@ -35,6 +36,7 @@ enum Commands {
     #[command(arg_required_else_help = true)]
     Extract(extract::Options),
 
+    #[cfg(not(windows))]
     #[command(arg_required_else_help = true)]
     Mount(mount::Options),
 }
@@ -67,6 +69,7 @@ fn run() -> Result<()> {
         Commands::List(options) => Ok(list::list(options)?),
         Commands::Dump(options) => Ok(dump::dump(options)?),
         Commands::Extract(options) => Ok(extract::extract(options)?),
+        #[cfg(not(windows))]
         Commands::Mount(options) => Ok(mount::mount(options)?),
     }
 }
