@@ -19,3 +19,8 @@ fxhash = "0.2.1"
 blake3 = "1.5.0"
 tempfile = "3.8.0"
 walkdir = "2.4.0"
+
+[features]
+lz4 = ["jbk/lz4"]
+zstd = ["jbk/zstd"]
+lzma = ["jbk/lzma"]

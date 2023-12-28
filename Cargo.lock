@@ -644,6 +644,7 @@ name = "libarx"
 version = "0.2.0"
 dependencies = [
  "blake3",
+ "clap",
  "fuser 0.13.0",
  "fxhash",
  "jubako",
