@@ -2,7 +2,7 @@ What is arx
 ===========
 
 Arx is a file archive format based on the
-[jubako container format](https://framagit.org/jubako/jubako).
+[jubako container format](https://github.com/jubako/jubako).
 
 It allow you to create, read, extract file archive (as zip or tar does).
 
