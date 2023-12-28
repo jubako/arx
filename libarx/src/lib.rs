@@ -2,6 +2,8 @@
 
 mod arx;
 mod arx_fs;
+#[cfg(feature = "cmd_utils")]
+pub mod cmd_utils;
 mod common;
 pub mod create;
 mod entry;
