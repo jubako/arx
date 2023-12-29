@@ -6,7 +6,7 @@ resolver = "2"
 edition = "2021"
 version = "0.2.0"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
-repository = "https://framagit.org/jubako/arx"
+repository = "https://github.com/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]

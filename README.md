@@ -34,7 +34,7 @@ Install arx
 -----------
 
 ```
-cargo install --git https://framagit.org/jubako/arx
+cargo install --git https://github.com/jubako/arx
 ```
 
 
