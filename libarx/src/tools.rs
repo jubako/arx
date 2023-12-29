@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 use std::fs::{create_dir, create_dir_all, OpenOptions};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::symlink;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
 
 use crate::{AllProperties, Arx, Builder, Reader, Walker};
