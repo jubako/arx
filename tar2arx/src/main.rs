@@ -115,7 +115,7 @@ pub struct Converter<R: Read> {
 }
 
 struct TarEntry {
-    path: PathBuf,
+    path: arx::PathBuf,
     kind: arx::create::EntryKind,
     uid: u64,
     gid: u64,
@@ -133,17 +133,21 @@ impl TarEntry {
         let gid = header.gid()?;
         let mtime = header.mtime()?;
         let mode = header.mode()? as u64;
+        let path = arx::PathBuf::from_path(entry.path()?)
+            .unwrap_or_else(|_| panic!("Entry path must be utf-8"));
         Ok(match entry.link_name()? {
             Some(target) => Self {
-                path: entry.path()?.into_owned(),
-                kind: arx::create::EntryKind::Link(target.into_owned().into()),
+                path,
+                kind: arx::create::EntryKind::Link(
+                    arx::PathBuf::from_path(&target)
+                        .unwrap_or_else(|_| panic!("{target:?} must be utf8")),
+                ),
                 uid,
                 gid,
                 mtime,
                 mode,
             },
             None => {
-                let path = entry.path()?.into_owned();
                 if entry.path_bytes().ends_with(&[b'/']) {
                     Self {
                         path,
@@ -175,7 +179,7 @@ impl arx::create::EntryTrait for TarEntry {
     fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
         Ok(Some(self.kind.clone()))
     }
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &arx::Path {
         &self.path
     }
 

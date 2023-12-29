@@ -1,5 +1,4 @@
 use std::io::Seek;
-use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -103,7 +102,10 @@ impl SimpleCreator {
                 if let Err(e) = tmpname.persist(directory_pack_path) {
                     return Err(e.error.into());
                 };
-                outfilename.into_vec()
+                outfilename
+                    .to_str()
+                    .unwrap_or_else(|| panic!("{outfilename:?} must be valid utf8"))
+                    .into()
             }
             _ => {
                 tmpfile.rewind()?;
@@ -136,7 +138,10 @@ impl SimpleCreator {
                 if let Err(e) = self.tmp_path_content_pack.persist(&content_pack_path) {
                     return Err(e.error.into());
                 }
-                outfilename.into_vec()
+                outfilename
+                    .to_str()
+                    .unwrap_or_else(|| panic!("{outfilename:?} must be valid utf8"))
+                    .into()
             }
         };
 

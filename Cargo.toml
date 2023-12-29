@@ -6,11 +6,11 @@ resolver = "2"
 edition = "2021"
 version = "0.2.0"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
-repository = "https://framagit.org/jubako/arx"
+repository = "https://github.com/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]
-jbk = { git = "https://framagit.org/jubako/jubako.git", package = "jubako" }
+jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako" }
 clap = { version = "4.4.5", features = ["derive"] }
 indicatif = "0.17.7"
 

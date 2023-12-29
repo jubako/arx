@@ -1,34 +1,40 @@
-use clap::Parser;
-use log::{error, info};
-use std::env;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
-#[derive(Parser)]
-#[command(name = "arx", author, version, about, long_about=None)]
-struct Cli {
-    #[arg(short, long, action=clap::ArgAction::Count)]
-    verbose: u8,
+#[cfg(unix)]
+mod inner {
+    pub use clap::Parser;
+    pub use std::env;
+    use std::path::PathBuf;
 
-    #[arg(value_parser)]
-    mountdir: PathBuf,
+    #[derive(Parser)]
+    #[command(name = "arx", author, version, about, long_about=None)]
+    pub struct Cli {
+        #[arg(short, long, action=clap::ArgAction::Count)]
+        pub verbose: u8,
+
+        #[arg(value_parser)]
+        pub mountdir: PathBuf,
+    }
+
+    pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
+    where
+        INP: AsRef<std::path::Path>,
+        OUTP: AsRef<std::path::Path>,
+    {
+        let arx = arx::Arx::new(&infile)?;
+        let arxfs = arx::ArxFs::new(arx)?;
+
+        let mut abs_path = env::current_dir().unwrap();
+        abs_path = abs_path.join(infile.as_ref());
+
+        arxfs.mount(abs_path.to_str().unwrap().to_string(), &outdir)
+    }
 }
 
-fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
-where
-    INP: AsRef<std::path::Path>,
-    OUTP: AsRef<std::path::Path>,
-{
-    let arx = arx::Arx::new(&infile)?;
-    let arxfs = arx::ArxFs::new(arx)?;
-
-    let mut abs_path = std::env::current_dir().unwrap();
-    abs_path = abs_path.join(infile.as_ref());
-
-    arxfs.mount(abs_path.to_str().unwrap().to_string(), &outdir)
-}
-
+#[cfg(unix)]
 fn main() -> ExitCode {
+    use inner::*;
+    use log::{error, info};
     let args = Cli::parse();
 
     match env::current_exe() {
@@ -56,4 +62,10 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+#[cfg(windows)]
+fn main() -> ExitCode {
+    eprintln!("Mount feature is not available on Windows.");
+    ExitCode::FAILURE
 }

@@ -24,7 +24,7 @@ pub struct Options {
 
     /// Remove STRIP_PREFIX from the entries' name added to the archive.
     #[arg(long, required = false)]
-    strip_prefix: Option<PathBuf>,
+    strip_prefix: Option<arx::PathBuf>,
 
     /// Move to BASE_DIR before starting adding content to arx archive.
     ///
@@ -172,7 +172,7 @@ pub fn create(options: Options) -> Result<()> {
 
     let strip_prefix = match &options.strip_prefix {
         Some(s) => s.clone(),
-        None => PathBuf::new(),
+        None => arx::PathBuf::new(),
     };
 
     let out_file = std::env::current_dir()?.join(options.outfile.as_ref().unwrap());

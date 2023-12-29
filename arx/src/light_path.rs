@@ -1,17 +1,15 @@
-use std::ffi::OsString;
 use std::io;
 use std::io::Write;
-use std::os::unix::ffi::OsStrExt;
 
 #[derive(Clone, Debug)]
-pub struct LightPath(Vec<OsString>);
+pub struct LightPath(Vec<Vec<u8>>);
 
 impl LightPath {
     pub fn new() -> Self {
         Self(Vec::with_capacity(10))
     }
 
-    pub fn push(&mut self, component: OsString) {
+    pub fn push(&mut self, component: Vec<u8>) {
         self.0.push(component);
     }
 
@@ -23,10 +21,10 @@ impl LightPath {
         let mut stdout = io::stdout().lock();
         let mut parts = self.0.iter();
         if let Some(part) = parts.next() {
-            stdout.write_all(part.as_bytes())?;
+            stdout.write_all(part)?;
             for part in parts {
                 stdout.write_all(b"/")?;
-                stdout.write_all(part.as_bytes())?;
+                stdout.write_all(part)?;
             }
             if !component.is_empty() {
                 stdout.write_all(b"/")?;
@@ -48,8 +46,8 @@ impl Default for LightPath {
     }
 }
 
-impl From<OsString> for LightPath {
-    fn from(s: OsString) -> Self {
+impl From<Vec<u8>> for LightPath {
+    fn from(s: Vec<u8>) -> Self {
         let mut p = Self::new();
         p.push(s);
         p
@@ -61,7 +59,7 @@ impl From<&LightPath> for std::path::PathBuf {
         let size = p.0.iter().map(|v| v.len()).sum();
         let mut s = Self::with_capacity(size);
         for part in &p.0 {
-            s.push(part)
+            s.push(String::from_utf8_lossy(part).as_ref())
         }
         s
     }

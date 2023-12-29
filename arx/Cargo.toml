@@ -20,7 +20,7 @@ anyhow = "1.0.75"
 log = "0.4.20"
 
 [dev-dependencies]
-arx_test_dir = { git = "https://framagit.org/jubako/arx_test_dir.git" }
+arx_test_dir = { git = "https://github.com/jubako/arx_test_dir.git" }
 tempfile = "3.8.0"
 
 [features]

@@ -1,7 +1,10 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
 use jbk::creator::InputReader;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
 
 pub enum FsEntryKind {
@@ -18,7 +21,7 @@ pub trait Adder {
 pub struct FsEntry {
     pub kind: FsEntryKind,
     pub fs_path: PathBuf,
-    pub arx_path: PathBuf,
+    pub arx_path: crate::PathBuf,
     uid: u64,
     gid: u64,
     mode: u64,
@@ -28,7 +31,7 @@ pub struct FsEntry {
 impl FsEntry {
     pub fn new_from_walk_entry<A: Adder>(
         dir_entry: walkdir::DirEntry,
-        arx_path: PathBuf,
+        arx_path: crate::PathBuf,
         adder: &mut A,
     ) -> jbk::Result<Box<Self>> {
         let fs_path = dir_entry.path().to_path_buf();
@@ -49,10 +52,23 @@ impl FsEntry {
             kind,
             fs_path,
             arx_path,
+            #[cfg(unix)]
             uid: attr.uid() as u64,
+            #[cfg(windows)]
+            uid: 1000,
+            #[cfg(unix)]
             gid: attr.gid() as u64,
+            #[cfg(windows)]
+            gid: 1000,
+            #[cfg(unix)]
             mode: attr.mode() as u64,
+            #[cfg(windows)]
+            mode: 755,
+            #[cfg(unix)]
             mtime: attr.mtime() as u64,
+            #[cfg(windows)]
+            mtime: epochs::to_unix(epochs::windows_file(attr.last_write_time() as i64).unwrap())
+                as u64,
         }))
     }
 }
@@ -65,11 +81,17 @@ impl EntryTrait for FsEntry {
                 Some(EntryKind::File(size, content_address))
             }
 
-            FsEntryKind::Link => Some(EntryKind::Link(fs::read_link(&self.fs_path)?.into())),
+            FsEntryKind::Link => {
+                let target = fs::read_link(&self.fs_path)?;
+                Some(EntryKind::Link(
+                    crate::PathBuf::from_path(&target)
+                        .unwrap_or_else(|_| panic!("{target:?} must be a relative utf-8 path")),
+                ))
+            }
             _ => None,
         })
     }
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &crate::Path {
         &self.arx_path
     }
 
@@ -89,11 +111,11 @@ impl EntryTrait for FsEntry {
 
 pub struct FsAdder<'a> {
     creator: &'a mut SimpleCreator,
-    strip_prefix: PathBuf,
+    strip_prefix: crate::PathBuf,
 }
 
 impl<'a> FsAdder<'a> {
-    pub fn new(creator: &'a mut SimpleCreator, strip_prefix: PathBuf) -> Self {
+    pub fn new(creator: &'a mut SimpleCreator, strip_prefix: crate::PathBuf) -> Self {
         Self {
             creator,
             strip_prefix,
@@ -119,12 +141,12 @@ impl<'a> FsAdder<'a> {
         let walker = walker.into_iter();
         for entry in walker.filter_entry(filter) {
             let entry = entry.unwrap();
-            let arx_path = entry
-                .path()
-                .strip_prefix(&self.strip_prefix)
-                .unwrap()
-                .to_path_buf();
-            if arx_path.as_os_str().is_empty() {
+            let entry_path = entry.path();
+            let arx_path = crate::PathBuf::from_path(entry_path)
+                .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
+            let arx_path: crate::PathBuf =
+                arx_path.strip_prefix(&self.strip_prefix).unwrap().into();
+            if arx_path.as_str().is_empty() {
                 continue;
             }
             let entry = FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder())?;
