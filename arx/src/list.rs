@@ -2,8 +2,6 @@ use crate::light_path::LightPath;
 use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
 use log::info;
-use std::ffi::OsString;
-use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
@@ -43,7 +41,7 @@ impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
         Ok(())
     }
     fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<bool> {
-        current_path.push(OsString::from_vec(path.clone()));
+        current_path.push(path.clone());
         current_path.println()?;
         Ok(true)
     }
@@ -61,42 +59,45 @@ impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
 
 struct StableLister {}
 
-impl arx::walk::Operator<PathBuf, arx::FullBuilder> for StableLister {
-    fn on_start(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
+impl arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister {
+    fn on_start(&self, _current_path: &mut arx::PathBuf) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_stop(&self, _current_path: &mut PathBuf) -> jbk::Result<()> {
+    fn on_stop(&self, _current_path: &mut arx::PathBuf) -> jbk::Result<()> {
         Ok(())
     }
-    fn on_directory_enter(&self, current_path: &mut PathBuf, dir: &arx::Dir) -> jbk::Result<bool> {
-        current_path.push(OsString::from_vec(dir.path().clone()));
-        println!("d {} {}", dir.mtime(), current_path.display());
+    fn on_directory_enter(
+        &self,
+        current_path: &mut arx::PathBuf,
+        dir: &arx::Dir,
+    ) -> jbk::Result<bool> {
+        current_path.push(String::from_utf8_lossy(dir.path()).as_ref());
+        println!("d {} {}", dir.mtime(), current_path);
         Ok(true)
     }
-    fn on_directory_exit(&self, current_path: &mut PathBuf, _dir: &arx::Dir) -> jbk::Result<()> {
+    fn on_directory_exit(
+        &self,
+        current_path: &mut arx::PathBuf,
+        _dir: &arx::Dir,
+    ) -> jbk::Result<()> {
         current_path.pop();
         Ok(())
     }
-    fn on_file(&self, current_path: &mut PathBuf, file: &arx::FileEntry) -> jbk::Result<()> {
-        current_path.push(OsString::from_vec(file.path().clone()));
+    fn on_file(&self, current_path: &mut arx::PathBuf, file: &arx::FileEntry) -> jbk::Result<()> {
+        current_path.push(String::from_utf8_lossy(file.path()).as_ref());
         println!(
             "f {} {} {}",
             file.mtime(),
             file.size().into_u64(),
-            current_path.display()
+            current_path
         );
         current_path.pop();
         Ok(())
     }
-    fn on_link(&self, current_path: &mut PathBuf, link: &arx::Link) -> jbk::Result<()> {
-        current_path.push(OsString::from_vec(link.path().clone()));
-        let target: PathBuf = OsString::from_vec(link.target().clone()).into();
-        println!(
-            "l {} {}->{}",
-            link.mtime(),
-            current_path.display(),
-            target.display()
-        );
+    fn on_link(&self, current_path: &mut arx::PathBuf, link: &arx::Link) -> jbk::Result<()> {
+        current_path.push(String::from_utf8_lossy(link.path()).as_ref());
+        let target: PathBuf = String::from_utf8_lossy(link.target()).as_ref().into();
+        println!("l {} {}->{}", link.mtime(), current_path, target.display());
         current_path.pop();
         Ok(())
     }

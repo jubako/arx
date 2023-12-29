@@ -148,7 +148,7 @@ impl crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'_> {
         current_path: &mut crate::PathBuf,
         path: &String,
     ) -> jbk::Result<bool> {
-        current_path.push(&path);
+        current_path.push(path);
         if !self.should_extract(current_path, true) {
             return Ok(false);
         }
