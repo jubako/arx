@@ -2,8 +2,6 @@ use super::common::{AllProperties, Comparator, Entry, FullBuilderTrait, RealBuil
 use jbk::reader::Range;
 use std::path::Path;
 
-pub use jbk::SubReader as Reader;
-
 pub struct Arx {
     pub container: jbk::reader::Container,
     pub(crate) root_index: jbk::reader::Index,
