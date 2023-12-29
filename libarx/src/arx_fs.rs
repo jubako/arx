@@ -1,5 +1,5 @@
 use super::Arx;
-use crate::common::{AllProperties, Comparator, EntryResult, EntryType, ReadEntry};
+use crate::common::{AllProperties, Comparator, EntryType, ReadEntry};
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::Range;
@@ -14,6 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 
+pub type EntryResult<T> = Result<T, EntryType>;
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 const BLOCK_SIZE: u32 = 512;
 
