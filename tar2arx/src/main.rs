@@ -222,6 +222,7 @@ impl<R: Read> Converter<R> {
         archive: tar::Archive<R>,
         outfile: P,
         concat_mode: arx::create::ConcatMode,
+        compression: jbk::creator::Compression,
     ) -> jbk::Result<Self> {
         let progress = Arc::new(ProgressBar::new()?);
         let arx_creator = arx::create::SimpleCreator::new(
@@ -229,7 +230,7 @@ impl<R: Read> Converter<R> {
             concat_mode,
             progress,
             Rc::new(()),
-            jbk::creator::Compression::zstd(),
+            compression,
         )?;
 
         Ok(Self {
@@ -268,6 +269,7 @@ fn main() -> jbk::Result<()> {
         archive,
         args.outfile.as_ref().unwrap(),
         args.concat_mode.into(),
+        args.compression,
     )?;
     converter.run(args.outfile.as_ref().unwrap())
 }
