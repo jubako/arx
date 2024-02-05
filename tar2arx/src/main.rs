@@ -127,7 +127,7 @@ impl TarEntry {
     pub fn new<'a, R: 'a + Read, A: Adder>(
         mut entry: tar::Entry<'a, R>,
         adder: &mut A,
-    ) -> jbk::Result<Self> {
+    ) -> jbk::Result<Option<Self>> {
         let header = entry.header();
         let uid = header.uid()?;
         let gid = header.gid()?;
@@ -135,40 +135,60 @@ impl TarEntry {
         let mode = header.mode()? as u64;
         let path = arx::PathBuf::from_path(entry.path()?)
             .unwrap_or_else(|_| panic!("Entry path must be utf-8"));
-        Ok(match entry.link_name()? {
-            Some(target) => Self {
+        Ok(match header.entry_type() {
+            tar::EntryType::Directory => Some(Self {
                 path,
-                kind: arx::create::EntryKind::Link(
-                    arx::PathBuf::from_path(&target)
-                        .unwrap_or_else(|_| panic!("{target:?} must be utf8")),
-                ),
+                kind: arx::create::EntryKind::Dir,
                 uid,
                 gid,
                 mtime,
                 mode,
-            },
-            None => {
-                if entry.path_bytes().ends_with(&[b'/']) {
-                    Self {
+            }),
+            tar::EntryType::Symlink => {
+                let target = entry.link_name()?.unwrap();
+                Some(Self {
+                    path,
+                    kind: arx::create::EntryKind::Link(
+                        arx::PathBuf::from_path(&target)
+                            .unwrap_or_else(|_| panic!("{target:?} must be utf8")),
+                    ),
+                    uid,
+                    gid,
+                    mtime,
+                    mode,
+                })
+            }
+            /* GNULongName, GNULongLink and XHeader should already be handled by entries iterator
+               but it doesn't arm to explicitly ignore them.
+               XGlobalHeader is not handled by entries iterator, so we MUST explicitly ignore it.
+            */
+            tar::EntryType::GNULongName
+            | tar::EntryType::GNULongLink
+            | tar::EntryType::XHeader
+            | tar::EntryType::XGlobalHeader => None,
+            _ => {
+                if header.as_ustar().is_none() && header.path_bytes().ends_with(b"/") {
+                    Some(Self {
                         path,
                         kind: arx::create::EntryKind::Dir,
                         uid,
                         gid,
                         mtime,
                         mode,
-                    }
+                    })
                 } else {
+                    //Handle everything else as normal file
                     let mut data = vec![];
                     let size = entry.read_to_end(&mut data)?;
                     let content_address = adder.add(std::io::Cursor::new(data))?;
-                    Self {
+                    Some(Self {
                         path,
                         kind: arx::create::EntryKind::File(size.into(), content_address),
                         uid,
                         gid,
                         mtime,
                         mode,
-                    }
+                    })
                 }
             }
         })
@@ -202,6 +222,7 @@ impl<R: Read> Converter<R> {
         archive: tar::Archive<R>,
         outfile: P,
         concat_mode: arx::create::ConcatMode,
+        compression: jbk::creator::Compression,
     ) -> jbk::Result<Self> {
         let progress = Arc::new(ProgressBar::new()?);
         let arx_creator = arx::create::SimpleCreator::new(
@@ -209,7 +230,7 @@ impl<R: Read> Converter<R> {
             concat_mode,
             progress,
             Rc::new(()),
-            jbk::creator::Compression::zstd(),
+            compression,
         )?;
 
         Ok(Self {
@@ -226,8 +247,9 @@ impl<R: Read> Converter<R> {
         let iter = self.archive.entries()?;
         for entry in iter {
             let entry = entry?;
-            let entry = TarEntry::new(entry, self.arx_creator.adder())?;
-            self.arx_creator.add_entry(&entry)?;
+            if let Some(entry) = TarEntry::new(entry, self.arx_creator.adder())? {
+                self.arx_creator.add_entry(&entry)?;
+            }
         }
         self.finalize(outfile)
     }
@@ -247,6 +269,7 @@ fn main() -> jbk::Result<()> {
         archive,
         args.outfile.as_ref().unwrap(),
         args.concat_mode.into(),
+        args.compression,
     )?;
     converter.run(args.outfile.as_ref().unwrap())
 }
