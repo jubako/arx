@@ -10,7 +10,7 @@ repository = "https://github.com/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]
-jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako" }
+jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", version = "0.2.0" }
 clap = { version = "4.4.5", features = ["derive"] }
 indicatif = "0.17.7"
 
