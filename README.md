@@ -149,7 +149,7 @@ Documentation directory only of linux source code:
 |           FS | 145ms189μs | 38.45 MB |  90ms135μs |  7ms222μs |  1s942ms |   75ms76μs |
 
 This is the ratio <Archive> time / Arx time.
-A ration greater than 100% means Arx is better.
+A ratio greater than 100% means Arx is better.
 
 
 |     Type     | Creation |  Size   | Extract | Listing |  Dump   | Mount diff |
@@ -177,7 +177,7 @@ Driver directory only of linux source code:
 
 
 This is the ratio <Archive> time / Arx time.
-A ration greater than 100% means Arx is better.
+A ratio greater than 100% means Arx is better.
 
 |     Type     | Creation |  Size   | Extract | Listing  |  Dump  | Mount diff |
 | ------------ | -------- | ------- | ------- | -------- | ------ | ---------- |
@@ -203,7 +203,7 @@ Linux Source Code
 
 
 This is the ratio <Archive> time / Arx time.
-A ration greater than 100% means Arx is better.
+A ratio greater than 100% means Arx is better.
 
 |     Type     | Creation |  Size   | Extract | Listing  |  Dump  | Mount diff |
 | ------------ | -------- | ------- | ------- | -------- | ------ | ---------- |
