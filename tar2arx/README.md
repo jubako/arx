@@ -20,7 +20,7 @@ Creating an archive is simple :
 
 
 ```
-gzip -d foo.tar.gz | tar2arx -o foo.arx
+tar2arx -o foo.arx foo.tar.gz
 ```
 
 Read arx archive

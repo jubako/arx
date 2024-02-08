@@ -12,6 +12,10 @@ use std::sync::Arc;
 #[derive(Parser)]
 #[command(name = "tar2arx", author, version, about, long_about=None)]
 struct Cli {
+    /// Tar file to convert
+    #[arg(value_parser)]
+    tar_file: Option<String>,
+
     /// Archive name to create
     #[arg(
         short,
@@ -37,15 +41,10 @@ struct Cli {
 struct ProgressBar {
     pub comp_clusters: indicatif::ProgressBar,
     pub uncomp_clusters: indicatif::ProgressBar,
-    pub size: indicatif::ProgressBar,
 }
 
 impl ProgressBar {
-    fn new() -> jbk::Result<Self> {
-        Self::new_with_size(None)
-    }
-
-    fn new_with_size(size: Option<u64>) -> jbk::Result<Self> {
+    fn new(size_progress_bar: indicatif::ProgressBar) -> jbk::Result<Self> {
         let draw_target = indicatif::ProgressDrawTarget::stdout_with_hz(1);
         let style = indicatif::ProgressStyle::with_template(
             "{prefix} : [{wide_bar:.cyan/blue}] {pos:7} / {len:7}",
@@ -69,12 +68,9 @@ impl ProgressBar {
             )
             .unwrap();
 
-        let size = match size {
-            None => indicatif::ProgressBar::new_spinner(),
-            Some(s) => indicatif::ProgressBar::new(s),
-        }
-        .with_style(bytes_style)
-        .with_prefix("Size");
+        let size = size_progress_bar
+            .with_style(bytes_style)
+            .with_prefix("Size");
 
         multi.add(size.clone());
         multi.add(comp_clusters.clone());
@@ -82,7 +78,6 @@ impl ProgressBar {
         Ok(Self {
             comp_clusters,
             uncomp_clusters,
-            size,
         })
     }
 }
@@ -104,9 +99,7 @@ impl jbk::creator::Progress for ProgressBar {
         }
         .inc(1)
     }
-    fn content_added(&self, size: jbk::Size) {
-        self.size.inc(size.into_u64())
-    }
+    fn content_added(&self, _size: jbk::Size) {}
 }
 
 pub struct Converter<R: Read> {
@@ -223,8 +216,9 @@ impl<R: Read> Converter<R> {
         outfile: P,
         concat_mode: arx::create::ConcatMode,
         compression: jbk::creator::Compression,
+        progress_bar: indicatif::ProgressBar,
     ) -> jbk::Result<Self> {
-        let progress = Arc::new(ProgressBar::new()?);
+        let progress = Arc::new(ProgressBar::new(progress_bar)?);
         let arx_creator = arx::create::SimpleCreator::new(
             outfile,
             concat_mode,
@@ -263,13 +257,33 @@ fn main() -> jbk::Result<()> {
         return Ok(());
     }
 
-    let stdin = std::io::stdin();
-    let archive = tar::Archive::new(stdin.lock());
+    let mut input_size = None;
+    let input: Box<dyn Read> = match args.tar_file {
+        None => Box::new(std::io::stdin()),
+        Some(p) => {
+            if p == "- " {
+                Box::new(std::io::stdin())
+            } else {
+                let f = std::fs::File::open(p)?;
+                input_size = Some(f.metadata()?.len());
+                Box::new(f)
+            }
+        }
+    };
+    let progress_bar = indicatif::ProgressBar::hidden();
+    if let Some(s) = input_size {
+        progress_bar.set_length(s);
+    };
+    let input_stream = niffler::get_reader(Box::new(progress_bar.wrap_read(input)))
+        .unwrap()
+        .0;
+    let archive = tar::Archive::new(input_stream);
     let converter = Converter::new(
         archive,
         args.outfile.as_ref().unwrap(),
         args.concat_mode.into(),
         args.compression,
+        progress_bar,
     )?;
     converter.run(args.outfile.as_ref().unwrap())
 }

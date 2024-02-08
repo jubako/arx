@@ -100,14 +100,9 @@ zip2ar -o my_archive.arx my_zip_archive.zip
 Converting a tar archive to an arx archive
 ------------------------------------------
 
-The tool `tar2arx` works on uncompressed tar file.
-Most of the time, you will have a copmressed tar file (`tar.gz`, ...)
-`tar2arx` expect the tar content to be given on its standard input.
-
 ```
-gzip -d my_archive.tar.gz | tar2arx -o my_archive.arx
+tar2arx -o my_archive.arx my_tar_archive.tar.gz
 ```
-
 
 
 Performance
