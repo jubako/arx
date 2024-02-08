@@ -10,15 +10,15 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 pub struct Options {
     /// Archive to read
-    #[arg(short = 'f', long = "file", value_hint=ValueHint::FilePath)]
-    infile: PathBuf,
+    #[arg(value_hint=ValueHint::FilePath, required_unless_present("infile_old"))]
+    infile: Option<PathBuf>,
 
     /// Directory in which extract the archive. (Default to current directory)
     #[arg(short = 'C', required = false, value_hint=ValueHint::DirPath)]
     outdir: Option<PathBuf>,
 
     /// Files to extract
-    #[arg(value_parser, group = "input", value_hint=ValueHint::AnyPath)]
+    #[arg(group = "input", value_hint=ValueHint::AnyPath)]
     extract_files: Vec<arx::PathBuf>,
 
     /// Print a progress bar of the extraction
@@ -36,6 +36,15 @@ pub struct Options {
 
     #[arg(from_global)]
     verbose: u8,
+
+    #[arg(
+        short = 'f',
+        long = "file",
+        hide = true,
+        conflicts_with("infile"),
+        required_unless_present("infile")
+    )]
+    infile_old: Option<PathBuf>,
 }
 
 fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>> {
@@ -57,6 +66,11 @@ pub fn extract(options: Options) -> jbk::Result<()> {
         Some(o) => o,
         None => current_dir()?,
     };
-    info!("Extract archive {:?} in {:?}", &options.infile, outdir);
-    arx::extract(&options.infile, &outdir, files_to_extract, options.progress)
+    let infile = if let Some(ref infile) = options.infile_old {
+        infile
+    } else {
+        &options.infile.as_ref().unwrap()
+    };
+    info!("Extract archive {:?} in {:?}", &infile, outdir);
+    arx::extract(&infile, &outdir, files_to_extract, options.progress)
 }

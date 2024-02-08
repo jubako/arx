@@ -57,7 +57,7 @@ Extract an archive
 Extracting (decompressing) an archive is done with :
 
 ```
-arx extract -f my_archive.arx -C my_out_dir
+arx extract my_archive.arx -C my_out_dir
 ```
 
 

@@ -268,7 +268,7 @@ class Arx(ArchiveKind):
 
     @staticmethod
     def extract(archive, out_dir):
-        return [["arx", "extract", "-f", archive, "-C", out_dir]]
+        return [["arx", "extract", archive, "-C", out_dir]]
 
     @staticmethod
     def mount(archive, mount_dir):
