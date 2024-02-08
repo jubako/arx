@@ -177,30 +177,6 @@ impl arx::create::EntryTrait for ZipEntry {
     }
 }
 
-struct Directory<'a>(&'a arx::Path);
-
-impl<'a> arx::create::EntryTrait for Directory<'a> {
-    fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
-        Ok(Some(arx::create::EntryKind::Dir))
-    }
-    fn path(&self) -> &arx::Path {
-        self.0
-    }
-
-    fn uid(&self) -> u64 {
-        0
-    }
-    fn gid(&self) -> u64 {
-        0
-    }
-    fn mode(&self) -> u64 {
-        0
-    }
-    fn mtime(&self) -> u64 {
-        0
-    }
-}
-
 impl<R: Read + Seek> Converter<R> {
     pub fn new<P: AsRef<Path>>(
         archive: zip::ZipArchive<R>,
@@ -233,19 +209,6 @@ impl<R: Read + Seek> Converter<R> {
         for idx in 0..self.archive.len() {
             self.progress.entries.inc(1);
             let entry = self.archive.by_index(idx).unwrap();
-            if let Some(parent) = arx::PathBuf::from_path(entry.enclosed_name().unwrap())
-                .unwrap()
-                .parent()
-            {
-                let mut current = arx::PathBuf::new();
-                for component in parent.components() {
-                    current.push(component);
-                    if current.file_name().is_some() {
-                        let directory = Directory(&current);
-                        self.arx_creator.add_entry(&directory)?;
-                    }
-                }
-            }
             let entry = ZipEntry::new(entry, self.arx_creator.adder(), &self.archive_path)?;
             self.arx_creator.add_entry(&entry)?;
         }
