@@ -45,7 +45,7 @@ Creating an archive is simple :
 
 
 ```
-arx create --file my_archive.arx -r my_directory
+arx create -o my_archive.arx -r my_directory
 ```
 
 It will one file : `my_archive.arx`, which will contains the `my_directory` directory.

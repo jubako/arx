@@ -260,7 +260,7 @@ class Arx(ArchiveKind):
 
     @staticmethod
     def creation(source, archive) -> list[str]:
-        return [["arx", "create", source, "-r", "-f", archive]]
+        return [["arx", "create", source, "-r", "-o", archive]]
 
     @staticmethod
     def list(archive) -> list[str]:
