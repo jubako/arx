@@ -74,6 +74,8 @@ And if you want to access to the content of only one file :
 
 ```
 arx dump my_archive.arx my_directory/path/to/my_file > my_file
+# or
+arx dump my_archive.arx my_directory/path/to/my_file -o my_file
 ```
 
 Mounting the archive

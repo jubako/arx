@@ -25,12 +25,13 @@ type FullBuilder = (FileBuilder, (), ());
 fn dump_entry(
     container: &jbk::reader::Container,
     entry: arx::Entry<(jbk::ContentAddress, (), ())>,
+    output: &mut dyn std::io::Write,
 ) -> jbk::Result<()> {
     match entry {
         arx::Entry::Dir(_, _) => Err("Found directory".to_string().into()),
         arx::Entry::File(content_address) => {
             let reader = container.get_reader(content_address)?;
-            std::io::copy(&mut reader.create_flux_all(), &mut std::io::stdout().lock())?;
+            std::io::copy(&mut reader.create_flux_all(), output)?;
             Ok(())
         }
         arx::Entry::Link(_) => Err("Found link".to_string().into()),
@@ -48,6 +49,10 @@ pub struct Options {
     #[arg(value_parser)]
     path: arx::PathBuf,
 
+    /// Output Path. If not present or -, print to stdout
+    #[arg(value_parser)]
+    output: Option<String>,
+
     #[arg(from_global)]
     verbose: u8,
 }
@@ -58,5 +63,15 @@ pub fn dump(options: Options) -> jbk::Result<()> {
         options.path, options.infile
     );
     let arx = arx::Arx::new(options.infile)?;
-    dump_entry(&arx, arx.get_entry::<FullBuilder>(&options.path)?)
+    let entry = arx.get_entry::<FullBuilder>(&options.path)?;
+    match options.output {
+        None => dump_entry(&arx, entry, &mut std::io::stdout()),
+        Some(out) => {
+            if out == "-" {
+                dump_entry(&arx, entry, &mut std::io::stdout())
+            } else {
+                dump_entry(&arx, entry, &mut std::fs::File::open(out)?)
+            }
+        }
+    }
 }
