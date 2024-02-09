@@ -265,6 +265,7 @@ impl<R: Read> Converter<R> {
 }
 
 fn main() -> jbk::Result<()> {
+    human_panic::setup_panic!();
     let args = Cli::parse();
 
     if args.list_compressions {

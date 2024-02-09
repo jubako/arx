@@ -34,6 +34,8 @@ mod inner {
 fn main() -> jbk::Result<()> {
     use inner::*;
     use log::error;
+
+    human_panic::setup_panic!();
     let args = Cli::parse();
 
     if args.option.contains(&"rw".into()) {

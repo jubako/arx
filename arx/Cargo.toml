@@ -7,6 +7,7 @@ authors.workspace = true
 edition.workspace = true
 repository.workspace = true
 license.workspace = true
+homepage.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,6 +18,7 @@ clap.workspace = true
 clap_mangen.workspace = true
 clap_complete.workspace = true
 indicatif.workspace = true
+human-panic.workspace = true
 env_logger = "0.10.0"
 anyhow = "1.0.75"
 log = "0.4.20"

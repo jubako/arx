@@ -35,6 +35,8 @@ mod inner {
 fn main() -> ExitCode {
     use inner::*;
     use log::{error, info};
+
+    human_panic::setup_panic!();
     let args = Cli::parse();
 
     match env::current_exe() {

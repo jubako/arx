@@ -121,6 +121,7 @@ fn run() -> Result<()> {
 }
 
 fn main() -> ExitCode {
+    human_panic::setup_panic!();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
