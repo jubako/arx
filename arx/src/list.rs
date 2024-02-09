@@ -2,6 +2,9 @@ use crate::light_path::LightPath;
 use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
 use log::info;
+use std::cell::RefCell;
+use std::io::Write;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
@@ -31,9 +34,17 @@ impl arx::Builder for PathBuilder {
 
 type LightBuilder = (PathBuilder, PathBuilder, PathBuilder);
 
-struct Lister {}
+struct Lister<W>
+where
+    W: std::io::Write,
+{
+    output: RefCell<std::io::BufWriter<W>>,
+}
 
-impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
+impl<W> arx::walk::Operator<LightPath, LightBuilder> for Lister<W>
+where
+    W: std::io::Write,
+{
     fn on_start(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
         Ok(())
     }
@@ -42,7 +53,7 @@ impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
     }
     fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<bool> {
         current_path.push(path.clone());
-        current_path.println()?;
+        current_path.println(self.output.borrow_mut().deref_mut())?;
         Ok(true)
     }
     fn on_directory_exit(&self, current_path: &mut LightPath, _path: &Path) -> jbk::Result<()> {
@@ -50,16 +61,24 @@ impl arx::walk::Operator<LightPath, LightBuilder> for Lister {
         Ok(())
     }
     fn on_file(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
-        Ok(current_path.println2(path)?)
+        Ok(current_path.println2(path, self.output.borrow_mut().deref_mut())?)
     }
     fn on_link(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
-        Ok(current_path.println2(path)?)
+        Ok(current_path.println2(path, self.output.borrow_mut().deref_mut())?)
     }
 }
 
-struct StableLister {}
+struct StableLister<W>
+where
+    W: std::io::Write,
+{
+    output: RefCell<std::io::BufWriter<W>>,
+}
 
-impl arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister {
+impl<W> arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister<W>
+where
+    W: std::io::Write,
+{
     fn on_start(&self, _current_path: &mut arx::PathBuf) -> jbk::Result<()> {
         Ok(())
     }
@@ -72,7 +91,12 @@ impl arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister {
         dir: &arx::Dir,
     ) -> jbk::Result<bool> {
         current_path.push(String::from_utf8_lossy(dir.path()).as_ref());
-        println!("d {} {}", dir.mtime(), current_path);
+        writeln!(
+            self.output.borrow_mut(),
+            "d {} {}",
+            dir.mtime(),
+            current_path
+        )?;
         Ok(true)
     }
     fn on_directory_exit(
@@ -85,19 +109,26 @@ impl arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister {
     }
     fn on_file(&self, current_path: &mut arx::PathBuf, file: &arx::FileEntry) -> jbk::Result<()> {
         current_path.push(String::from_utf8_lossy(file.path()).as_ref());
-        println!(
+        writeln!(
+            self.output.borrow_mut(),
             "f {} {} {}",
             file.mtime(),
             file.size().into_u64(),
             current_path
-        );
+        )?;
         current_path.pop();
         Ok(())
     }
     fn on_link(&self, current_path: &mut arx::PathBuf, link: &arx::Link) -> jbk::Result<()> {
         current_path.push(String::from_utf8_lossy(link.path()).as_ref());
         let target: PathBuf = String::from_utf8_lossy(link.target()).as_ref().into();
-        println!("l {} {}->{}", link.mtime(), current_path, target.display());
+        writeln!(
+            self.output.borrow_mut(),
+            "l {} {}->{}",
+            link.mtime(),
+            current_path,
+            target.display()
+        )?;
         current_path.pop();
         Ok(())
     }
@@ -122,16 +153,23 @@ pub fn list(options: Options) -> Result<()> {
     info!("Listing entries in archive {:?}", options.infile);
     let arx =
         arx::Arx::new(&options.infile).with_context(|| format!("Opening {:?}", options.infile))?;
+    let stdout = std::io::stdout();
+    let handle = stdout.lock();
+    let handle = std::io::BufWriter::new(handle);
     if let Some(version) = options.stable_output {
         match version {
             1 => {
                 let mut walker = arx::walk::Walker::new(&arx, Default::default());
-                Ok(walker.run(&StableLister {})?)
+                Ok(walker.run(&StableLister {
+                    output: RefCell::new(handle),
+                })?)
             }
             _ => Err(anyhow!("Stable version {version} not supported")),
         }
     } else {
         let mut walker = arx::walk::Walker::new(&arx, Default::default());
-        Ok(walker.run(&Lister {})?)
+        Ok(walker.run(&Lister {
+            output: RefCell::new(handle),
+        })?)
     }
 }

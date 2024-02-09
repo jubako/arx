@@ -1,4 +1,3 @@
-use std::io;
 use std::io::Write;
 
 #[derive(Clone, Debug)]
@@ -17,26 +16,25 @@ impl LightPath {
         self.0.pop();
     }
 
-    pub fn println2(&self, component: &[u8]) -> std::io::Result<()> {
-        let mut stdout = io::stdout().lock();
+    pub fn println2(&self, component: &[u8], output: &mut impl Write) -> std::io::Result<()> {
         let mut parts = self.0.iter();
         if let Some(part) = parts.next() {
-            stdout.write_all(part)?;
+            output.write_all(part)?;
             for part in parts {
-                stdout.write_all(b"/")?;
-                stdout.write_all(part)?;
+                output.write_all(b"/")?;
+                output.write_all(part)?;
             }
             if !component.is_empty() {
-                stdout.write_all(b"/")?;
+                output.write_all(b"/")?;
             }
         }
-        stdout.write_all(component)?;
-        stdout.write_all(b"\n")?;
+        output.write_all(component)?;
+        output.write_all(b"\n")?;
         Ok(())
     }
 
-    pub fn println(&self) -> std::io::Result<()> {
-        self.println2(b"")
+    pub fn println(&self, output: &mut impl Write) -> std::io::Result<()> {
+        self.println2(b"", output)
     }
 }
 
