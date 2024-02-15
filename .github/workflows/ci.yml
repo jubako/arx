@@ -46,3 +46,17 @@ jobs:
 
       - name: Test code
         run: cargo test --verbose --features in_ci
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}-${{ matrix.toolchain }}
+          path: |
+            target/debug/arx
+            target/debug/arx.exe
+            target/debug/tar2arx
+            target/debug/tar2arx.exe
+            target/debug/zip2arx
+            target/debug/zip2arx.exe
+            target/debug/auto_mount
+          compression-level: 0
