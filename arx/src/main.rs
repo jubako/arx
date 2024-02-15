@@ -7,7 +7,7 @@ mod list;
 mod mount;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use log::error;
 use std::process::ExitCode;
 
@@ -18,8 +18,24 @@ struct Cli {
     #[arg(short, long, action=clap::ArgAction::Count, global=true)]
     verbose: u8,
 
+    #[arg(
+        long,
+        num_args= 0..=1,
+        default_missing_value = "",
+        help_heading = "Advanced",
+        value_parser([
+            "create",
+            "list",
+            "dump",
+            "extract",
+            #[cfg(not(windows))]
+            "mount"
+        ])
+    )]
+    generate_man_page: Option<String>,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -64,13 +80,32 @@ fn run() -> Result<()> {
     let args = Cli::parse();
     configure_log(args.verbose);
 
+    if let Some(what) = args.generate_man_page {
+        let command = match what.as_str() {
+            "" => Cli::command(),
+            "create" => create::Options::command(),
+            "list" => list::Options::command(),
+            "dump" => dump::Options::command(),
+            "extract" => extract::Options::command(),
+            #[cfg(not(windows))]
+            "mount" => mount::Options::command(),
+            _ => return Ok(Cli::command().print_help()?),
+        };
+        let man = clap_mangen::Man::new(command);
+        man.render(&mut std::io::stdout())?;
+        return Ok(());
+    }
+
     match args.command {
-        Commands::Create(options) => create::create(options),
-        Commands::List(options) => Ok(list::list(options)?),
-        Commands::Dump(options) => Ok(dump::dump(options)?),
-        Commands::Extract(options) => Ok(extract::extract(options)?),
-        #[cfg(not(windows))]
-        Commands::Mount(options) => Ok(mount::mount(options)?),
+        None => Ok(Cli::command().print_help()?),
+        Some(c) => match c {
+            Commands::Create(options) => create::create(options),
+            Commands::List(options) => Ok(list::list(options)?),
+            Commands::Dump(options) => Ok(dump::dump(options)?),
+            Commands::Extract(options) => Ok(extract::extract(options)?),
+            #[cfg(not(windows))]
+            Commands::Mount(options) => Ok(mount::mount(options)?),
+        },
     }
 }
 

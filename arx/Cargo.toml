@@ -14,6 +14,7 @@ license.workspace = true
 arx = { path = "../libarx", version = "0.2.0", package="libarx", features=["cmd_utils"] }
 jbk.workspace = true
 clap.workspace = true
+clap_mangen.workspace = true
 indicatif.workspace = true
 env_logger = "0.10.0"
 anyhow = "1.0.75"

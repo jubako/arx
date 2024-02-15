@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Create an archive.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Parser, Debug)]
 pub struct Options {
     /// File path of the archive to create.
     ///

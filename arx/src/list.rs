@@ -135,7 +135,7 @@ where
 }
 
 /// List the content in an archive.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Parser, Debug)]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser)]
