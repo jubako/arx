@@ -519,7 +519,7 @@ def main():
         ref_file_list.extend((dir_path / n for n in filenames))
     ref_file_list.sort()
 
-    if args.bin_dir.is_dir():
+    if args.bin_dir and args.bin_dir.is_dir():
         print(f"Adding {args.bin_dir} to PATH")
         os.environ["PATH"] = f"{args.bin_dir}:{os.environ['PATH']}"
 
@@ -556,7 +556,8 @@ def main():
                 if key == "Type":
                     continue
                 info[key] = info[key] / ref[key]
-        print_info(infos, False)
+        if infos:
+            print_info(infos, False)
 
 
 if __name__ == "__main__":

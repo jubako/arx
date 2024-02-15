@@ -95,14 +95,60 @@ impl DirEntry {
     {
         match components.next() {
             None => self.add_entry(entry, entry_store),
-            Some(component) => self
-                .dir_children
-                .try_write()
-                .unwrap()
-                .get_mut(component.as_str())
-                .unwrap()
-                .add(entry, components, entry_store),
+            Some(component) => {
+                self.ensure_dir(component.as_str(), entry_store)?;
+                let mut write_dir_children = self.dir_children.try_write().unwrap();
+                write_dir_children.get_mut(component.as_str()).unwrap().add(
+                    entry,
+                    components,
+                    entry_store,
+                )
+            }
         }
+    }
+
+    fn ensure_dir(&mut self, dir_name: &str, entry_store: &mut EntryStore) -> Void {
+        self.dir_children
+            .try_write()
+            .unwrap()
+            .entry(dir_name.into())
+            .or_insert_with(|| {
+                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
+                let dir_entry = DirEntry::new(entry_idx.bind());
+                let values = HashMap::from([
+                    (
+                        Property::Name,
+                        jbk::Value::Array(dir_name.as_bytes().into()),
+                    ),
+                    (
+                        Property::Parent,
+                        jbk::Value::UnsignedWord(self.as_parent_idx_generator().into()),
+                    ),
+                    (Property::Owner, jbk::Value::Unsigned(1000)),
+                    (Property::Group, jbk::Value::Unsigned(1000)),
+                    (Property::Rights, jbk::Value::Unsigned(0o755)),
+                    (Property::Mtime, jbk::Value::Unsigned(0)),
+                    (
+                        Property::FirstChild,
+                        jbk::Value::UnsignedWord(dir_entry.first_entry_generator().into()),
+                    ),
+                    (
+                        Property::NbChildren,
+                        jbk::Value::UnsignedWord(dir_entry.entry_count_generator().into()),
+                    ),
+                ]);
+
+                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
+                    &entry_store.schema,
+                    entry_idx,
+                    Some(EntryType::Dir),
+                    values,
+                ));
+                entry_store.add_entry(entry);
+                dir_entry
+            });
+
+        Ok(())
     }
 
     fn add_entry<E>(&mut self, entry: &E, entry_store: &mut EntryStore) -> Void
