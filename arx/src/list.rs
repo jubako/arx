@@ -8,6 +8,7 @@ use std::ops::DerefMut;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
+use clap::{Parser, ValueHint};
 
 type Path = Vec<u8>;
 
@@ -135,10 +136,10 @@ where
 }
 
 /// List the content in an archive.
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 pub struct Options {
     /// Archive to read
-    #[arg(value_parser)]
+    #[arg(value_parser, value_hint= ValueHint::FilePath)]
     infile: PathBuf,
 
     /// Use stable output (for scripting)

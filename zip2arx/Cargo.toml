@@ -16,5 +16,6 @@ jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
 clap_mangen.workspace = true
+clap_complete.workspace = true
 zip = "0.6.6"
 flate2 = "1.0.26"

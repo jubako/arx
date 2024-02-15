@@ -1,3 +1,4 @@
+use clap::{Parser, ValueHint};
 use jbk::reader::builder::PropertyBuilderTrait;
 use log::info;
 use std::path::PathBuf;
@@ -39,10 +40,10 @@ fn dump_entry(
 }
 
 /// Print the content of an entry in the archive.
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 pub struct Options {
     /// Archive to read
-    #[arg(value_parser)]
+    #[arg(value_parser, value_hint=ValueHint::FilePath)]
     infile: PathBuf,
 
     /// Path of the entry to print
@@ -50,7 +51,7 @@ pub struct Options {
     path: arx::PathBuf,
 
     /// Output Path. If not present or -, print to stdout
-    #[arg(value_parser)]
+    #[arg(value_parser, value_hint=ValueHint::FilePath)]
     output: Option<String>,
 
     #[arg(from_global)]

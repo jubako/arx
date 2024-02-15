@@ -1,3 +1,4 @@
+use clap::{Parser, ValueHint};
 use log::info;
 use std::collections::HashSet;
 use std::env::current_dir;
@@ -6,18 +7,18 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 /// Extract the content of an archive
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 pub struct Options {
     /// Archive to read
-    #[arg(short = 'f', long = "file")]
+    #[arg(short = 'f', long = "file", value_hint=ValueHint::FilePath)]
     infile: PathBuf,
 
     /// Directory in which extract the archive. (Default to current directory)
-    #[arg(short = 'C', required = false)]
+    #[arg(short = 'C', required = false, value_hint=ValueHint::DirPath)]
     outdir: Option<PathBuf>,
 
     /// Files to extract
-    #[arg(value_parser, group = "input")]
+    #[arg(value_parser, group = "input", value_hint=ValueHint::AnyPath)]
     extract_files: Vec<arx::PathBuf>,
 
     /// Print a progress bar of the extraction
@@ -25,7 +26,12 @@ pub struct Options {
     progress: bool,
 
     /// Get the list of files/directories to extract from the FILE_LIST (incompatible with EXTRACT_FILES)
-    #[arg(short = 'L', long = "file-list", group = "input")]
+    #[arg(
+        short = 'L',
+        long = "file-list",
+        group = "input",
+        value_hint = ValueHint::FilePath
+    )]
     file_list: Option<PathBuf>,
 
     #[arg(from_global)]

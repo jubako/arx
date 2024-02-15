@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueHint};
 
 use arx::create::Adder;
 use std::io::{Read, Seek};
@@ -13,19 +13,22 @@ struct Cli {
     /// Zip file to convert
     #[arg(
         value_parser,
-        required_unless_present_any(["list_compressions", "generate_man_page"])
+        required_unless_present_any(
+            ["list_compressions", "generate_man_page", "generate_complete"]
+        ),
+        value_hint=ValueHint::FilePath
     )]
     zip_file: Option<PathBuf>,
-
-    #[arg(long, help_heading = "Advanced")]
-    generate_man_page: bool,
 
     /// Archive name to create
     #[arg(
         short,
         long,
         value_parser,
-        required_unless_present_any(["list_compressions", "generate_man_page"])
+        required_unless_present_any(
+            ["list_compressions", "generate_man_page", "generate_complete"]
+        ),
+        value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
 
@@ -45,6 +48,12 @@ struct Cli {
     /// List available compression algorithms
     #[arg(long, default_value_t = false, action)]
     list_compressions: bool,
+
+    #[arg(long, help_heading = "Advanced")]
+    generate_man_page: bool,
+
+    #[arg(long, help_heading = "Advanced")]
+    generate_complete: Option<clap_complete::Shell>,
 }
 
 #[derive(Clone)]
@@ -239,6 +248,13 @@ fn main() -> jbk::Result<()> {
     if args.generate_man_page {
         let man = clap_mangen::Man::new(Cli::command());
         man.render(&mut std::io::stdout())?;
+        return Ok(());
+    }
+
+    if let Some(what) = args.generate_complete {
+        let mut command = Cli::command();
+        let name = command.get_name().to_string();
+        clap_complete::generate(what, &mut command, name, &mut std::io::stdout());
         return Ok(());
     }
 

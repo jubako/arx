@@ -34,6 +34,9 @@ struct Cli {
     )]
     generate_man_page: Option<String>,
 
+    #[arg(long, help_heading = "Advanced")]
+    generate_complete: Option<clap_complete::Shell>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -93,6 +96,13 @@ fn run() -> Result<()> {
         };
         let man = clap_mangen::Man::new(command);
         man.render(&mut std::io::stdout())?;
+        return Ok(());
+    }
+
+    if let Some(what) = args.generate_complete {
+        let mut command = Cli::command();
+        let name = command.get_name().to_string();
+        clap_complete::generate(what, &mut command, name, &mut std::io::stdout());
         return Ok(());
     }
 
