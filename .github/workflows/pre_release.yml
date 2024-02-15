@@ -1,0 +1,173 @@
+name: Pre-Release
+
+#
+on:
+  pull_request:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+
+jobs:
+  # The create-release job runs purely to initialize the GitHub release itself,
+  # and names the release after the `x.y.z` tag that was pushed. It's separate
+  # from building the release so that we only create the release once.
+  create-release:
+    name: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the release version from the tag
+        if: env.VERSION == ''
+        run: echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+      - name: Show the version
+        run: |
+          echo "version is: $VERSION"
+      - name: Check that tag version and Cargo.toml version are the same
+        shell: bash
+        run: |
+          if ! grep -q "version = \"$VERSION\"" Cargo.toml; then
+            echo "version does not match Cargo.toml" >&2
+            #exit 1
+          fi
+#      - name: Create GitHub release
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        run: gh release create $VERSION --draft --verify-tag --title $VERSION
+    outputs:
+      version: ${{ env.VERSION }}
+
+  # Now the github release has been created, we can build our binaries
+  # and upload them to github release
+  build-release:
+    name: build-release
+    needs: ['create-release']
+    runs-on: ${{ matrix.os }}
+    env:
+      # Emit backtraces on panics.
+      RUST_BACKTRACE: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [arx, tar2arx, zip2arx]
+        build: [linux, macos, windows]
+        include:
+        - build: linux
+          os: ubuntu-latest
+        - build: macos
+          os: macos-latest
+        - build: windows
+          os: windows-latest
+
+    steps:
+    - name: Install dependencies
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      run: |
+        sudo apt-get install -y libfuse-dev
+
+    - name: Install dependencies
+      if: ${{ matrix.os == 'macos-latest'}}
+      run: |
+        brew install macfuse
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build release binary
+      shell: bash
+      run: |
+        cargo build --verbose --release -p ${{ matrix.tool }}
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          bin="target/release/${{ matrix.tool }}.exe"
+        else
+          bin="target/release/${{ matrix.tool }}"
+        fi
+        echo "BIN=$bin" >> $GITHUB_ENV
+
+    - name: Strip release binary (macos)
+      if: matrix.os == 'macos-latest'
+      shell: bash
+      run: strip "$BIN"
+
+    - name: Determine archive name
+      shell: bash
+      run: |
+        version="${{ needs.create-release.outputs.version }}"
+        echo "ARCHIVE=${{ matrix.tool }}-$version-${{ matrix.build }}" >> $GITHUB_ENV
+
+    - name: Creating directory for archive
+      shell: bash
+      run: |
+        mkdir -p "$ARCHIVE"/{complete,doc}
+        cp "$BIN" "$ARCHIVE"/
+        cp {README.md,LICENSE-MIT} "$ARCHIVE"/
+        cp Changelog.md "$ARCHIVE"/doc/
+
+    - name: Generate completions
+      shell: bash
+      run: |
+        "$BIN" --version
+        "$BIN" --generate-complete=bash > "$ARCHIVE/complete/${{ matrix.tool }}.bash"
+        "$BIN" --generate-complete=fish > "$ARCHIVE/complete/${{ matrix.tool }}.fish"
+        "$BIN" --generate-complete=powershell > "$ARCHIVE/complete/_${{ matrix.tool }}.ps1"
+        "$BIN" --generate-complete=zsh > "$ARCHIVE/complete/_${{ matrix.tool }}"
+
+    - name: Generate man page
+      shell: bash
+      if: matrix.tool != 'arx'
+      run: |
+        "$BIN" --generate-man-page > "$ARCHIVE/doc/${{ matrix.tool }}.1"
+
+    - name: Generate man page (arx)
+      shell: bash
+      if: matrix.tool == 'arx'
+      run: |
+        "$BIN" --generate-man-page > "$ARCHIVE/doc/${{ matrix.tool }}.1"
+        commands="create list dump extract"
+        if [[ "${{ matrix.build }}" != "windows" ]]; then
+          commands=$commands" mount"
+        fi
+        for command in $commands
+        do
+          "$BIN" --generate-man-page=$command > "$ARCHIVE/doc/${{ matrix.tool }}-$command.1"
+        done
+
+    - name: Build archive (Windows)
+      shell: bash
+      if: matrix.os == 'windows-latest'
+      run: |
+        7z a "$ARCHIVE.zip" "$ARCHIVE"
+        certutil -hashfile "$ARCHIVE.zip" SHA256 > "$ARCHIVE.zip.sha256"
+        echo "ASSET=$ARCHIVE.zip" >> $GITHUB_ENV
+        echo "ASSET_SUM=$ARCHIVE.zip.sha256" >> $GITHUB_ENV
+
+    - name: Build archive (Unix)
+      shell: bash
+      if: matrix.os != 'windows-latest'
+      run: |
+        tar czf "$ARCHIVE.tar.gz" "$ARCHIVE"
+        shasum -a 256 "$ARCHIVE.tar.gz" > "$ARCHIVE.tar.gz.sha256"
+        echo "ASSET=$ARCHIVE.tar.gz" >> $GITHUB_ENV
+        echo "ASSET_SUM=$ARCHIVE.tar.gz.sha256" >> $GITHUB_ENV
+
+    - name: Upload release archive
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: bash
+      run: |
+        version="${{ needs.create-release.outputs.version }}"
+      #  gh release upload "$version" ${{ env.ASSET }} ${{ env.ASSET_SUM }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: pre_release-${{ matrix.build }}-${{ matrix.tool }}
+        path: |
+          ${{ env.ASSET }}
+        compression-level: 0
