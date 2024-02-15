@@ -1163,6 +1163,7 @@ name = "tar2arx"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "clap_mangen",
  "indicatif",
  "jubako",
  "libarx",
@@ -1532,6 +1533,7 @@ name = "zip2arx"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "clap_mangen",
  "flate2",
  "indicatif",
  "jubako",

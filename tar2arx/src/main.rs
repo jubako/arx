@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 use arx::create::Adder;
 use std::io::Read;
@@ -16,12 +16,15 @@ struct Cli {
     #[arg(value_parser)]
     tar_file: Option<String>,
 
+    #[arg(long, help_heading = "Advanced")]
+    generate_man_page: bool,
+
     /// Archive name to create
     #[arg(
         short,
         long,
         value_parser,
-        required_unless_present("list_compressions")
+        required_unless_present_any(["list_compressions", "generate_man_page"])
     )]
     outfile: Option<PathBuf>,
 
@@ -29,7 +32,13 @@ struct Cli {
     concat_mode: Option<arx::cmd_utils::ConcatMode>,
 
     /// Set compression algorithm to use
-    #[arg(short, long, value_parser=arx::cmd_utils::compression_arg_parser, required=false, default_value = "zstd")]
+    #[arg(
+        short,
+        long,
+        value_parser=arx::cmd_utils::compression_arg_parser,
+        required=false,
+        default_value = "zstd"
+    )]
     compression: jbk::creator::Compression,
 
     /// List available compression algorithms
@@ -254,6 +263,12 @@ fn main() -> jbk::Result<()> {
 
     if args.list_compressions {
         arx::cmd_utils::list_compressions();
+        return Ok(());
+    }
+
+    if args.generate_man_page {
+        let man = clap_mangen::Man::new(Cli::command());
+        man.render(&mut std::io::stdout())?;
         return Ok(());
     }
 
