@@ -89,7 +89,7 @@ impl std::fmt::Display for StatCounter {
 }
 
 /// Mount an archive in a directory.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Parser, Debug)]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser)]
