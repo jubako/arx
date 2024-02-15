@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueHint};
 
 use arx::create::Adder;
 use std::io::Read;
@@ -13,18 +13,18 @@ use std::sync::Arc;
 #[command(name = "tar2arx", author, version, about, long_about=None)]
 struct Cli {
     /// Tar file to convert
-    #[arg(value_parser)]
-    tar_file: Option<String>,
-
-    #[arg(long, help_heading = "Advanced")]
-    generate_man_page: bool,
+    #[arg(value_parser, value_hint=ValueHint::FilePath)]
+    tar_file: Option<PathBuf>,
 
     /// Archive name to create
     #[arg(
         short,
         long,
         value_parser,
-        required_unless_present_any(["list_compressions", "generate_man_page"])
+        required_unless_present_any(
+            ["list_compressions", "generate_man_page", "generate_complete"]
+        ),
+        value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
 
@@ -44,6 +44,12 @@ struct Cli {
     /// List available compression algorithms
     #[arg(long, default_value_t = false, action)]
     list_compressions: bool,
+
+    #[arg(long, help_heading = "Advanced")]
+    generate_man_page: bool,
+
+    #[arg(long, help_heading = "Advanced")]
+    generate_complete: Option<clap_complete::Shell>,
 }
 
 #[derive(Clone)]
@@ -272,11 +278,18 @@ fn main() -> jbk::Result<()> {
         return Ok(());
     }
 
+    if let Some(what) = args.generate_complete {
+        let mut command = Cli::command();
+        let name = command.get_name().to_string();
+        clap_complete::generate(what, &mut command, name, &mut std::io::stdout());
+        return Ok(());
+    }
+
     let mut input_size = None;
     let input: Box<dyn Read> = match args.tar_file {
         None => Box::new(std::io::stdin()),
         Some(p) => {
-            if p == "- " {
+            if p == PathBuf::from("-") {
                 Box::new(std::io::stdin())
             } else {
                 let f = std::fs::File::open(p)?;

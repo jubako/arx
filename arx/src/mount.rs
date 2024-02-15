@@ -1,3 +1,4 @@
+use clap::{Parser, ValueHint};
 use log::info;
 use std::path::PathBuf;
 
@@ -89,14 +90,14 @@ impl std::fmt::Display for StatCounter {
 }
 
 /// Mount an archive in a directory.
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 pub struct Options {
     /// Archive to read
-    #[arg(value_parser)]
+    #[arg(value_parser, value_hint=ValueHint::FilePath)]
     infile: PathBuf,
 
     /// Target directory
-    #[arg(value_parser)]
+    #[arg(value_parser, value_hint=ValueHint::DirPath)]
     mountdir: PathBuf,
 
     #[arg(from_global)]

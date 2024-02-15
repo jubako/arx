@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use clap::{Parser, ValueHint};
+
 /// Create an archive.
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 pub struct Options {
     /// File path of the archive to create.
     ///
@@ -18,18 +20,19 @@ pub struct Options {
         short = 'f',
         long = "file",
         value_parser,
-        required_unless_present("list_compressions")
+        required_unless_present("list_compressions"),
+        value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
 
     /// Remove STRIP_PREFIX from the entries' name added to the archive.
-    #[arg(long, required = false)]
+    #[arg(long, required = false, value_hint=ValueHint::DirPath)]
     strip_prefix: Option<arx::PathBuf>,
 
     /// Move to BASE_DIR before starting adding content to arx archive.
     ///
     /// Argument `INFILES` or `STRIP_PREFIX` must be relative to `BASE_DIR`.
-    #[arg(short = 'C', required = false)]
+    #[arg(short = 'C', required = false, value_hint=ValueHint::DirPath)]
     base_dir: Option<PathBuf>,
 
     /// Input files/directories
@@ -38,7 +41,7 @@ pub struct Options {
     ///
     /// In this mode `recurse` is true by default.
     /// Use `--no-recurse` to avoid recursion.
-    #[arg(value_parser, group = "input")]
+    #[arg(value_parser, group = "input", value_hint=ValueHint::AnyPath)]
     infiles: Vec<PathBuf>,
 
     /// Get the list of files/directories to add from the FILE_LIST (incompatible with INFILES)
@@ -48,7 +51,7 @@ pub struct Options {
     /// In this mode, `recurse` is false by default.
     /// This allow FILE_LIST listing both the directory and (subset of) files in the given directory.
     /// Use `--recurse` to activate recursion.
-    #[arg(short = 'L', long = "file-list", group = "input", verbatim_doc_comment)]
+    #[arg(short = 'L', long = "file-list", group = "input", verbatim_doc_comment, value_hint=ValueHint::FilePath)]
     file_list: Option<PathBuf>,
 
     /// Recurse in directories

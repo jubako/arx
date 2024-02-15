@@ -134,6 +134,7 @@ dependencies = [
  "anyhow",
  "arx_test_dir",
  "clap",
+ "clap_complete",
  "clap_mangen",
  "env_logger",
  "indicatif",
@@ -304,6 +305,15 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+]
+
+[[package]]
+name = "clap_complete"
+version = "4.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "299353be8209bd133b049bf1c63582d184a8b39fd9c04f15fe65f50f88bdfe6c"
+dependencies = [
+ "clap",
 ]
 
 [[package]]
@@ -1163,6 +1173,7 @@ name = "tar2arx"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "clap_complete",
  "clap_mangen",
  "indicatif",
  "jubako",
@@ -1533,6 +1544,7 @@ name = "zip2arx"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "clap_complete",
  "clap_mangen",
  "flate2",
  "indicatif",
