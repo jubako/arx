@@ -24,6 +24,7 @@ struct Cli {
         default_missing_value = "",
         help_heading = "Advanced",
         value_parser([
+            "",
             "create",
             "list",
             "dump",
