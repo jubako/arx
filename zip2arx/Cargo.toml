@@ -11,7 +11,7 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arx = { path = "../libarx", version = "0.2.0", package="libarx", features=["cmd_utils"] }
+arx = { path = "../libarx", version = "0.2.0", package="libarx", features=["cmd_utils", "zstd"] }
 jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
