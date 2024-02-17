@@ -172,6 +172,6 @@ jobs:
         # Until cargo publish can publish serveral package in the same time,
         # only libarx will work in `--dry-run` mode.
         # See https://github.com/rust-lang/cargo/issues/1169
-        #cargo publish --dry-run -p arx
-        #cargo publish --dry-run -p tar2arx
-        #cargo publish --dry-run -p zip2arx
+        cargo publish --dry-run -p arx
+        cargo publish --dry-run -p tar2arx
+        cargo publish --dry-run -p zip2arx
