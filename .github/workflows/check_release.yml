@@ -3,7 +3,7 @@ name: Check Release
 on:
   pull_request:
     branches:
-      - "r/[0-9]+.[0-9]+.[0-9]+"
+      - "r/[0-9]+.[0-9]+.[0-9]+(-[0-9a-zA-Z]+)?"
 
 jobs:
   check-version:
