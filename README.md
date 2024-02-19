@@ -45,7 +45,7 @@ Creating an archive is simple :
 
 
 ```
-arx create --file my_archive.arx -r my_directory
+arx create -o my_archive.arx -r my_directory
 ```
 
 It will one file : `my_archive.arx`, which will contains the `my_directory` directory.
@@ -57,7 +57,7 @@ Extract an archive
 Extracting (decompressing) an archive is done with :
 
 ```
-arx extract -f my_archive.arx -C my_out_dir
+arx extract my_archive.arx -C my_out_dir
 ```
 
 

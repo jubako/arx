@@ -17,10 +17,10 @@ pub struct Options {
     /// Relative path are relative to the current working dir.
     /// `BASE_DIR` option is used after resolving relative path.
     #[arg(
-        short = 'f',
-        long = "file",
+        short,
+        long,
         value_parser,
-        required_unless_present("list_compressions"),
+        required_unless_present_any(["list_compressions","outfile_old"]),
         value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
@@ -88,6 +88,15 @@ pub struct Options {
 
     #[arg(from_global)]
     verbose: u8,
+
+    #[arg(
+        short = 'f',
+        long = "file",
+        hide = true,
+        conflicts_with("outfile"),
+        required_unless_present("outfile")
+    )]
+    outfile_old: Option<PathBuf>,
 }
 
 fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
@@ -178,7 +187,12 @@ pub fn create(options: Options) -> Result<()> {
         None => arx::PathBuf::new(),
     };
 
-    let out_file = std::env::current_dir()?.join(options.outfile.as_ref().unwrap());
+    let out_file = if let Some(ref outfile) = options.outfile_old {
+        outfile
+    } else {
+        options.outfile.as_ref().unwrap()
+    };
+    let out_file = std::env::current_dir()?.join(out_file);
     let files_to_add = get_files_to_add(&options)?;
 
     let jbk_progress = Arc::new(ProgressBar::new());
