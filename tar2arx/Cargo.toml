@@ -19,5 +19,6 @@ indicatif.workspace = true
 clap_mangen.workspace = true
 clap_complete.workspace = true
 human-panic.workspace = true
+anyhow.workspace = true
 tar = "0.4.39"
 niffler = "2.5.0"

@@ -1,5 +1,6 @@
 use clap::{CommandFactory, Parser, ValueHint};
 
+use anyhow::Result;
 use arx::create::Adder;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -264,7 +265,7 @@ impl<R: Read> Converter<R> {
     }
 }
 
-fn main() -> jbk::Result<()> {
+fn main() -> Result<()> {
     human_panic::setup_panic!();
     let args = Cli::parse();
 
@@ -314,5 +315,5 @@ fn main() -> jbk::Result<()> {
         args.compression,
         progress_bar,
     )?;
-    converter.run(args.outfile.as_ref().unwrap())
+    Ok(converter.run(args.outfile.as_ref().unwrap())?)
 }

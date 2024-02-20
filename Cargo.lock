@@ -1269,6 +1269,7 @@ dependencies = [
 name = "tar2arx"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "clap",
  "clap_complete",
  "clap_mangen",
