@@ -1,16 +1,25 @@
-Convert tar archive to arx
-==========================
+Tar2Arx
+=======
+
+`tar2arx` is a command line tool to convert tar archive to arx format.
 
 [Arx](https://crates.io/crates/arx) is a new file archive format.
 
 Install tar2arx
----------------
+===============
+
+Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
+You can also install tar2arx using Cargo:
 
 ```
 cargo install tar2arx arx
 ```
 
 You will need `arx` to read the archive.
+
+
+Use tar2arx
+===========
 
 
 Convert a tar archive

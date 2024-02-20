@@ -4,14 +4,14 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
 repository = "https://github.com/jubako/arx"
 homepage = "https://github.com/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]
-jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", version = "0.2.0" }
+jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", version = "0.2.1" }
 clap = { version = "4.4.5", features = ["derive"] }
 clap_mangen = "0.2.20"
 clap_complete = "4.5.0"

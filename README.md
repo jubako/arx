@@ -27,16 +27,18 @@ Arx use the jubako format and create arx archive which:
 - Allow to mount the archive to explore and use (read only) the files in the
   archive without decompressing it.
 
-Try arx
-=======
-
 Install arx
------------
+===========
+
+Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
+You can also install arx using Cargo:
 
 ```
 cargo install arx
 ```
 
+Use arx
+=======
 
 Create an archive
 -----------------
@@ -94,7 +96,7 @@ Converting a zip archive to an arx archive
 ------------------------------------------
 
 ```
-zip2ar -o my_archive.arx my_zip_archive.zip
+zip2arx -o my_archive.arx my_zip_archive.zip
 ```
 
 Converting a tar archive to an arx archive
