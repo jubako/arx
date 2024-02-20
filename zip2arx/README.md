@@ -1,16 +1,25 @@
-Convert zip archive to arx
-==========================
+Zip2Arx
+=======
+
+`zip2arx` is a command line tool to convert zip archive to arx format.
 
 [Arx](https://crates.io/crates/arx) is a new file archive format.
 
 Install zip2arx
----------------
+===============
+
+Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
+You can also install zip2arx using Cargo:
 
 ```
 cargo install zip2arx arx
 ```
 
 You will need `arx` to read the archive.
+
+
+Use zip2arx
+===========
 
 
 Convert a zip archive
