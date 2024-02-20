@@ -19,8 +19,8 @@ clap_mangen.workspace = true
 clap_complete.workspace = true
 indicatif.workspace = true
 human-panic.workspace = true
+anyhow.workspace = true
 env_logger = "0.10.0"
-anyhow = "1.0.75"
 log = "0.4.20"
 
 [dev-dependencies]
