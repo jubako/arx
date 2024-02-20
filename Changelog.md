@@ -1,3 +1,18 @@
+# Arx 0.2.1
+
+- Add README.md in all sub-packages.
+- Improve performance of arx list (x2)
+- libarx now creates missing intermediate "directory" at arx archive creation.
+- `arx dump` now takes a output argument to not always dump on stdout
+- `tar2arx` accepts now a compressed tar as input.
+- `tar2arx` can now takes tar as a path to the tar and not always as stdin.
+- Add option to generate man page (all tools)
+- Add option to generate completion script (all tools)
+- `arx create` now takes option `-o` for create archive. (`-f` is keep for compatibility but will be removed)
+- `arx extract` now takes the input archive as argument (`-f` is keep for compatibility but will be removed)
+- Show a nice message in case of panic.
+- Better CI
+
 # Arx 0.2
 
 This release is a huge release!!

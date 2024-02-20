@@ -138,7 +138,7 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 
 [[package]]
 name = "arx"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arx_test_dir",
@@ -785,7 +785,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libarx"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "clap",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "tar2arx"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -1673,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "zip2arx"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "clap_complete",
