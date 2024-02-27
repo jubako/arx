@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{AllProperties, Arx, Builder, Reader, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::MayMissPack;
 
 struct FileEntry {
     path: String,
@@ -181,15 +182,29 @@ impl crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'_> {
             .write(true)
             .create_new(true)
             .open(&abs_path)?;
-        let size = reader.size().into_usize();
-        let mut offset = 0;
-        loop {
-            let sub_size = std::cmp::min(size - offset, 4 * 1024);
-            let reader = reader.into_memory_reader(offset.into(), jbk::End::new_size(sub_size))?;
-            let written = file.write(reader.get_slice(jbk::Offset::zero(), jbk::End::None)?)?;
-            offset += written;
-            if offset == size {
-                break;
+        match reader {
+            MayMissPack::FOUND(reader) => {
+                let size = reader.size().into_usize();
+                let mut offset = 0;
+                loop {
+                    let sub_size = std::cmp::min(size - offset, 4 * 1024);
+                    let reader =
+                        reader.into_memory_reader(offset.into(), jbk::End::new_size(sub_size))?;
+                    let written =
+                        file.write(reader.get_slice(jbk::Offset::zero(), jbk::End::None)?)?;
+                    offset += written;
+                    if offset == size {
+                        break;
+                    }
+                }
+            }
+            MayMissPack::MISSING(pack_info) => {
+                eprintln!(
+                    "Missing pack {} for {}. Declared location is {}",
+                    pack_info.uuid,
+                    abs_path.display(),
+                    String::from_utf8_lossy(&pack_info.pack_location)
+                );
             }
         }
         if self.print_progress {

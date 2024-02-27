@@ -1,5 +1,5 @@
 use clap::{Parser, ValueHint};
-use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::{builder::PropertyBuilderTrait, MayMissPack};
 use log::info;
 use std::path::PathBuf;
 
@@ -31,8 +31,18 @@ fn dump_entry(
     match entry {
         arx::Entry::Dir(_, _) => Err("Found directory".to_string().into()),
         arx::Entry::File(content_address) => {
-            let reader = container.get_reader(content_address)?;
-            std::io::copy(&mut reader.create_flux_all(), output)?;
+            match container.get_reader(content_address)? {
+                MayMissPack::FOUND(reader) => {
+                    std::io::copy(&mut reader.create_flux_all(), output)?;
+                }
+                MayMissPack::MISSING(pack_info) => {
+                    eprintln!(
+                        "Missing pack {}. Declared location is {}",
+                        pack_info.uuid,
+                        String::from_utf8_lossy(&pack_info.pack_location)
+                    );
+                }
+            }
             Ok(())
         }
         arx::Entry::Link(_) => Err("Found link".to_string().into()),
