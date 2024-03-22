@@ -2,7 +2,7 @@ use super::Arx;
 use crate::common::{AllProperties, Comparator, EntryType, ReadEntry};
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
-use jbk::reader::Range;
+use jbk::reader::{MayMissPack, Range};
 use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;
@@ -542,11 +542,19 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                         .get_entry(&self.light_file_builder, idx)
                         .unwrap();
                     match &entry {
-                        Ok(content_address) => {
-                            let reader = self.arx.get_reader(*content_address).unwrap();
-                            self.reader_cache.insert(ino, (reader, 1));
-                            reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
-                        }
+                        Ok(content_address) => match self.arx.get_reader(*content_address) {
+                            Err(_e) => reply.error(libc::EIO),
+                            Ok(MayMissPack::MISSING(_pack_info)) => reply.error(
+                                #[cfg(not(target_os = "linux"))]
+                                libc::ENODATA,
+                                #[cfg(target_os = "linux")]
+                                libc::ENOMEDIUM,
+                            ),
+                            Ok(MayMissPack::FOUND(reader)) => {
+                                self.reader_cache.insert(ino, (reader, 1));
+                                reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
+                            }
+                        },
                         Err(EntryType::Dir) => reply.error(libc::EISDIR),
                         Err(EntryType::Link) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
                         Err(EntryType::File) => unreachable!(),
