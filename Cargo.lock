@@ -756,8 +756,7 @@ dependencies = [
 
 [[package]]
 name = "jubako"
-version = "0.2.1"
-source = "git+https://github.com/jubako/jubako.git#36ce8c375aa289e00e6c7843781d421fb3f36a92"
+version = "0.3.0-dev"
 dependencies = [
  "blake3",
  "clap",
