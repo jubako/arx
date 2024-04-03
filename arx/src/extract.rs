@@ -69,8 +69,8 @@ pub fn extract(options: Options) -> jbk::Result<()> {
     let infile = if let Some(ref infile) = options.infile_old {
         infile
     } else {
-        &options.infile.as_ref().unwrap()
+        options.infile.as_ref().unwrap()
     };
     info!("Extract archive {:?} in {:?}", &infile, outdir);
-    arx::extract(&infile, &outdir, files_to_extract, options.progress)
+    arx::extract(infile, &outdir, files_to_extract, options.progress)
 }
