@@ -32,6 +32,12 @@ Creating an archive is simple :
 tar2arx -o foo.arx foo.tar.gz
 ```
 
+With feature `http` (default), you can directly convert a remote tar archive with:
+
+```
+tar2arx -o foo.arg https://example.com/foo.tar.gz
+```
+
 Read arx archive
 ----------------
 

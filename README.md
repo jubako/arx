@@ -106,6 +106,12 @@ Converting a tar archive to an arx archive
 tar2arx -o my_archive.arx my_tar_archive.tar.gz
 ```
 
+or
+
+```
+tar2arx -o my_archive.arx https://example.com/my_tar_archive.tar.gz
+```
+
 
 Performance
 ===========

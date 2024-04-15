@@ -1,5 +1,6 @@
 use clap::{CommandFactory, Parser, ValueHint};
 
+use anyhow::Result;
 use arx::create::Adder;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ use std::sync::Arc;
 struct Cli {
     /// Tar file to convert
     #[arg(value_parser, value_hint=ValueHint::FilePath)]
-    tar_file: Option<PathBuf>,
+    tar_file: Option<String>,
 
     /// Archive name to create
     #[arg(
@@ -264,7 +265,7 @@ impl<R: Read> Converter<R> {
     }
 }
 
-fn main() -> jbk::Result<()> {
+fn main() -> Result<()> {
     human_panic::setup_panic!();
     let args = Cli::parse();
 
@@ -290,8 +291,10 @@ fn main() -> jbk::Result<()> {
     let input: Box<dyn Read> = match args.tar_file {
         None => Box::new(std::io::stdin()),
         Some(p) => {
-            if p == PathBuf::from("-") {
+            if p == "-" {
                 Box::new(std::io::stdin())
+            } else if p.starts_with("https://") || p.starts_with("http://") {
+                Box::new(ureq::get(&p).call()?.into_reader())
             } else {
                 let f = std::fs::File::open(p)?;
                 input_size = Some(f.metadata()?.len());
@@ -314,5 +317,5 @@ fn main() -> jbk::Result<()> {
         args.compression,
         progress_bar,
     )?;
-    converter.run(args.outfile.as_ref().unwrap())
+    Ok(converter.run(args.outfile.as_ref().unwrap())?)
 }

@@ -350,7 +350,7 @@ pub struct ArxFs<'a, S: Stats> {
 impl ArxFs<'static, ()> {
     pub fn new(arx: Arx) -> jbk::Result<Self> {
         // SAFETY: No data race can occurs on empty type doing nothing
-        Self::new_with_stats(arx, unsafe { &mut NOSTATS })
+        Self::new_with_stats(arx, unsafe { &mut *std::ptr::addr_of_mut!(NOSTATS) })
     }
 }
 
