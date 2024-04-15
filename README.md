@@ -90,6 +90,12 @@ mkdir mount_point
 arx mount my_archive.arx mount_point
 ```
 
+If you don't provide a `mount_point`, arx will create a temporary one for you
+
+```
+arx mount my_archive.arx # Will create my_archive.arx.xxxxxx
+```
+
 `arx` will be running until you unmount `mount_point`.
 
 Converting a zip archive to an arx archive

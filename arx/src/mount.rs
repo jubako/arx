@@ -1,5 +1,6 @@
 use clap::{Parser, ValueHint};
 use log::info;
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 pub struct StatCounter {
@@ -98,24 +99,40 @@ pub struct Options {
 
     /// Target directory
     #[arg(value_parser, value_hint=ValueHint::DirPath)]
-    mountdir: PathBuf,
+    mountdir: Option<PathBuf>,
 
     #[arg(from_global)]
     verbose: u8,
 }
 
 pub fn mount(options: Options) -> jbk::Result<()> {
-    info!(
-        "Mount archive {:?} in {:?}",
-        options.infile, options.mountdir
-    );
     let mut stats = StatCounter::new();
     let arx = arx::Arx::new(&options.infile)?;
     let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
 
     let mut abs_path = std::env::current_dir().unwrap();
     abs_path = abs_path.join(options.infile);
-    arxfs.mount(abs_path.to_str().unwrap().to_string(), &options.mountdir)?;
+    let mut _tmp = None;
+    let mount_dir = match &options.mountdir {
+        Some(m) => m.as_path(),
+        None => {
+            let file_name = abs_path.file_name().unwrap();
+            let mut prefix = OsString::with_capacity(file_name.len() + 1);
+            prefix.push(file_name);
+            prefix.push(".");
+            _tmp = Some(tempfile::TempDir::with_prefix_in(
+                prefix,
+                abs_path.parent().unwrap(),
+            )?);
+            println!(
+                "Create mount point {}",
+                _tmp.as_ref().unwrap().path().display()
+            );
+            _tmp.as_ref().unwrap().path()
+        }
+    };
+    info!("Mount {} in {}", abs_path.display(), mount_dir.display());
+    arxfs.mount(abs_path.to_str().unwrap().to_string(), mount_dir)?;
 
     info!("Stats:\n {stats}");
     Ok(())
