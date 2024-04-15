@@ -12,7 +12,7 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arx = { path = "../libarx", version = "0.2.1", package="libarx", features=["cmd_utils", "zstd"] }
+arx = { path = "../libarx", version = "0.2.1", package="libarx", features=["cmd_utils"] }
 jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
@@ -21,3 +21,9 @@ clap_complete.workspace = true
 human-panic.workspace = true
 zip = "0.6.6"
 flate2 = "1.0.26"
+
+[features]
+default = ["zstd"]
+lzma = ["arx/lzma"]
+zstd = ["arx/zstd"]
+lz4 = ["arx/lz4"]

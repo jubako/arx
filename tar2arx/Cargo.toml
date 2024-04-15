@@ -12,7 +12,7 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arx = { path = "../libarx", version = "0.2.1", package="libarx", features=["cmd_utils", "zstd"] }
+arx = { path = "../libarx", version = "0.2.1", package="libarx", features=["cmd_utils"] }
 jbk.workspace = true
 clap.workspace = true
 indicatif.workspace = true
@@ -25,5 +25,8 @@ niffler = "2.5.0"
 ureq = { version = "2.9.6", optional = true }
 
 [features]
-default = ["http"]
+default = ["http", "zstd"]
+lzma = ["arx/lzma"]
+zstd = ["arx/zstd"]
+lz4 = ["arx/lz4"]
 http = ["dep:ureq"]
