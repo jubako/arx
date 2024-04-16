@@ -304,7 +304,28 @@ impl EntryStoreCreator {
         }
     }
 
-    pub fn finalize(self, directory_pack: &mut jbk::creator::DirectoryPackCreator) {
+    pub fn entry_count(&self) -> jbk::EntryCount {
+        jbk::EntryCount::from(self.root_entry.entry_count_generator()() as u32)
+    }
+
+    pub fn add_entry<E>(&mut self, entry: &E) -> Void
+    where
+        E: EntryTrait,
+    {
+        let path = entry.path();
+        match path.parent() {
+            None => self
+                .root_entry
+                .add(entry, std::iter::empty(), &mut self.entry_store),
+            Some(parent) => self
+                .root_entry
+                .add(entry, parent.components(), &mut self.entry_store),
+        }
+    }
+}
+
+impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
+    fn finalize(self: Box<Self>, directory_pack: &mut jbk::creator::DirectoryPackCreator) {
         let root_count = self.entry_count();
         let entry_count = self.entry_store.len();
         directory_pack.add_value_store(self.path_store);
@@ -326,25 +347,6 @@ impl EntryStoreCreator {
             jbk::EntryIdx::from(0).into(),
         );
     }
-
-    pub fn entry_count(&self) -> jbk::EntryCount {
-        jbk::EntryCount::from(self.root_entry.entry_count_generator()() as u32)
-    }
-
-    pub fn add_entry<E>(&mut self, entry: &E) -> Void
-    where
-        E: EntryTrait,
-    {
-        let path = entry.path();
-        match path.parent() {
-            None => self
-                .root_entry
-                .add(entry, std::iter::empty(), &mut self.entry_store),
-            Some(parent) => self
-                .root_entry
-                .add(entry, parent.components(), &mut self.entry_store),
-        }
-    }
 }
 
 impl Default for EntryStoreCreator {
@@ -357,6 +359,7 @@ impl Default for EntryStoreCreator {
 mod tests {
     use super::super::*;
     use super::*;
+    use jbk::creator::EntryStoreTrait;
 
     #[test]
     fn test_empty() -> jbk::Result<()> {
@@ -368,7 +371,7 @@ mod tests {
             Default::default(),
         );
 
-        let entry_store_creator = EntryStoreCreator::new();
+        let entry_store_creator = Box::new(EntryStoreCreator::new());
         entry_store_creator.finalize(&mut creator);
         creator.finalize(&mut arx_file)?;
         assert!(arx_name.is_file());
@@ -422,7 +425,7 @@ mod tests {
             Default::default(),
         );
 
-        let mut entry_store_creator = EntryStoreCreator::new();
+        let mut entry_store_creator = Box::new(EntryStoreCreator::new());
         let entry = SimpleEntry("foo.txt".into());
         entry_store_creator.add_entry(&entry)?;
         entry_store_creator.finalize(&mut creator);
