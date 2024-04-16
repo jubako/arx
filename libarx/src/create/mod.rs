@@ -4,7 +4,7 @@ mod fs_adder;
 
 pub use creator::SimpleCreator;
 pub use entry_store_creator::EntryStoreCreator;
-pub use fs_adder::{Adder, FsAdder};
+pub use fs_adder::FsAdder;
 
 #[derive(Clone)]
 pub enum EntryKind {

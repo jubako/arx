@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::{Adder, EntryStoreCreator, EntryTrait, Void};
+use super::{EntryStoreCreator, EntryTrait, Void};
 use jbk::creator::OutStream;
 
 pub struct ContentAdder<O: OutStream + 'static> {
@@ -20,8 +20,11 @@ impl<O: OutStream> ContentAdder<O> {
     }
 }
 
-impl<O: OutStream> Adder for ContentAdder<O> {
-    fn add<R: jbk::creator::InputReader>(&mut self, reader: R) -> jbk::Result<jbk::ContentAddress> {
+impl<O: OutStream> jbk::creator::ContentAdder for ContentAdder<O> {
+    fn add_content<R: jbk::creator::InputReader>(
+        &mut self,
+        reader: R,
+    ) -> jbk::Result<jbk::ContentAddress> {
         let content_id = self.content_pack.add_content(reader)?;
         Ok(jbk::ContentAddress::new(1.into(), content_id))
     }

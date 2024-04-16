@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser, ValueHint};
+use jbk::creator::ContentAdder;
 
-use arx::create::Adder;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -132,9 +132,9 @@ struct ZipEntry {
 }
 
 impl ZipEntry {
-    pub fn new<A: Adder>(
+    pub fn new(
         mut entry: zip::read::ZipFile<'_>,
-        adder: &mut A,
+        adder: &mut impl ContentAdder,
         archive_path: &Path,
     ) -> jbk::Result<Self> {
         let mtime = entry.last_modified().to_time().unwrap().unix_timestamp() as u64;
@@ -160,11 +160,11 @@ impl ZipEntry {
                     entry.data_start(),
                     Some(entry.size()),
                 )?;
-                adder.add(reader)?
+                adder.add_content(reader)?
             } else {
                 let mut data = vec![];
                 entry.read_to_end(&mut data)?;
-                adder.add(std::io::Cursor::new(data))?
+                adder.add_content(std::io::Cursor::new(data))?
             };
             Self {
                 path,
