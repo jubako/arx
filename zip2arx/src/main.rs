@@ -203,7 +203,7 @@ impl<R: Read + Seek> Converter<R> {
         archive: zip::ZipArchive<R>,
         archive_path: PathBuf,
         outfile: P,
-        concat_mode: arx::create::ConcatMode,
+        concat_mode: jbk::creator::ConcatMode,
     ) -> jbk::Result<Self> {
         let progress = Arc::new(ProgressBar::new(&archive)?);
         let arx_creator = arx::create::SimpleCreator::new(
@@ -265,7 +265,10 @@ fn main() -> jbk::Result<()> {
         archive,
         args.zip_file.unwrap(),
         args.outfile.as_ref().unwrap(),
-        args.concat_mode.into(),
+        match args.concat_mode {
+            None => jbk::creator::ConcatMode::OneFile,
+            Some(e) => e.into(),
+        },
     )?;
     converter.run(args.outfile.as_ref().unwrap())
 }

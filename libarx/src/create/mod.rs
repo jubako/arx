@@ -6,13 +6,6 @@ pub use creator::SimpleCreator;
 pub use entry_store_creator::EntryStoreCreator;
 pub use fs_adder::{Adder, FsAdder};
 
-#[derive(Clone, Copy)]
-pub enum ConcatMode {
-    OneFile,
-    TwoFiles,
-    NoConcat,
-}
-
 #[derive(Clone)]
 pub enum EntryKind {
     Dir,

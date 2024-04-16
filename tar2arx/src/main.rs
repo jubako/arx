@@ -230,7 +230,7 @@ impl<R: Read> Converter<R> {
     pub fn new<P: AsRef<Path>>(
         archive: tar::Archive<R>,
         outfile: P,
-        concat_mode: arx::create::ConcatMode,
+        concat_mode: jbk::creator::ConcatMode,
         compression: jbk::creator::Compression,
         progress_bar: indicatif::ProgressBar,
     ) -> jbk::Result<Self> {
@@ -313,7 +313,10 @@ fn main() -> Result<()> {
     let converter = Converter::new(
         archive,
         args.outfile.as_ref().unwrap(),
-        args.concat_mode.into(),
+        match args.concat_mode {
+            None => jbk::creator::ConcatMode::OneFile,
+            Some(e) => e.into(),
+        },
         args.compression,
         progress_bar,
     )?;

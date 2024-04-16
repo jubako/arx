@@ -80,18 +80,15 @@ pub struct ConcatMode {
     multiple_files: bool,
 }
 
-impl From<Option<ConcatMode>> for crate::create::ConcatMode {
-    fn from(flags: Option<ConcatMode>) -> Self {
-        match flags {
-            None => crate::create::ConcatMode::OneFile,
-            Some(opt) => {
-                let (one, two, multiple) = (opt.one_file, opt.two_files, opt.multiple_files);
-                match (one, two, multiple) {
-                    (true, _, _) => crate::create::ConcatMode::OneFile,
-                    (_, true, _) => crate::create::ConcatMode::TwoFiles,
-                    (_, _, true) => crate::create::ConcatMode::NoConcat,
-                    _ => unreachable!(),
-                }
+impl From<ConcatMode> for jbk::creator::ConcatMode {
+    fn from(opt: ConcatMode) -> Self {
+        {
+            let (one, two, multiple) = (opt.one_file, opt.two_files, opt.multiple_files);
+            match (one, two, multiple) {
+                (true, _, _) => jbk::creator::ConcatMode::OneFile,
+                (_, true, _) => jbk::creator::ConcatMode::TwoFiles,
+                (_, _, true) => jbk::creator::ConcatMode::NoConcat,
+                _ => unreachable!(),
             }
         }
     }

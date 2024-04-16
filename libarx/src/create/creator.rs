@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::{Adder, ConcatMode, EntryStoreCreator, EntryTrait, Void};
+use super::{Adder, EntryStoreCreator, EntryTrait, Void};
 use jbk::creator::OutStream;
 
 pub struct ContentAdder<O: OutStream + 'static> {
@@ -31,7 +31,7 @@ pub struct SimpleCreator {
     adder: ContentAdder<std::fs::File>,
     directory_pack: jbk::creator::DirectoryPackCreator,
     entry_store_creator: EntryStoreCreator,
-    concat_mode: ConcatMode,
+    concat_mode: jbk::creator::ConcatMode,
     out_dir: PathBuf,
     tmp_path_content_pack: tempfile::TempPath,
 }
@@ -39,7 +39,7 @@ pub struct SimpleCreator {
 impl SimpleCreator {
     pub fn new<P: AsRef<Path>>(
         outfile: P,
-        concat_mode: ConcatMode,
+        concat_mode: jbk::creator::ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
         compression: jbk::creator::Compression,
@@ -83,7 +83,7 @@ impl SimpleCreator {
         self.entry_store_creator.finalize(&mut self.directory_pack);
 
         let mut container = match self.concat_mode {
-            ConcatMode::NoConcat => None,
+            jbk::creator::ConcatMode::NoConcat => None,
             _ => Some(jbk::creator::ContainerPackCreator::new(outfile)?),
         };
 
@@ -92,7 +92,7 @@ impl SimpleCreator {
         let directory_pack_info = self.directory_pack.finalize(&mut tmpfile)?;
 
         let directory_locator = match self.concat_mode {
-            ConcatMode::NoConcat => {
+            jbk::creator::ConcatMode::NoConcat => {
                 let mut outfilename = outfile.file_name().unwrap().to_os_string();
                 outfilename.push(".jbkd");
                 let mut directory_pack_path = PathBuf::new();
@@ -120,7 +120,7 @@ impl SimpleCreator {
         let (mut content_pack_file, content_pack_info) =
             self.adder.into_inner().into_inner().finalize()?;
         let content_locator = match self.concat_mode {
-            ConcatMode::OneFile => {
+            jbk::creator::ConcatMode::OneFile => {
                 content_pack_file.rewind()?;
                 container
                     .as_mut()
@@ -156,7 +156,7 @@ impl SimpleCreator {
         let manifest_uuid = manifest_creator.finalize(&mut tmpfile)?;
 
         match self.concat_mode {
-            ConcatMode::NoConcat => {
+            jbk::creator::ConcatMode::NoConcat => {
                 if let Err(e) = tmpname.persist(outfile) {
                     return Err(e.error.into());
                 };
