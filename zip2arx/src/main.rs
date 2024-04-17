@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser, ValueHint};
+use jbk::creator::ContentAdder;
 
-use arx::create::Adder;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -132,9 +132,9 @@ struct ZipEntry {
 }
 
 impl ZipEntry {
-    pub fn new<A: Adder>(
+    pub fn new(
         mut entry: zip::read::ZipFile<'_>,
-        adder: &mut A,
+        adder: &mut impl ContentAdder,
         archive_path: &Path,
     ) -> jbk::Result<Self> {
         let mtime = entry.last_modified().to_time().unwrap().unix_timestamp() as u64;
@@ -160,11 +160,11 @@ impl ZipEntry {
                     entry.data_start(),
                     Some(entry.size()),
                 )?;
-                adder.add(reader)?
+                adder.add_content(reader)?
             } else {
                 let mut data = vec![];
                 entry.read_to_end(&mut data)?;
-                adder.add(std::io::Cursor::new(data))?
+                adder.add_content(std::io::Cursor::new(data))?
             };
             Self {
                 path,
@@ -203,7 +203,7 @@ impl<R: Read + Seek> Converter<R> {
         archive: zip::ZipArchive<R>,
         archive_path: PathBuf,
         outfile: P,
-        concat_mode: arx::create::ConcatMode,
+        concat_mode: jbk::creator::ConcatMode,
     ) -> jbk::Result<Self> {
         let progress = Arc::new(ProgressBar::new(&archive)?);
         let arx_creator = arx::create::SimpleCreator::new(
@@ -265,7 +265,10 @@ fn main() -> jbk::Result<()> {
         archive,
         args.zip_file.unwrap(),
         args.outfile.as_ref().unwrap(),
-        args.concat_mode.into(),
+        match args.concat_mode {
+            None => jbk::creator::ConcatMode::OneFile,
+            Some(e) => e.into(),
+        },
     )?;
     converter.run(args.outfile.as_ref().unwrap())
 }

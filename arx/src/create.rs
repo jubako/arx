@@ -199,7 +199,10 @@ pub fn create(options: Options) -> Result<()> {
     let progress = Rc::new(CachedSize::new());
     let mut creator = arx::create::SimpleCreator::new(
         &out_file,
-        options.concat_mode.into(),
+        match options.concat_mode {
+            None => jbk::creator::ConcatMode::OneFile,
+            Some(e) => e.into(),
+        },
         jbk_progress,
         Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
         options.compression,

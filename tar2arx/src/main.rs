@@ -1,7 +1,7 @@
 use clap::{CommandFactory, Parser, ValueHint};
 
 use anyhow::Result;
-use arx::create::Adder;
+use jbk::creator::ContentAdder;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -133,9 +133,9 @@ struct TarEntry {
 }
 
 impl TarEntry {
-    pub fn new<'a, R: 'a + Read, A: Adder>(
+    pub fn new<'a, R: 'a + Read>(
         mut entry: tar::Entry<'a, R>,
-        adder: &mut A,
+        adder: &mut impl ContentAdder,
     ) -> jbk::Result<Option<Self>> {
         let header = entry.header();
         let uid = header.uid()?;
@@ -189,7 +189,7 @@ impl TarEntry {
                     //Handle everything else as normal file
                     let mut data = vec![];
                     let size = entry.read_to_end(&mut data)?;
-                    let content_address = adder.add(std::io::Cursor::new(data))?;
+                    let content_address = adder.add_content(std::io::Cursor::new(data))?;
                     Some(Self {
                         path,
                         kind: arx::create::EntryKind::File(size.into(), content_address),
@@ -230,7 +230,7 @@ impl<R: Read> Converter<R> {
     pub fn new<P: AsRef<Path>>(
         archive: tar::Archive<R>,
         outfile: P,
-        concat_mode: arx::create::ConcatMode,
+        concat_mode: jbk::creator::ConcatMode,
         compression: jbk::creator::Compression,
         progress_bar: indicatif::ProgressBar,
     ) -> jbk::Result<Self> {
@@ -313,7 +313,10 @@ fn main() -> Result<()> {
     let converter = Converter::new(
         archive,
         args.outfile.as_ref().unwrap(),
-        args.concat_mode.into(),
+        match args.concat_mode {
+            None => jbk::creator::ConcatMode::OneFile,
+            Some(e) => e.into(),
+        },
         args.compression,
         progress_bar,
     )?;

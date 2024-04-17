@@ -14,10 +14,6 @@ pub enum FsEntryKind {
     Other,
 }
 
-pub trait Adder {
-    fn add<R: jbk::creator::InputReader>(&mut self, reader: R) -> jbk::Result<jbk::ContentAddress>;
-}
-
 pub struct FsEntry {
     pub kind: FsEntryKind,
     pub fs_path: PathBuf,
@@ -29,7 +25,7 @@ pub struct FsEntry {
 }
 
 impl FsEntry {
-    pub fn new_from_walk_entry<A: Adder>(
+    pub fn new_from_walk_entry<A: jbk::creator::ContentAdder>(
         dir_entry: walkdir::DirEntry,
         arx_path: crate::PathBuf,
         adder: &mut A,
@@ -41,7 +37,7 @@ impl FsEntry {
         } else if attr.is_file() {
             let reader = jbk::creator::InputFile::open(&fs_path)?;
             let size = reader.size();
-            let content_address = adder.add(reader)?;
+            let content_address = adder.add_content(reader)?;
             FsEntryKind::File(size, content_address)
         } else if attr.is_symlink() {
             FsEntryKind::Link
