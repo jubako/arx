@@ -204,6 +204,8 @@ def register(klass):
 
 class ArchiveKind:
     mount_sleep = 1
+    dump_too_long = False
+    mount_too_long = False
 
     @staticmethod
     def size(archive):
@@ -283,6 +285,8 @@ class Arx(ArchiveKind):
 class Tar(ArchiveKind):
     name = "Tar"
     extension = "tar.zst"
+    dump_too_long = True
+    mount_too_long = True
 
     @staticmethod
     def creation(source, archive):
@@ -301,12 +305,10 @@ class Tar(ArchiveKind):
 
     @staticmethod
     def mount(archive, mount_dir):
-        # raise SkipCommand
         return [["archivemount", archive, mount_dir]]
 
     @staticmethod
     def dump(archive, file):
-        # raise SkipCommand
         return [["tar", "--extract", "-O", "-f", archive, file]]
 
 
@@ -314,6 +316,8 @@ class Tar(ArchiveKind):
 class Zip(ArchiveKind):
     name = "Zip"
     extension = "zip"
+    dump_too_long = True
+    mount_too_long = True
 
     @staticmethod
     def creation(source, archive):
@@ -329,12 +333,10 @@ class Zip(ArchiveKind):
 
     @staticmethod
     def mount(archive, mount_dir):
-        # raise SkipCommand
         return [["archivemount", archive, mount_dir]]
 
     @staticmethod
     def dump(archive, file):
-        # raise SkipCommand
         return [["unzip", "-p", archive, file]]
 
 
@@ -394,6 +396,7 @@ class SquashfsKernel(Squashfs):
 @register
 class SquashfsFuse(Squashfs):
     name = "SquashfsFuse"
+    dump_too_long = True
 
     @staticmethod
     def mount(archive, mount_dir):
@@ -403,17 +406,22 @@ class SquashfsFuse(Squashfs):
 
 class Comparator:
     def __init__(
-        self, source: Path, ref_file_list: list[str], tmp_dir: Path, kind, verbose, fast
+        self,
+        ref_file_list: list[str],
+        tmp_dir: Path,
+        kind,
+        args,
     ):
-        self.source = source
         self.ref_file_list = ref_file_list
         self.tmp_dir = tmp_dir
         self.archive = tmp_dir / f"archive.{kind.extension}"
         self.info = {"Type": kind.name}
         self.kind = kind
-        self.verbose = verbose >= 1
-        self.debug = verbose >= 2
-        self.fast = fast
+        self.source = args.source
+        self.verbose = args.verbose >= 1
+        self.debug = args.verbose >= 2
+        self.fast = args.fast
+        self.too_long_operations = args.too_long_operations
 
     def creation(self):
         return run(self.kind.creation(self.source, self.archive), verbose=self.debug)
@@ -432,6 +440,8 @@ class Comparator:
         return run(self.kind.extract(self.archive, out_dir), verbose=self.debug)
 
     def dump(self):
+        if self.kind.dump_too_long and not self.too_long_operations:
+            raise SkipCommand
         dump_time = DeltaTime(0)
         to_dump = (
             f
@@ -456,6 +466,8 @@ class Comparator:
         return dump_time
 
     def mount_diff(self):
+        if self.kind.mount_too_long and not self.too_long_operations:
+            raise SkipCommand
         mount_dir = self.tmp_dir / "MOUNT_DIR"
         mount_dir.mkdir()
         mount_process = run(
@@ -471,9 +483,9 @@ class Comparator:
             run(self.kind.unmount(mount_dir), verbose=self.debug)
 
     def compare(self):
-        operations = ["creation", "size", "extract", "listing"]
+        operations = ["creation", "size", "extract", "listing", "mount_diff"]
         if not self.fast:
-            operations.extend(["dump", "mount_diff"])
+            operations.append("dump")
         for operation in operations:
             if self.verbose:
                 print(f"--- {operation} {self.archive}")
@@ -505,6 +517,7 @@ def main():
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument("--save-csv", type=Path)
     parser.add_argument("--fast", action="store_true", default=False)
+    parser.add_argument("--too-long-operations", action="store_true", default=False)
     args = parser.parse_args()
 
     if not args.source.is_dir():
@@ -528,14 +541,7 @@ def main():
             print(f"\n\n====== Testing {kind}")
             k_tmp_dir = tmp_dir / kind
             k_tmp_dir.mkdir()
-            comparator = Comparator(
-                args.source,
-                ref_file_list,
-                k_tmp_dir,
-                KNOWN_KINDS[kind],
-                verbose=args.verbose,
-                fast=args.fast,
-            )
+            comparator = Comparator(ref_file_list, k_tmp_dir, KNOWN_KINDS[kind], args)
             infos.append(comparator.compare())
 
     print("======  Results")
