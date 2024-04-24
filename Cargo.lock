@@ -851,6 +851,7 @@ dependencies = [
  "jubako",
  "libc",
  "lru",
+ "rayon",
  "relative-path",
  "tempfile",
  "walkdir",

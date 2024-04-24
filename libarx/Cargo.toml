@@ -21,6 +21,7 @@ tempfile = "3.8.0"
 walkdir = "2.4.0"
 relative-path = "1.9.2"
 epochs = "0.2.4"
+rayon = "1.10.0"
 
 [target.'cfg(not(windows))'.dependencies]
 fuser = "0.13.0"
