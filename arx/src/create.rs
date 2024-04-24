@@ -86,6 +86,9 @@ pub struct Options {
     #[arg(long, default_value_t = false, action)]
     list_compressions: bool,
 
+    #[arg(long, default_value_t = false, action)]
+    progress: bool,
+
     #[arg(from_global)]
     verbose: u8,
 
@@ -195,8 +198,12 @@ pub fn create(options: Options) -> Result<()> {
     let out_file = std::env::current_dir()?.join(out_file);
     let files_to_add = get_files_to_add(&options)?;
 
-    let jbk_progress = Arc::new(ProgressBar::new());
-    let progress = Rc::new(CachedSize::new());
+    let jbk_progress: Arc<dyn jbk::creator::Progress> = if options.progress {
+        Arc::new(ProgressBar::new())
+    } else {
+        Arc::new(())
+    };
+    let cache_progress = Rc::new(CachedSize::new());
     let mut creator = arx::create::SimpleCreator::new(
         &out_file,
         match options.concat_mode {
@@ -204,7 +211,7 @@ pub fn create(options: Options) -> Result<()> {
             Some(e) => e.into(),
         },
         jbk_progress,
-        Rc::clone(&progress) as Rc<dyn jbk::creator::CacheProgress>,
+        cache_progress.clone(),
         options.compression,
     )?;
 
@@ -218,6 +225,6 @@ pub fn create(options: Options) -> Result<()> {
     }
 
     let ret = creator.finalize(&out_file);
-    debug!("Saved place is {}", progress.0.get());
+    debug!("Saved place is {}", cache_progress.0.get());
     Ok(ret?)
 }
