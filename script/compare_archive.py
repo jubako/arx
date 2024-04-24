@@ -403,7 +403,7 @@ class SquashfsFuse(Squashfs):
 
 class Comparator:
     def __init__(
-        self, source: Path, ref_file_list: list[str], tmp_dir: Path, kind, verbose
+        self, source: Path, ref_file_list: list[str], tmp_dir: Path, kind, verbose, fast
     ):
         self.source = source
         self.ref_file_list = ref_file_list
@@ -413,6 +413,7 @@ class Comparator:
         self.kind = kind
         self.verbose = verbose >= 1
         self.debug = verbose >= 2
+        self.fast = fast
 
     def creation(self):
         return run(self.kind.creation(self.source, self.archive), verbose=self.debug)
@@ -470,14 +471,10 @@ class Comparator:
             run(self.kind.unmount(mount_dir), verbose=self.debug)
 
     def compare(self):
-        for operation in [
-            "creation",
-            "size",
-            "extract",
-            "listing",
-            "dump",
-            "mount_diff",
-        ]:
+        operations = ["creation", "size", "extract", "listing"]
+        if not self.fast:
+            operations.extend(["dump", "mount_diff"])
+        for operation in operations:
             if self.verbose:
                 print(f"--- {operation} {self.archive}")
             try:
@@ -507,6 +504,7 @@ def main():
     )
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument("--save-csv", type=Path)
+    parser.add_argument("--fast", action="store_true", default=False)
     args = parser.parse_args()
 
     if not args.source.is_dir():
@@ -536,6 +534,7 @@ def main():
                 k_tmp_dir,
                 KNOWN_KINDS[kind],
                 verbose=args.verbose,
+                fast=args.fast,
             )
             infos.append(comparator.compare())
 
