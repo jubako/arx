@@ -5,7 +5,7 @@ use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
-use std::{fs, io::Cursor};
+use std::{fs, io::Cursor, sync::mpsc, thread::spawn};
 
 pub enum FsEntryKind {
     Dir,
@@ -133,23 +133,34 @@ impl<'a> FsAdder<'a> {
     where
         P: AsRef<std::path::Path>,
         F: FnMut(&walkdir::DirEntry) -> bool,
+        F: Send + 'static,
     {
-        let mut walker = walkdir::WalkDir::new(path);
-        if !recurse {
-            walker = walker.max_depth(0);
-        }
-        let walker = walker.into_iter();
-        for entry in walker.filter_entry(filter) {
-            let entry = entry.unwrap();
-            let entry_path = entry.path();
-            let arx_path = crate::PathBuf::from_path(entry_path)
-                .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
-            let arx_path: crate::PathBuf =
-                arx_path.strip_prefix(&self.strip_prefix).unwrap().into();
-            if arx_path.as_str().is_empty() {
-                continue;
+        let (tx, rx) = mpsc::channel();
+        let path = path.as_ref().to_path_buf();
+        let strip_prefix = self.strip_prefix.clone();
+
+        spawn(move || {
+            let mut walker = walkdir::WalkDir::new(path);
+            if !recurse {
+                walker = walker.max_depth(0);
             }
-            let entry = FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder())?;
+            let walker = walker.into_iter();
+            for entry in walker.filter_entry(filter) {
+                let entry = entry.unwrap();
+                let entry_path = entry.path();
+                let arx_path = crate::PathBuf::from_path(entry_path)
+                    .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
+                let arx_path: crate::PathBuf = arx_path.strip_prefix(&strip_prefix).unwrap().into();
+                if arx_path.as_str().is_empty() {
+                    continue;
+                }
+                tx.send((entry, arx_path)).unwrap();
+            }
+        });
+
+        while let Ok((e, entry_path)) = rx.recv() {
+            let entry = FsEntry::new_from_walk_entry(e, entry_path, self.creator.adder()).unwrap();
+
             self.creator.add_entry(entry.as_ref())?;
         }
         Ok(())
