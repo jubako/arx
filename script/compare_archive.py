@@ -92,10 +92,10 @@ class DeltaTime(Value):
             # If we are in seconds, don't care about microseconds
             microseconds = 0
         hours = f"{hours}h" if hours else ""
-        minutes = f"{minutes}m" if minutes else ""
-        seconds = f"{seconds}s" if seconds else ""
-        milliseconds = f"{milliseconds}ms" if milliseconds else ""
-        microseconds = f"{microseconds}μs" if microseconds else ""
+        minutes = f"{minutes:02}m" if minutes else ""
+        seconds = f"{seconds:02}s" if seconds else ""
+        milliseconds = f"{milliseconds:03}ms" if milliseconds else ""
+        microseconds = f"{microseconds:03}μs" if microseconds else ""
         return hours + minutes + seconds + milliseconds + microseconds
 
 
