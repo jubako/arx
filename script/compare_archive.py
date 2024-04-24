@@ -383,7 +383,7 @@ class SquashfsKernel(Squashfs):
         print(f"!!!!!!!!!! Will will run a sudo command to mount archive {archive}")
         print("Command is :")
         command = ["sudo", "mount", archive, mount_dir, "-o", "loop"]
-        print(command)
+        print(" ".join(str(c) for c in command))
         return [command]
 
     @staticmethod
