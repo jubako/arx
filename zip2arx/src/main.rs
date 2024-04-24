@@ -160,11 +160,14 @@ impl ZipEntry {
                     entry.data_start(),
                     Some(entry.size()),
                 )?;
-                adder.add_content(reader)?
+                adder.add_content(Box::new(reader), jbk::creator::CompHint::Detect)?
             } else {
                 let mut data = vec![];
                 entry.read_to_end(&mut data)?;
-                adder.add_content(std::io::Cursor::new(data))?
+                adder.add_content(
+                    Box::new(std::io::Cursor::new(data)),
+                    jbk::creator::CompHint::Detect,
+                )?
             };
             Self {
                 path,

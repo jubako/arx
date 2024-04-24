@@ -189,7 +189,10 @@ impl TarEntry {
                     //Handle everything else as normal file
                     let mut data = vec![];
                     let size = entry.read_to_end(&mut data)?;
-                    let content_address = adder.add_content(std::io::Cursor::new(data))?;
+                    let content_address = adder.add_content(
+                        Box::new(std::io::Cursor::new(data)),
+                        jbk::creator::CompHint::Detect,
+                    )?;
                     Some(Self {
                         path,
                         kind: arx::create::EntryKind::File(size.into(), content_address),

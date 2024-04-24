@@ -1,11 +1,11 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
 use jbk::creator::InputReader;
-use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
+use std::{fs, io::Cursor};
 
 pub enum FsEntryKind {
     Dir,
@@ -35,10 +35,14 @@ impl FsEntry {
         let kind = if attr.is_dir() {
             FsEntryKind::Dir
         } else if attr.is_file() {
-            let reader = jbk::creator::InputFile::open(&fs_path)?;
-            let size = reader.size();
-            let content_address = adder.add_content(reader)?;
-            FsEntryKind::File(size, content_address)
+            let reader: Box<dyn InputReader> = if attr.len() < 1024 * 1024 {
+                let content = std::fs::read(&fs_path)?;
+                Box::new(Cursor::new(content))
+            } else {
+                Box::new(jbk::creator::InputFile::open(&fs_path)?)
+            };
+            let content_address = adder.add_content(reader, jbk::creator::CompHint::Detect)?;
+            FsEntryKind::File(attr.len().into(), content_address)
         } else if attr.is_symlink() {
             FsEntryKind::Link
         } else {
