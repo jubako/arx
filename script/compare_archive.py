@@ -292,7 +292,7 @@ class Tar(ArchiveKind):
     def creation(source, archive):
         return [
             ["tar", "-c", source],
-            ["zstd", "--no-progress", "-q", "-5", "-T8", "-o", archive],
+            ["zstd", "--no-progress", "-q", "-5", "-T16", "-o", archive],
         ]
 
     @staticmethod
