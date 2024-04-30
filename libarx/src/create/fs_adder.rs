@@ -1,4 +1,5 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
+use bstr::{BString, ByteVec};
 use jbk::creator::InputReader;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
@@ -83,10 +84,10 @@ impl EntryTrait for FsEntry {
 
             FsEntryKind::Link => {
                 let target = fs::read_link(&self.fs_path)?;
-                Some(EntryKind::Link(
-                    crate::PathBuf::from_path(&target)
-                        .unwrap_or_else(|_| panic!("{target:?} must be a relative utf-8 path")),
-                ))
+                Some(EntryKind::Link(BString::from(
+                    Vec::from_path_buf(target)
+                        .unwrap_or_else(|target| panic!("{target:?} must be utf-8")),
+                )))
             }
             _ => None,
         })

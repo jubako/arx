@@ -231,7 +231,7 @@ impl DirEntry {
                 Ok(())
             }
             EntryKind::Link(target) => {
-                values.insert(Property::Target, jbk::Value::Array(target.as_str().into()));
+                values.insert(Property::Target, jbk::Value::Array(target.into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::Link),

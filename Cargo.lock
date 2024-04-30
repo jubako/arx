@@ -844,6 +844,7 @@ name = "libarx"
 version = "0.2.1"
 dependencies = [
  "blake3",
+ "bstr",
  "clap",
  "epochs",
  "fuser",
@@ -1386,6 +1387,7 @@ name = "tar2arx"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "bstr",
  "clap",
  "clap_complete",
  "clap_mangen",

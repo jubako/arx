@@ -1,3 +1,4 @@
+use bstr::{BString, ByteVec};
 use clap::{CommandFactory, Parser, ValueHint};
 
 use anyhow::Result;
@@ -157,10 +158,10 @@ impl TarEntry {
                 let target = entry.link_name()?.unwrap();
                 Some(Self {
                     path,
-                    kind: arx::create::EntryKind::Link(
-                        arx::PathBuf::from_path(&target)
-                            .unwrap_or_else(|_| panic!("{target:?} must be utf8")),
-                    ),
+                    kind: arx::create::EntryKind::Link(BString::new(
+                        Vec::from_path_buf(target.into_owned())
+                            .unwrap_or_else(|target| panic!("{target:?} must be utf8")),
+                    )),
                     uid,
                     gid,
                     mtime,
