@@ -101,14 +101,18 @@ impl Builder for DirBuilder {
 
 type FullBuilder = (FileBuilder, LinkBuilder, DirBuilder);
 
-struct Extractor<'a> {
+struct Extractor<'a, 'scope>
+where
+    'a: 'scope,
+{
     arx: &'a Arx,
+    scope: &'scope rayon::Scope<'a>,
     files: HashSet<crate::PathBuf>,
     base_dir: PathBuf,
     print_progress: bool,
 }
 
-impl Extractor<'_> {
+impl Extractor<'_, '_> {
     fn should_extract(&self, current_file: &crate::Path, is_dir: bool) -> bool {
         if self.files.is_empty() {
             return true;
@@ -134,7 +138,10 @@ impl Extractor<'_> {
     }
 }
 
-impl crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'_> {
+impl<'a, 'scope> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'a, 'scope>
+where
+    'a: 'scope,
+{
     fn on_start(&self, _current_path: &mut crate::PathBuf) -> jbk::Result<()> {
         create_dir_all(&self.base_dir)?;
         Ok(())
@@ -170,47 +177,64 @@ impl crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'_> {
         current_path.pop();
         Ok(())
     }
+
     fn on_file(&self, current_path: &mut crate::PathBuf, entry: &FileEntry) -> jbk::Result<()> {
-        let reader = self.arx.container.get_reader(entry.content)?;
+        let mut current_path = current_path.clone();
         current_path.push(&entry.path);
-        if !self.should_extract(current_path, false) {
-            current_path.pop();
+        let entry_content = entry.content;
+        let abs_path = self.abs_path(&current_path);
+        let print_progress = self.print_progress;
+        let arx = self.arx;
+        if !self.should_extract(&current_path, false) {
             return Ok(());
         }
-        let abs_path = self.abs_path(current_path);
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&abs_path)?;
-        match reader {
-            MayMissPack::FOUND(reader) => {
-                let size = reader.size().into_usize();
-                let mut offset = 0;
-                loop {
-                    let sub_size = std::cmp::min(size - offset, 4 * 1024);
-                    let reader =
-                        reader.into_memory_reader(offset.into(), jbk::End::new_size(sub_size))?;
-                    let written =
-                        file.write(reader.get_slice(jbk::Offset::zero(), jbk::End::None)?)?;
-                    offset += written;
-                    if offset == size {
-                        break;
+        let reader = arx.container.get_reader(entry_content).unwrap();
+
+        self.scope.spawn(move |_scope| {
+            match reader {
+                MayMissPack::FOUND(reader) => {
+                    let abs_path = abs_path.clone();
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(abs_path)
+                        .unwrap();
+
+                    // Don't use std::io::copy as it use an internal buffer where it read data into before writing in file.
+                    // If content is compressed, we already have a buffer. Same thing for uncompress as the cluster is probably mmapped.
+                    let size = reader.size().into_usize();
+                    let mut offset = 0;
+                    loop {
+                        let sub_size = std::cmp::min(size - offset, 4 * 1024);
+                        let reader = reader
+                            .into_memory_reader(offset.into(), jbk::End::new_size(sub_size))
+                            .unwrap();
+                        let written = file
+                            .write(
+                                reader
+                                    .get_slice(jbk::Offset::zero(), jbk::End::None)
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                        offset += written;
+                        if offset == size {
+                            break;
+                        }
                     }
                 }
+                MayMissPack::MISSING(pack_info) => {
+                    eprintln!(
+                        "Missing pack {} for {}. Declared location is {}",
+                        pack_info.uuid,
+                        abs_path.display(),
+                        String::from_utf8_lossy(&pack_info.pack_location)
+                    );
+                }
             }
-            MayMissPack::MISSING(pack_info) => {
-                eprintln!(
-                    "Missing pack {} for {}. Declared location is {}",
-                    pack_info.uuid,
-                    abs_path.display(),
-                    String::from_utf8_lossy(&pack_info.pack_location)
-                );
+            if print_progress {
+                println!("{}", abs_path.display());
             }
-        }
-        if self.print_progress {
-            println!("{}", abs_path.display());
-        }
-        current_path.pop();
+        });
         Ok(())
     }
     fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> jbk::Result<()> {
@@ -237,11 +261,14 @@ pub fn extract(
 ) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
     let mut walker = Walker::new(&arx, Default::default());
-    let extractor = Extractor {
-        arx: &arx,
-        files: files_to_extract,
-        base_dir: outdir.to_path_buf(),
-        print_progress: progress,
-    };
-    walker.run(&extractor)
+    rayon::scope(|scope| {
+        let extractor = Extractor {
+            arx: &arx,
+            scope,
+            files: files_to_extract,
+            base_dir: outdir.to_path_buf(),
+            print_progress: progress,
+        };
+        walker.run(&extractor)
+    })
 }

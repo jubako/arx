@@ -442,6 +442,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab3db02a9c5b5121e1e42fbdb1aeb65f5e02624cc58c43f2884c6ccac0b82f95"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -494,6 +503,15 @@ dependencies = [
  "block-buffer",
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "dropout"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3c0917e95e581015b3c9402f47d6c64b73db065ece7ca131452c6bea0851297"
+dependencies = [
+ "crossbeam-channel",
 ]
 
 [[package]]
@@ -793,12 +811,12 @@ dependencies = [
 [[package]]
 name = "jubako"
 version = "0.3.0-dev"
-source = "git+https://github.com/jubako/jubako.git#9bf4869915b4e49fc15a90ee529eca1702f2ccbe"
 dependencies = [
  "blake3",
  "bstr",
  "clap",
  "deranged",
+ "dropout",
  "fxhash",
  "log",
  "lru",
@@ -826,6 +844,7 @@ name = "libarx"
 version = "0.2.1"
 dependencies = [
  "blake3",
+ "bstr",
  "clap",
  "epochs",
  "fuser",
@@ -833,6 +852,7 @@ dependencies = [
  "jubako",
  "libc",
  "lru",
+ "rayon",
  "relative-path",
  "tempfile",
  "walkdir",
@@ -1367,6 +1387,7 @@ name = "tar2arx"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "bstr",
  "clap",
  "clap_complete",
  "clap_mangen",

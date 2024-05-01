@@ -1,11 +1,12 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
+use bstr::{BString, ByteVec};
 use jbk::creator::InputReader;
-use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
+use std::{fs, io::Cursor, sync::mpsc, thread::spawn};
 
 pub enum FsEntryKind {
     Dir,
@@ -35,10 +36,14 @@ impl FsEntry {
         let kind = if attr.is_dir() {
             FsEntryKind::Dir
         } else if attr.is_file() {
-            let reader = jbk::creator::InputFile::open(&fs_path)?;
-            let size = reader.size();
-            let content_address = adder.add_content(reader)?;
-            FsEntryKind::File(size, content_address)
+            let reader: Box<dyn InputReader> = if attr.len() < 1024 * 1024 {
+                let content = std::fs::read(&fs_path)?;
+                Box::new(Cursor::new(content))
+            } else {
+                Box::new(jbk::creator::InputFile::open(&fs_path)?)
+            };
+            let content_address = adder.add_content(reader, jbk::creator::CompHint::Detect)?;
+            FsEntryKind::File(attr.len().into(), content_address)
         } else if attr.is_symlink() {
             FsEntryKind::Link
         } else {
@@ -79,10 +84,10 @@ impl EntryTrait for FsEntry {
 
             FsEntryKind::Link => {
                 let target = fs::read_link(&self.fs_path)?;
-                Some(EntryKind::Link(
-                    crate::PathBuf::from_path(&target)
-                        .unwrap_or_else(|_| panic!("{target:?} must be a relative utf-8 path")),
-                ))
+                Some(EntryKind::Link(BString::from(
+                    Vec::from_path_buf(target)
+                        .unwrap_or_else(|target| panic!("{target:?} must be utf-8")),
+                )))
             }
             _ => None,
         })
@@ -129,23 +134,34 @@ impl<'a> FsAdder<'a> {
     where
         P: AsRef<std::path::Path>,
         F: FnMut(&walkdir::DirEntry) -> bool,
+        F: Send + 'static,
     {
-        let mut walker = walkdir::WalkDir::new(path);
-        if !recurse {
-            walker = walker.max_depth(0);
-        }
-        let walker = walker.into_iter();
-        for entry in walker.filter_entry(filter) {
-            let entry = entry.unwrap();
-            let entry_path = entry.path();
-            let arx_path = crate::PathBuf::from_path(entry_path)
-                .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
-            let arx_path: crate::PathBuf =
-                arx_path.strip_prefix(&self.strip_prefix).unwrap().into();
-            if arx_path.as_str().is_empty() {
-                continue;
+        let (tx, rx) = mpsc::channel();
+        let path = path.as_ref().to_path_buf();
+        let strip_prefix = self.strip_prefix.clone();
+
+        spawn(move || {
+            let mut walker = walkdir::WalkDir::new(path);
+            if !recurse {
+                walker = walker.max_depth(0);
             }
-            let entry = FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder())?;
+            let walker = walker.into_iter();
+            for entry in walker.filter_entry(filter) {
+                let entry = entry.unwrap();
+                let entry_path = entry.path();
+                let arx_path = crate::PathBuf::from_path(entry_path)
+                    .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
+                let arx_path: crate::PathBuf = arx_path.strip_prefix(&strip_prefix).unwrap().into();
+                if arx_path.as_str().is_empty() {
+                    continue;
+                }
+                tx.send((entry, arx_path)).unwrap();
+            }
+        });
+
+        while let Ok((e, entry_path)) = rx.recv() {
+            let entry = FsEntry::new_from_walk_entry(e, entry_path, self.creator.adder()).unwrap();
+
             self.creator.add_entry(entry.as_ref())?;
         }
         Ok(())

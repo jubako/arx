@@ -231,7 +231,7 @@ impl DirEntry {
                 Ok(())
             }
             EntryKind::Link(target) => {
-                values.insert(Property::Target, jbk::Value::Array(target.as_str().into()));
+                values.insert(Property::Target, jbk::Value::Array(target.into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::Link),
@@ -373,7 +373,7 @@ mod tests {
 
         let entry_store_creator = Box::new(EntryStoreCreator::new());
         entry_store_creator.finalize(&mut creator);
-        creator.finalize(&mut arx_file)?;
+        creator.finalize()?.write(&mut arx_file)?;
         assert!(arx_name.is_file());
 
         let directory_pack =
@@ -429,7 +429,7 @@ mod tests {
         let entry = SimpleEntry("foo.txt".into());
         entry_store_creator.add_entry(&entry)?;
         entry_store_creator.finalize(&mut creator);
-        creator.finalize(&mut arx_file)?;
+        creator.finalize()?.write(&mut arx_file)?;
         assert!(arx_name.is_file());
 
         let directory_pack =

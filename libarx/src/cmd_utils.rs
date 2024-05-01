@@ -22,7 +22,7 @@ pub fn compression_arg_parser(s: &str) -> Result<jbk::creator::Compression, Inva
         #[cfg(feature = "lz4")]
         "lz4" => match level {
             None => jbk::creator::Compression::lz4(),
-            Some(l) => jbkk::creator::Compression::Lz4(match l.parse() {
+            Some(l) => jbk::creator::Compression::Lz4(match l.parse() {
                 Ok(l) => l,
                 Err(e) => return Err(InvalidCompression::Level(e.to_string())),
             }),

@@ -10,7 +10,7 @@ pub use fs_adder::FsAdder;
 pub enum EntryKind {
     Dir,
     File(jbk::Size, jbk::ContentAddress),
-    Link(crate::PathBuf),
+    Link(bstr::BString),
 }
 
 pub trait EntryTrait {

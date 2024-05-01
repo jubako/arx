@@ -1,3 +1,4 @@
+use bstr::{BString, ByteVec};
 use clap::{CommandFactory, Parser, ValueHint};
 
 use anyhow::Result;
@@ -157,10 +158,10 @@ impl TarEntry {
                 let target = entry.link_name()?.unwrap();
                 Some(Self {
                     path,
-                    kind: arx::create::EntryKind::Link(
-                        arx::PathBuf::from_path(&target)
-                            .unwrap_or_else(|_| panic!("{target:?} must be utf8")),
-                    ),
+                    kind: arx::create::EntryKind::Link(BString::new(
+                        Vec::from_path_buf(target.into_owned())
+                            .unwrap_or_else(|target| panic!("{target:?} must be utf8")),
+                    )),
                     uid,
                     gid,
                     mtime,
@@ -189,7 +190,10 @@ impl TarEntry {
                     //Handle everything else as normal file
                     let mut data = vec![];
                     let size = entry.read_to_end(&mut data)?;
-                    let content_address = adder.add_content(std::io::Cursor::new(data))?;
+                    let content_address = adder.add_content(
+                        Box::new(std::io::Cursor::new(data)),
+                        jbk::creator::CompHint::Detect,
+                    )?;
                     Some(Self {
                         path,
                         kind: arx::create::EntryKind::File(size.into(), content_address),
