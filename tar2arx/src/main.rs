@@ -1,7 +1,7 @@
 use bstr::{BString, ByteVec};
 use clap::{CommandFactory, Parser, ValueHint};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use jbk::creator::ContentAdder;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -23,9 +23,6 @@ struct Cli {
         short,
         long,
         value_parser,
-        required_unless_present_any(
-            ["list_compressions", "generate_man_page", "generate_complete"]
-        ),
         value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
@@ -292,6 +289,25 @@ fn main() -> Result<()> {
     }
 
     let mut input_size = None;
+
+    if args.outfile.is_none() && (args.tar_file.is_none() || args.tar_file.as_ref().unwrap() == "-")
+    {
+        return Err(anyhow!("Cannot infer arx name from input name. Please give a output filename with `--outfile` option."));
+    }
+
+    let outfile = args.outfile.unwrap_or_else(|| {
+        let p = Path::new(args.tar_file.as_ref().unwrap());
+        let p = if p.starts_with("https://") || p.starts_with("http://") {
+            Path::new(p.file_name().unwrap())
+                .with_extension("")
+                .with_extension("arx")
+        } else {
+            p.with_extension("").with_extension("arx")
+        };
+        println!("Converting tar file to {p:?}");
+        p
+    });
+
     let input: Box<dyn Read> = match args.tar_file {
         None => Box::new(std::io::stdin()),
         Some(p) => {
@@ -313,10 +329,11 @@ fn main() -> Result<()> {
     let input_stream = niffler::get_reader(Box::new(progress_bar.wrap_read(input)))
         .unwrap()
         .0;
+
     let archive = tar::Archive::new(input_stream);
     let converter = Converter::new(
         archive,
-        args.outfile.as_ref().unwrap(),
+        &outfile,
         match args.concat_mode {
             None => jbk::creator::ConcatMode::OneFile,
             Some(e) => e.into(),
@@ -324,5 +341,5 @@ fn main() -> Result<()> {
         args.compression,
         progress_bar,
     )?;
-    Ok(converter.run(args.outfile.as_ref().unwrap())?)
+    Ok(converter.run(&outfile)?)
 }
