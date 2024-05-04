@@ -1,5 +1,6 @@
 use super::common::{AllProperties, Comparator, Entry, FullBuilderTrait, RealBuilder};
-use jbk::reader::Range;
+use jbk::reader::builder::BuilderTrait;
+use jbk::{reader::Range, EntryIdx};
 use std::path::Path;
 
 pub struct Arx {
@@ -74,5 +75,13 @@ impl Arx {
             }
         }
         unreachable!();
+    }
+
+    pub fn get_entry_at_idx<B>(&self, idx: EntryIdx) -> jbk::Result<Entry<B::Entry>>
+    where
+        B: FullBuilderTrait,
+    {
+        let builder = RealBuilder::<B>::new(&self.properties);
+        builder.create_entry(idx)
     }
 }
