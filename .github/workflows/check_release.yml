@@ -87,7 +87,7 @@ jobs:
     - name: Determine archive name
       shell: bash
       run: |
-        version="${{ needs.create-release.outputs.version }}"
+        version="${{ needs.check-version.outputs.version }}"
         echo "ARCHIVE=${{ matrix.tool }}-$version-${{ matrix.build }}" >> $GITHUB_ENV
 
     - name: Creating directory for archive
