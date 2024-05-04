@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::iterator::EntryIter;
+
 use super::content_address::ContentAddress;
 use super::entry::Entry;
 use arx::PathBuf;
@@ -72,5 +74,10 @@ impl Arx {
         content: ContentAddress,
     ) -> PyResult<&'py pyo3::types::PyBytes> {
         Self::get_content_rust(&self, py, content.0)
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<EntryIter>> {
+        let iter = EntryIter::new_from_index(Arc::clone(&slf.0), &slf.0.root_index);
+        Py::new(slf.py(), iter)
     }
 }

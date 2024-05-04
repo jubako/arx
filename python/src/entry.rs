@@ -3,7 +3,7 @@ use std::{borrow::Cow, sync::Arc};
 use arx::CommonEntry;
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-use crate::content_address::ContentAddress;
+use crate::{content_address::ContentAddress, iterator::EntryIter};
 
 #[pyclass]
 pub struct Entry {
@@ -152,6 +152,16 @@ impl Entry {
     fn nb_children(&self) -> PyResult<u32> {
         match &self.entry {
             arx::Entry::Dir(range, _) => Ok(range.size().into_u32()),
+            _ => Err(PyValueError::new_err("Not a dir")),
+        }
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<EntryIter>> {
+        match &slf.entry {
+            arx::Entry::Dir(range, _) => {
+                let iter = EntryIter::new_from_range(Arc::clone(&slf.arx), range);
+                Py::new(slf.py(), iter)
+            }
             _ => Err(PyValueError::new_err("Not a dir")),
         }
     }

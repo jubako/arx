@@ -1,6 +1,7 @@
 mod arx;
 mod content_address;
 mod entry;
+mod iterator;
 use pyo3::prelude::*;
 
 /// A Python module implemented in Rust.
