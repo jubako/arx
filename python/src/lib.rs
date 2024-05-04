@@ -1,14 +1,13 @@
+mod arx;
+mod content_address;
+mod entry;
 use pyo3::prelude::*;
-
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn python(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+fn libarx(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<arx::Arx>()?;
+    m.add_class::<entry::Entry>()?;
+    m.add_class::<content_address::ContentAddress>()?;
     Ok(())
 }
