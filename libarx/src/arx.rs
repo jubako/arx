@@ -4,8 +4,8 @@ use std::path::Path;
 
 pub struct Arx {
     pub container: jbk::reader::Container,
-    pub(crate) root_index: jbk::reader::Index,
-    pub(crate) properties: AllProperties,
+    pub root_index: jbk::reader::Index,
+    pub properties: AllProperties,
 }
 
 impl std::ops::Deref for Arx {
