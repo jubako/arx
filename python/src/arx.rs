@@ -80,4 +80,9 @@ impl Arx {
         let iter = EntryIter::new_from_index(Arc::clone(&slf.0), &slf.0.root_index);
         Py::new(slf.py(), iter)
     }
+
+    fn extract(&self, extract_path: std::path::PathBuf) -> PyResult<()> {
+        arx::extract_arx(&self.0, &extract_path, Default::default(), false)
+            .map_err(|_e| PyValueError::new_err("oups"))
+    }
 }
