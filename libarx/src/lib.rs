@@ -16,5 +16,5 @@ pub use arx::Arx;
 pub use arx_fs::{ArxFs, Stats};
 pub use common::{AllProperties, Builder, Entry, FullBuilderTrait, Path, PathBuf, VENDOR_ID};
 pub use entry::*;
-pub use tools::extract;
+pub use tools::{extract, extract_arx};
 pub use walk::*;
