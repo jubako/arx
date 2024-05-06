@@ -58,13 +58,23 @@ impl Entry {
 
     /// The index of the parent entry.
     #[getter]
-    fn parent(&self) -> PyResult<Option<u32>> {
-        let parent = match &self.entry {
+    fn parent(&self) -> PyResult<Option<Entry>> {
+        let parent_idx = match &self.entry {
             arx::Entry::File(e) => e.parent(),
             arx::Entry::Link(e) => e.parent(),
             arx::Entry::Dir(_, e) => e.parent(),
         };
-        Ok(parent.map(|p| p.into_u32()))
+        match parent_idx {
+            None => Ok(None),
+            Some(i) => {
+                let arx_entry = self
+                    .arx
+                    .get_entry_at_idx::<arx::FullBuilder>(i)
+                    .map_err(|_| PyValueError::new_err("Oups"))?;
+                let entry = Entry::new(self.arx.clone(), arx_entry);
+                Ok(Some(entry))
+            }
+        }
     }
 
     /// The owner (int) of the entry.
