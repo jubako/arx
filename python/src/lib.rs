@@ -1,5 +1,6 @@
 mod arx;
 mod content_address;
+mod creator;
 mod entry;
 mod iterator;
 use pyo3::prelude::*;
@@ -10,5 +11,6 @@ fn libarx(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<arx::Arx>()?;
     m.add_class::<entry::Entry>()?;
     m.add_class::<content_address::ContentAddress>()?;
+    m.add_class::<creator::Creator>()?;
     Ok(())
 }
