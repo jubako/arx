@@ -206,4 +206,8 @@ impl Entry {
             _ => Err(PyValueError::new_err("Not a dir")),
         }
     }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.idx() == other.idx()
+    }
 }
