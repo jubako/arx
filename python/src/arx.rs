@@ -12,6 +12,27 @@ use pyo3::prelude::*;
 use pyo3::types::PyUnicode;
 use std::io::Read;
 
+/// An Arx archive.
+///
+/// From an arx archive, you can access the entries in it.
+///
+/// # Accessing entrie is arx archive:
+///
+/// You can either:
+///
+/// ## Directly use `arx.get_entry("foo/bar/file.ext")` if you know the path of the entry.
+///
+/// > arx = libarx.Arx("archive.arx")
+/// > entry = arx.get_entry("foo/bar/file.ext")
+///
+/// ## Iterate on the archive
+///
+/// > arx = libarx.Arx("archive.arx")
+/// > for entry in arx:
+/// >     ...
+///
+/// Arx archives contain a tree structure, so iterating on the archive will loop only on top level
+/// entries. You will have to iterate on Directory entries to walk the tree structure.
 #[pyclass]
 pub struct Arx(Arc<arx::Arx>);
 
@@ -68,6 +89,7 @@ impl Arx {
         }
     }
 
+    /// Get the content associated to contentAddress
     fn get_content<'py>(
         &self,
         py: Python<'py>,
@@ -81,6 +103,8 @@ impl Arx {
         Py::new(slf.py(), iter)
     }
 
+    /// Extract the whole archive in
+    #[pyo3(signature=(extract_path=std::path::PathBuf::from(".")))]
     fn extract(&self, extract_path: std::path::PathBuf) -> PyResult<()> {
         arx::extract_arx(&self.0, &extract_path, Default::default(), false)
             .map_err(|_e| PyValueError::new_err("oups"))

@@ -5,6 +5,13 @@ use arx::create::{FsAdder, SimpleCreator};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+/// An Arx creator.
+///
+/// A creator is context manager and must be used as a context mananger.
+///
+/// > creator = libarx.Creator("new_archive.arx")
+/// > with creator:
+/// >    creator.add("foo/par")
 #[pyclass(unsendable)]
 pub struct Creator {
     started: bool,
@@ -61,6 +68,9 @@ impl Creator {
         }
     }
 
+    /// Add the file `name` to the archive. `name` may be any type of file (directory, symlink, regular file).
+    /// Directory are added recursively by default. This cane be avoided by setting `recursive` to `False`
+    #[pyo3(signature=(path, recursive=true))]
     fn add(&mut self, path: PathBuf, recursive: bool) -> PyResult<()> {
         match self.creator.as_mut() {
             None => Err(PyValueError::new_err("Creator already finalized")),

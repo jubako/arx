@@ -5,6 +5,9 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::{content_address::ContentAddress, iterator::EntryIter};
 
+/// An entry i an arx archive.
+///
+/// Can be a directory, a file or a link.
 #[pyclass]
 pub struct Entry {
     arx: Arc<arx::Arx>,
@@ -33,6 +36,7 @@ impl Entry {
         }
     }
 
+    /// The index of the current entry
     #[getter]
     fn idx(&self) -> u32 {
         match &self.entry {
@@ -42,6 +46,7 @@ impl Entry {
         }
     }
 
+    /// The path (relative to its parent entry)
     #[getter]
     fn path(&self) -> PyResult<String> {
         Ok(match &self.entry {
@@ -51,6 +56,7 @@ impl Entry {
         })
     }
 
+    /// The index of the parent entry.
     #[getter]
     fn parent(&self) -> PyResult<Option<u32>> {
         let parent = match &self.entry {
@@ -61,6 +67,7 @@ impl Entry {
         Ok(parent.map(|p| p.into_u32()))
     }
 
+    /// The owner (int) of the entry.
     #[getter]
     fn owner(&self) -> u32 {
         match &self.entry {
@@ -70,6 +77,7 @@ impl Entry {
         }
     }
 
+    /// The group (int) of the entry.
     #[getter]
     fn group(&self) -> u32 {
         match &self.entry {
@@ -79,6 +87,7 @@ impl Entry {
         }
     }
 
+    /// The rigths (int) of the entry.
     #[getter]
     fn rights(&self) -> u8 {
         match &self.entry {
@@ -88,6 +97,7 @@ impl Entry {
         }
     }
 
+    /// The modification time of the entry.
     #[getter]
     fn mtime(&self) -> u64 {
         match &self.entry {
@@ -97,6 +107,7 @@ impl Entry {
         }
     }
 
+    /// Return True if the entry is a file entry
     fn is_file(&self) -> bool {
         if let arx::Entry::File(_) = &self.entry {
             true
@@ -105,6 +116,7 @@ impl Entry {
         }
     }
 
+    /// Return True if the entry is a link entry
     fn is_link(&self) -> bool {
         if let arx::Entry::Link(_) = &self.entry {
             true
@@ -113,6 +125,7 @@ impl Entry {
         }
     }
 
+    /// Return True if the entry is a dir entry
     fn is_dir(&self) -> bool {
         if let arx::Entry::Dir(_, _) = &self.entry {
             true
@@ -121,6 +134,9 @@ impl Entry {
         }
     }
 
+    /// Get the content address of the file entry.
+    ///
+    /// Raise an exception if entry is not a file.
     fn get_content_address(&self) -> PyResult<ContentAddress> {
         match &self.entry {
             arx::Entry::File(f) => Ok(f.content().into()),
@@ -128,6 +144,9 @@ impl Entry {
         }
     }
 
+    /// Get the content of the file entry.
+    ///
+    /// Raise an exception if entry is not a file.
     fn get_content<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
         match &self.entry {
             arx::Entry::File(f) => super::arx::Arx::get_content_rust(&self.arx, py, f.content()),
@@ -135,6 +154,9 @@ impl Entry {
         }
     }
 
+    /// Get the link target of the link entry.
+    ///
+    /// Raise an exception if entry is not a link.
     fn get_target(&self) -> PyResult<Cow<[u8]>> {
         match &self.entry {
             arx::Entry::Link(l) => Ok(l.target().into()),
@@ -142,6 +164,9 @@ impl Entry {
         }
     }
 
+    /// Get the index of the first child of the dir entry.
+    ///
+    /// Raise an exception if entry is not a directory.
     fn first_child(&self) -> PyResult<u32> {
         match &self.entry {
             arx::Entry::Dir(range, _) => Ok(range.begin().into_u32()),
@@ -149,6 +174,9 @@ impl Entry {
         }
     }
 
+    /// Get the number of children in the dir entry.
+    ///
+    /// Raise an exception if entry is not a directory.
     fn nb_children(&self) -> PyResult<u32> {
         match &self.entry {
             arx::Entry::Dir(range, _) => Ok(range.size().into_u32()),
@@ -156,6 +184,9 @@ impl Entry {
         }
     }
 
+    /// Iter on all child entries in the dir entry.
+    ///
+    /// Raise an exception if entry is not a directory.
     fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<EntryIter>> {
         match &slf.entry {
             arx::Entry::Dir(range, _) => {
