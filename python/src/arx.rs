@@ -4,10 +4,10 @@ use crate::iterator::EntryIter;
 
 use super::content_address::ContentAddress;
 use super::entry::Entry;
-use arx::PathBuf;
+use arx::{FromPathErrorKind, PathBuf};
 use jbk::reader::MayMissPack;
-use pyo3::exceptions::PyTypeError;
-use pyo3::exceptions::{PyOSError, PyValueError};
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyOSError, PyUnicodeDecodeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyUnicode;
 use std::io::Read;
@@ -82,7 +82,16 @@ impl Arx {
 
     /// Get an entry for the given path
     fn get_entry(&self, path: std::path::PathBuf) -> PyResult<Entry> {
-        let path = PathBuf::from_path(path).map_err(|e| PyTypeError::new_err(e.to_string()))?;
+        let path = PathBuf::from_path(&path).map_err(|e| match e.kind() {
+            FromPathErrorKind::NonRelative => {
+                PyRuntimeError::new_err(format!("{} is not a relative path", path.display()))
+            }
+            FromPathErrorKind::NonUtf8 => {
+                PyUnicodeDecodeError::new_err(format!("Non utf8 char in path"))
+            }
+            FromPathErrorKind::BadSeparator => PyRuntimeError::new_err("Invalid path separator"),
+            _ => PyRuntimeError::new_err("Unknown error"),
+        })?;
         match self.0.get_entry::<arx::FullBuilder>(&path) {
             Ok(e) => Ok(Entry::new(Arc::clone(&self.0), e)),
             Err(_) => Err(PyValueError::new_err("Cannot get entry")),
@@ -107,6 +116,6 @@ impl Arx {
     #[pyo3(signature=(extract_path=std::path::PathBuf::from(".")))]
     fn extract(&self, extract_path: std::path::PathBuf) -> PyResult<()> {
         arx::extract_arx(&self.0, &extract_path, Default::default(), false)
-            .map_err(|_e| PyValueError::new_err("oups"))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }

@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::{path::PathBuf, sync::Arc};
 
 use arx::create::{FsAdder, SimpleCreator};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 /// An Arx creator.
@@ -33,7 +33,7 @@ impl Creator {
                     Rc::new(()),
                     jbk::creator::Compression::zstd(),
                 )
-                .map_err(|_| PyValueError::new_err("Cannot create creator"))?,
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
             ),
             outfile,
         })
@@ -41,10 +41,10 @@ impl Creator {
 
     fn __enter__(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
         if slf.creator.is_none() {
-            return Err(PyValueError::new_err("Creator already finalized"));
+            return Err(PyRuntimeError::new_err("Creator already finalized"));
         }
         if slf.started {
-            return Err(PyValueError::new_err("Creator already started"));
+            return Err(PyRuntimeError::new_err("Creator already started"));
         }
         slf.started = true;
         Ok(slf)
@@ -57,14 +57,14 @@ impl Creator {
         _traceback: PyObject,
     ) -> PyResult<()> {
         if !slf.started {
-            return Err(PyValueError::new_err("Creator not started."));
+            return Err(PyRuntimeError::new_err("Creator not started."));
         }
         slf.started = false;
         match slf.creator.take() {
-            None => Err(PyValueError::new_err("Creator already finalized")),
+            None => Err(PyRuntimeError::new_err("Creator already finalized")),
             Some(creator) => creator
                 .finalize(&slf.outfile)
-                .map_err(|_| PyValueError::new_err("Cannot Finalize")),
+                .map_err(|e| PyRuntimeError::new_err(e.to_string())),
         }
     }
 
@@ -73,17 +73,17 @@ impl Creator {
     #[pyo3(signature=(path, recursive=true))]
     fn add(&mut self, path: PathBuf, recursive: bool) -> PyResult<()> {
         match self.creator.as_mut() {
-            None => Err(PyValueError::new_err("Creator already finalized")),
+            None => Err(PyRuntimeError::new_err("Creator already finalized")),
             Some(creator) => {
                 if !self.started {
-                    return Err(PyValueError::new_err(
+                    return Err(PyRuntimeError::new_err(
                         "add method must be used inside a context manager",
                     ));
                 }
                 let mut adder = FsAdder::new(creator, "".into());
                 adder
                     .add_from_path(path, recursive)
-                    .map_err(|_| PyValueError::new_err("Cannot add file/dir"))
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))
             }
         }
     }

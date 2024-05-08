@@ -1,7 +1,10 @@
 use std::{borrow::Cow, sync::Arc};
 
 use arx::CommonEntry;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyTypeError},
+    prelude::*,
+};
 
 use crate::{content_address::ContentAddress, iterator::EntryIter};
 
@@ -70,7 +73,7 @@ impl Entry {
                 let arx_entry = self
                     .arx
                     .get_entry_at_idx::<arx::FullBuilder>(i)
-                    .map_err(|_| PyValueError::new_err("Oups"))?;
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
                 let entry = Entry::new(self.arx.clone(), arx_entry);
                 Ok(Some(entry))
             }
@@ -150,7 +153,7 @@ impl Entry {
     fn get_content_address(&self) -> PyResult<ContentAddress> {
         match &self.entry {
             arx::Entry::File(f) => Ok(f.content().into()),
-            _ => Err(PyValueError::new_err("Not a file")),
+            _ => Err(PyTypeError::new_err("Not a file")),
         }
     }
 
@@ -160,7 +163,7 @@ impl Entry {
     fn get_content<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
         match &self.entry {
             arx::Entry::File(f) => super::arx::Arx::get_content_rust(&self.arx, py, f.content()),
-            _ => Err(PyValueError::new_err("Not a file")),
+            _ => Err(PyTypeError::new_err("Not a file")),
         }
     }
 
@@ -170,7 +173,7 @@ impl Entry {
     fn get_target(&self) -> PyResult<Cow<[u8]>> {
         match &self.entry {
             arx::Entry::Link(l) => Ok(l.target().into()),
-            _ => Err(PyValueError::new_err("Not a link")),
+            _ => Err(PyTypeError::new_err("Not a link")),
         }
     }
 
@@ -180,7 +183,7 @@ impl Entry {
     fn first_child(&self) -> PyResult<u32> {
         match &self.entry {
             arx::Entry::Dir(range, _) => Ok(range.begin().into_u32()),
-            _ => Err(PyValueError::new_err("Not a dir")),
+            _ => Err(PyTypeError::new_err("Not a dir")),
         }
     }
 
@@ -190,7 +193,7 @@ impl Entry {
     fn nb_children(&self) -> PyResult<u32> {
         match &self.entry {
             arx::Entry::Dir(range, _) => Ok(range.size().into_u32()),
-            _ => Err(PyValueError::new_err("Not a dir")),
+            _ => Err(PyTypeError::new_err("Not a dir")),
         }
     }
 
@@ -203,7 +206,7 @@ impl Entry {
                 let iter = EntryIter::new_from_range(Arc::clone(&slf.arx), range);
                 Py::new(slf.py(), iter)
             }
-            _ => Err(PyValueError::new_err("Not a dir")),
+            _ => Err(PyTypeError::new_err("Not a dir")),
         }
     }
 

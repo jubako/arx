@@ -15,6 +15,8 @@ pub const VENDOR_ID: jbk::VendorId = jbk::VendorId::new([0x41, 0x52, 0x58, 0x00]
 
 pub type Path = relative_path::RelativePath;
 pub type PathBuf = relative_path::RelativePathBuf;
+pub type FromPathError = relative_path::FromPathError;
+pub type FromPathErrorKind = relative_path::FromPathErrorKind;
 
 pub struct Comparator {
     store: jbk::reader::EntryStore,

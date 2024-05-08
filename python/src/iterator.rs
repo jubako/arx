@@ -5,7 +5,7 @@ use jbk::{
     reader::{Index, Range},
     EntryIdx, EntryRange,
 };
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 #[pyclass]
 pub struct EntryIter {
@@ -44,7 +44,7 @@ impl EntryIter {
             Arc::clone(&slf.arx),
             slf.arx
                 .get_entry_at_idx::<arx::FullBuilder>(slf.start)
-                .map_err(|_e| PyValueError::new_err("Unknown error"))?,
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
         );
         slf.start += 1;
         Ok(Some(ret))
