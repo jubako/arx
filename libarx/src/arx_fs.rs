@@ -343,7 +343,7 @@ pub struct ArxFs<'a, S: Stats> {
     attr_builder: AttrBuilder,
     resolve_cache: LruCache<(Ino, OsString), Option<jbk::EntryIdx>, FxBuildHasher>,
     attr_cache: LruCache<jbk::EntryIdx, fuser::FileAttr, FxBuildHasher>,
-    reader_cache: HashMap<Ino, (jbk::Reader, u64), FxBuildHasher>,
+    region_cache: HashMap<Ino, (jbk::reader::ByteRegion, u64), FxBuildHasher>,
     stats: &'a mut S,
 }
 
@@ -383,7 +383,7 @@ impl<'a, S: Stats> ArxFs<'a, S> {
                 NonZeroUsize::new(100).unwrap(),
                 FxBuildHasher::default(),
             ),
-            reader_cache: HashMap::with_hasher(FxBuildHasher::default()),
+            region_cache: HashMap::with_hasher(FxBuildHasher::default()),
             stats,
         })
     }
@@ -529,7 +529,7 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
     fn open(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
         self.stats.open();
         let ino = Ino::from(ino);
-        match self.reader_cache.get_mut(&ino) {
+        match self.region_cache.get_mut(&ino) {
             Some((_r, c)) => {
                 *c += 1;
                 reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
@@ -542,7 +542,7 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                         .get_entry(&self.light_file_builder, idx)
                         .unwrap();
                     match &entry {
-                        Ok(content_address) => match self.arx.get_reader(*content_address) {
+                        Ok(content_address) => match self.arx.get_bytes(*content_address) {
                             Err(_e) => reply.error(libc::EIO),
                             Ok(MayMissPack::MISSING(_pack_info)) => reply.error(
                                 #[cfg(not(target_os = "linux"))]
@@ -550,8 +550,8 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                                 #[cfg(target_os = "linux")]
                                 libc::ENOMEDIUM,
                             ),
-                            Ok(MayMissPack::FOUND(reader)) => {
-                                self.reader_cache.insert(ino, (reader, 1));
+                            Ok(MayMissPack::FOUND(bytes)) => {
+                                self.region_cache.insert(ino, (bytes, 1));
                                 reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
                             }
                         },
@@ -577,17 +577,12 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
     ) {
         self.stats.read();
         let ino = Ino::from(ino);
-        let reader = &self.reader_cache.get(&ino).unwrap().0;
-        let reader =
-            reader.create_sub_reader(jbk::Offset::new(offset.try_into().unwrap()), jbk::End::None);
-        let size = min(size as u64, reader.size().into_u64());
-        let reader = reader
-            .into_memory_reader(jbk::Offset::zero(), jbk::End::new_size(size))
-            .unwrap();
-        let data = reader
-            .get_slice(jbk::Offset::zero(), jbk::End::None)
-            .unwrap();
-        reply.data(data)
+        let size = jbk::Size::from(size as u64);
+        let offset = jbk::Offset::new(offset.try_into().unwrap());
+        let region = &self.region_cache.get(&ino).unwrap().0;
+        let size = min(size, region.size() - offset.into());
+        let data = region.get_slice(offset, size).unwrap();
+        reply.data(&data)
     }
 
     fn release(
@@ -602,11 +597,11 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
     ) {
         self.stats.release();
         let ino = Ino::from(ino);
-        match self.reader_cache.get_mut(&ino) {
+        match self.region_cache.get_mut(&ino) {
             Some((_r, c)) => {
                 *c -= 1;
                 if *c == 0 {
-                    self.reader_cache.remove(&ino);
+                    self.region_cache.remove(&ino);
                 }
                 reply.ok()
             }

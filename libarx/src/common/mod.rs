@@ -11,8 +11,6 @@ use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
 pub use properties::{AllProperties, Property};
 
-pub use jbk::SubReader as Reader;
-
 pub const VENDOR_ID: jbk::VendorId = jbk::VendorId::new([0x41, 0x52, 0x58, 0x00]);
 
 pub type Path = relative_path::RelativePath;

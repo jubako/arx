@@ -1,4 +1,5 @@
 use clap::{Parser, ValueHint};
+use jbk::reader::ByteSlice;
 use jbk::reader::{builder::PropertyBuilderTrait, MayMissPack};
 use log::info;
 use std::path::PathBuf;
@@ -16,7 +17,7 @@ impl arx::Builder for FileBuilder {
         }
     }
 
-    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &arx::Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         self.content_address_property.create(reader)
     }
 }
@@ -31,9 +32,9 @@ fn dump_entry(
     match entry {
         arx::Entry::Dir(_, _) => Err("Found directory".to_string().into()),
         arx::Entry::File(content_address) => {
-            match container.get_reader(content_address)? {
-                MayMissPack::FOUND(reader) => {
-                    std::io::copy(&mut reader.create_flux_all(), output)?;
+            match container.get_bytes(content_address)? {
+                MayMissPack::FOUND(bytes) => {
+                    std::io::copy(&mut bytes.stream(), output)?;
                 }
                 MayMissPack::MISSING(pack_info) => {
                     eprintln!(
