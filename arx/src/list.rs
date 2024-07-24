@@ -1,6 +1,7 @@
 use crate::light_path::LightPath;
 use arx::CommonEntry;
 use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::ByteSlice;
 use log::info;
 use std::cell::RefCell;
 use std::io::Write;
@@ -25,7 +26,7 @@ impl arx::Builder for PathBuilder {
         }
     }
 
-    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &arx::Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;

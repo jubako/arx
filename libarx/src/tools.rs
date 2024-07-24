@@ -7,8 +7,9 @@ use std::os::unix::fs::symlink;
 use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
 
-use crate::{AllProperties, Arx, Builder, Reader, Walker};
+use crate::{AllProperties, Arx, Builder, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
+use jbk::reader::ByteSlice;
 use jbk::reader::MayMissPack;
 
 struct FileEntry {
@@ -36,7 +37,7 @@ impl Builder for FileBuilder {
         }
     }
 
-    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
@@ -63,7 +64,7 @@ impl Builder for LinkBuilder {
         }
     }
 
-    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
@@ -91,7 +92,7 @@ impl Builder for DirBuilder {
         }
     }
 
-    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &Reader) -> jbk::Result<Self::Entry> {
+    fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
@@ -188,11 +189,11 @@ where
         if !self.should_extract(&current_path, false) {
             return Ok(());
         }
-        let reader = arx.container.get_reader(entry_content).unwrap();
+        let bytes = arx.container.get_bytes(entry_content).unwrap();
 
         self.scope.spawn(move |_scope| {
-            match reader {
-                MayMissPack::FOUND(reader) => {
+            match bytes {
+                MayMissPack::FOUND(bytes) => {
                     let abs_path = abs_path.clone();
                     let mut file = OpenOptions::new()
                         .write(true)
@@ -202,17 +203,14 @@ where
 
                     // Don't use std::io::copy as it use an internal buffer where it read data into before writing in file.
                     // If content is compressed, we already have a buffer. Same thing for uncompress as the cluster is probably mmapped.
-                    let size = reader.size().into_usize();
+                    let size = bytes.size().into_usize();
                     let mut offset = 0;
                     loop {
                         let sub_size = std::cmp::min(size - offset, 4 * 1024);
-                        let reader = reader
-                            .into_memory_reader(offset.into(), jbk::End::new_size(sub_size))
-                            .unwrap();
                         let written = file
                             .write(
-                                reader
-                                    .get_slice(jbk::Offset::zero(), jbk::End::None)
+                                &bytes
+                                    .get_slice(offset.into(), jbk::Size::from(sub_size))
                                     .unwrap(),
                             )
                             .unwrap();

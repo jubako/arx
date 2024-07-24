@@ -14,9 +14,7 @@ pub mod walk;
 pub use arx::Arx;
 #[cfg(not(windows))]
 pub use arx_fs::{ArxFs, Stats};
-pub use common::{
-    AllProperties, Builder, Entry, FullBuilderTrait, Path, PathBuf, Reader, VENDOR_ID,
-};
+pub use common::{AllProperties, Builder, Entry, FullBuilderTrait, Path, PathBuf, VENDOR_ID};
 pub use entry::*;
 pub use tools::extract;
 pub use walk::*;
