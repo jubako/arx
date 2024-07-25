@@ -161,22 +161,49 @@ impl<'a> FsAdder<'a> {
             let walker = walker.into_iter();
             for entry in walker.filter_entry(filter) {
                 let entry = entry.unwrap();
-                let entry_path = entry.path();
-                let arx_path = crate::PathBuf::from_path(entry_path)
-                    .unwrap_or_else(|_| panic!("{entry_path:?} must be a relative utf-8 path."));
-                let arx_path: crate::PathBuf = arx_path.strip_prefix(&strip_prefix).unwrap().into();
-                if arx_path.as_str().is_empty() {
-                    continue;
-                }
-                tx.send((entry, arx_path)).unwrap();
+                tx.send(entry).unwrap();
             }
         });
 
-        while let Ok((e, entry_path)) = rx.recv() {
+        while let Ok(entry) = rx.recv() {
             // Walkdir behaves differently if root is a link to a directory
-            let is_root_entry = e.path() == path.as_ref();
+            let is_root_entry = entry.path() == path.as_ref();
+
+            let entry_path = entry.path();
+            let arx_path = match crate::PathBuf::from_path(&entry_path) {
+                Ok(p) => p,
+                Err(e) => {
+                    return Err(match e.kind() {
+                        relative_path::FromPathErrorKind::NonRelative => {
+                            format!("{} is not a relative path", entry_path.display())
+                        }
+                        relative_path::FromPathErrorKind::NonUtf8 => {
+                            format!("Non utf8 char in {}", entry_path.display())
+                        }
+                        relative_path::FromPathErrorKind::BadSeparator => {
+                            format!("Invalid path separator in {}", entry_path.display(),)
+                        }
+                        _ => {
+                            format!(
+                                "Unknown error converting {} to relative utf-8 path.",
+                                entry_path.display()
+                            )
+                        }
+                    }
+                    .into())
+                }
+            };
+            let arx_path: crate::PathBuf = match arx_path.strip_prefix(&strip_prefix) {
+                Ok(p) => p,
+                Err(_e) => return Err(format!("{strip_prefix} is not in {arx_path}").into()),
+            }
+            .into();
+            if arx_path.as_str().is_empty() {
+                continue;
+            }
+
             let entry =
-                FsEntry::new_from_walk_entry(e, entry_path, self.creator.adder(), is_root_entry)
+                FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder(), is_root_entry)
                     .unwrap();
 
             self.creator.add_entry(entry.as_ref())?;
