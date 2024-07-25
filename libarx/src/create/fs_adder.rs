@@ -30,6 +30,7 @@ impl FsEntry {
         dir_entry: walkdir::DirEntry,
         arx_path: crate::PathBuf,
         adder: &mut A,
+        is_root_entry: bool,
     ) -> jbk::Result<Box<Self>> {
         let fs_path = dir_entry.path().to_path_buf();
         let attr = dir_entry.metadata().unwrap();
@@ -45,7 +46,19 @@ impl FsEntry {
             let content_address = adder.add_content(reader, jbk::creator::CompHint::Detect)?;
             FsEntryKind::File(attr.len().into(), content_address)
         } else if attr.is_symlink() {
-            FsEntryKind::Link
+            if is_root_entry {
+                // Walkdir will return it is a link but will follow it if it is a directory.
+                let target_attr = std::fs::metadata(std::fs::read_link(dir_entry.path())?)?;
+                if target_attr.is_dir() {
+                    FsEntryKind::Dir
+                } else {
+                    // Walkdir follow root link only if points to a directory.
+                    // So if it is not a directory, it is a link (no need to handle as a file)
+                    FsEntryKind::Link
+                }
+            } else {
+                FsEntryKind::Link
+            }
         } else {
             FsEntryKind::Other
         };
@@ -137,11 +150,11 @@ impl<'a> FsAdder<'a> {
         F: Send + 'static,
     {
         let (tx, rx) = mpsc::channel();
-        let path = path.as_ref().to_path_buf();
+        let path_copy = path.as_ref().to_path_buf();
         let strip_prefix = self.strip_prefix.clone();
 
         spawn(move || {
-            let mut walker = walkdir::WalkDir::new(path);
+            let mut walker = walkdir::WalkDir::new(path_copy);
             if !recurse {
                 walker = walker.max_depth(0);
             }
@@ -160,7 +173,11 @@ impl<'a> FsAdder<'a> {
         });
 
         while let Ok((e, entry_path)) = rx.recv() {
-            let entry = FsEntry::new_from_walk_entry(e, entry_path, self.creator.adder()).unwrap();
+            // Walkdir behaves differently if root is a link to a directory
+            let is_root_entry = e.path() == path.as_ref();
+            let entry =
+                FsEntry::new_from_walk_entry(e, entry_path, self.creator.adder(), is_root_entry)
+                    .unwrap();
 
             self.creator.add_entry(entry.as_ref())?;
         }
