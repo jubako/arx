@@ -153,23 +153,23 @@ Documentation directory only of linux source code:
 
 |     Type     |  Creation  |   Size   |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | ---------- | -------- | ---------- | ---------- | ---------- | ---------- |
-|          Arx | 151ms148μs | 11.10 MB | 038ms527μs | 003ms381μs | 250ms776μs | 004ms909μs |
-|           FS | 152ms331μs | 38.45 MB | 105ms728μs | 007ms509μs | 078ms462μs |      496μs |
-|     Squashfs | 099ms716μs | 10.60 MB | 085ms815μs | 004ms637μs | 272ms953μs | 002ms106μs |
-| SquashfsFuse | 097ms174μs | 10.60 MB |          - |          - | 775ms089μs |          - |
-|          Tar | 129ms599μs |  9.68 MB | 064ms772μs | 041ms099μs |     02m48s | 043ms755μs |
-|          Zip |   01s111ms | 15.22 MB | 370ms369μs | 028ms685μs |     03m09s | 014ms194μs |
+|          Arx | 150ms963μs | 11.10 MB | 038ms395μs | 004ms051μs | 299ms764μs | 005ms618μs |
+|           FS | 150ms639μs | 38.45 MB | 106ms821μs | 006ms962μs | 077ms414μs |      498μs |
+|     Squashfs | 103ms076μs | 10.60 MB | 098ms787μs | 005ms365μs | 261ms533μs | 002ms088μs |
+| SquashfsFuse | 097ms863μs | 10.60 MB |          - |          - | 748ms597μs |          - |
+|          Tar | 141ms079μs |  9.68 MB | 065ms744μs | 041ms015μs |     02m41s | 042ms143μs |
+|          Zip |   01s083ms | 15.22 MB | 388ms720μs | 037ms044μs |     03m06s | 014ms088μs |
 
 This is the ratio <Archive> time / Arx time.
 A ratio greater than 100% means Arx is better.
 
 |     Type     | Creation | Size | Extract | Listing | Mount diff | Dump |
 | ------------ | -------- | ---- | ------- | ------- | ---------- | ---- |
-|           FS |     101% | 346% |    274% |    222% |        31% |  10% |
-|     Squashfs |      66% |  95% |    223% |    137% |       109% |  43% |
-| SquashfsFuse |      64% |  95% |       - |       - |       309% |    - |
-|          Tar |      86% |  87% |    168% |   1216% |     67104% | 891% |
-|          Zip |     735% | 137% |    961% |    848% |     75548% | 289% |
+|           FS |     100% | 346% |    278% |    172% |        26% |   9% |
+|     Squashfs |      68% |  95% |    257% |    132% |        87% |  37% |
+| SquashfsFuse |      65% |  95% |       - |       - |       250% |    - |
+|          Tar |      93% |  87% |    171% |   1012% |     53997% | 750% |
+|          Zip |     718% | 137% |   1012% |    914% |     62350% | 251% |
 
 
 Linux Driver
@@ -179,23 +179,23 @@ Driver directory only of linux source code:
 
 |     Type     |  Creation  |   Size    |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | ---------- | --------- | ---------- | ---------- | ---------- | ---------- |
-|          Arx |   01s085ms |  98.23 MB | 285ms486μs | 009ms975μs |   01s298ms | 005ms219μs |
-|           FS | 800ms259μs | 799.02 MB | 519ms484μs | 018ms222μs | 473ms239μs |      499μs |
-|     Squashfs | 829ms672μs | 121.70 MB | 420ms767μs | 011ms155μs |   01s591ms | 002ms201μs |
-| SquashfsFuse | 827ms695μs | 121.70 MB |          - |          - |   03s808ms |          - |
-|          Tar | 906ms266μs |  97.96 MB | 509ms529μs | 467ms522μs |          - | 514ms628μs |
-|          Zip |   20s692ms | 141.91 MB |   03s730ms | 096ms525μs |          - | 034ms796μs |
+|          Arx |   01s060ms |  98.23 MB | 241ms699μs | 009ms516μs |   01s290ms | 007ms193μs |
+|           FS | 778ms095μs | 799.02 MB | 523ms191μs | 021ms578μs | 467ms559μs |      495μs |
+|     Squashfs | 829ms886μs | 121.70 MB | 435ms851μs | 012ms289μs |   01s629ms | 002ms190μs |
+| SquashfsFuse | 829ms237μs | 121.70 MB |          - |          - |   03s823ms |          - |
+|          Tar | 911ms042μs |  97.96 MB | 515ms178μs | 472ms060μs |          - | 504ms231μs |
+|          Zip |   20s498ms | 141.91 MB |   03s665ms | 098ms194μs |          - | 034ms481μs |
 
 This is the ratio <Archive> time / Arx time.
 A ratio greater than 100% means Arx is better.
 
 |     Type     | Creation | Size | Extract | Listing | Mount diff | Dump  |
 | ------------ | -------- | ---- | ------- | ------- | ---------- | ----- |
-|           FS |      74% | 813% |    182% |    183% |        36% |   10% |
-|     Squashfs |      76% | 124% |    147% |    112% |       123% |   42% |
-| SquashfsFuse |      76% | 124% |       - |       - |       293% |     - |
-|          Tar |      83% | 100% |    178% |   4687% |          - | 9861% |
-|          Zip |    1906% | 144% |   1307% |    968% |          - |  667% |
+|           FS |      73% | 813% |    216% |    227% |        36% |    7% |
+|     Squashfs |      78% | 124% |    180% |    129% |       126% |   30% |
+| SquashfsFuse |      78% | 124% |       - |       - |       296% |     - |
+|          Tar |      86% | 100% |    213% |   4961% |          - | 7010% |
+|          Zip |    1932% | 144% |   1516% |   1032% |          - |  479% |
 
 
 Linux Source Code
@@ -203,23 +203,23 @@ Linux Source Code
 
 |     Type     | Creation |   Size    |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | -------- | --------- | ---------- | ---------- | ---------- | ---------- |
-|          Arx | 02s291ms | 170.97 MB | 482ms533μs | 023ms408μs |   02s825ms | 005ms316μs |
-|           FS | 01s627ms |   1.12 GB |   01s101ms | 047ms314μs | 956ms438μs |      480μs |
-|     Squashfs | 01s425ms | 201.43 MB | 743ms588μs | 027ms390μs |   03s274ms | 002ms379μs |
-| SquashfsFuse | 01s441ms | 201.43 MB |          - |          - |   14s433ms |          - |
-|          Tar | 01s560ms | 168.77 MB |   01s103ms | 845ms941μs |          - | 824ms696μs |
-|          Zip | 32s022ms | 252.96 MB |   06s499ms | 259ms919μs |          - | 045ms474μs |
+|          Arx | 02s104ms | 170.97 MB | 435ms846μs | 022ms238μs |   02s829ms | 010ms613μs |
+|           FS | 01s605ms |   1.12 GB |   01s046ms | 043ms358μs | 943ms546μs |      493μs |
+|     Squashfs | 01s430ms | 201.43 MB | 725ms532μs | 024ms050μs |   03s272ms | 002ms374μs |
+| SquashfsFuse | 01s417ms | 201.43 MB |          - |          - |   13s864ms |          - |
+|          Tar | 01s479ms | 168.77 MB | 938ms758μs | 799ms550μs |          - | 802ms427μs |
+|          Zip | 31s810ms | 252.96 MB |   06s260ms | 256ms137μs |          - | 045ms722μs |
 
 This is the ratio <Archive> time / Arx time.
 A ratio greater than 100% means Arx is better.
 
-|     Type     | Creation | Size | Extract | Listing | Mount diff |  Dump  |
-| ------------ | -------- | ---- | ------- | ------- | ---------- | ------ |
-|           FS |      71% | 674% |    228% |    202% |        34% |     9% |
-|     Squashfs |      62% | 118% |    154% |    117% |       116% |    45% |
-| SquashfsFuse |      63% | 118% |       - |       - |       511% |      - |
-|          Tar |      68% |  99% |    229% |   3614% |          - | 15513% |
-|          Zip |    1397% | 148% |   1347% |   1110% |          - |   855% |
+|     Type     | Creation | Size | Extract | Listing | Mount diff | Dump  |
+| ------------ | -------- | ---- | ------- | ------- | ---------- | ----- |
+|           FS |      76% | 674% |    240% |    195% |        33% |    5% |
+|     Squashfs |      68% | 118% |    166% |    108% |       116% |   22% |
+| SquashfsFuse |      67% | 118% |       - |       - |       490% |     - |
+|          Tar |      70% |  99% |    215% |   3595% |          - | 7561% |
+|          Zip |    1511% | 148% |   1436% |   1152% |          - |  431% |
 
 The kernel compilation is the time needed to compile the whole kernel with the
 default configuration (-j8). For arx, we are compiling the kernel using the
