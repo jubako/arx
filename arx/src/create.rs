@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::{debug, info};
 use std::cell::Cell;
 use std::fs::File;
@@ -41,6 +41,9 @@ pub struct Options {
     ///
     /// In this mode `recurse` is true by default.
     /// Use `--no-recurse` to avoid recursion.
+    ///
+    /// Arx is storing only relative path. If INFILES contains absolute paths, root
+    /// prefix is removed.
     #[arg(value_parser, group = "input", value_hint=ValueHint::AnyPath)]
     infiles: Vec<PathBuf>,
 
@@ -103,16 +106,23 @@ pub struct Options {
 }
 
 fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
-    if let Some(file_list) = &options.file_list {
-        let file = File::open(file_list).with_context(|| format!("Cannot open {:?}", file_list))?;
+    let file_list = if let Some(file_list) = &options.file_list {
+        let file = File::open(file_list)
+            .with_context(|| format!("Cannot open {}", file_list.display()))?;
         let mut files = Vec::new();
         for line in BufReader::new(file).lines() {
             files.push(line?.into());
         }
-        Ok(files)
+        files
     } else {
-        Ok(options.infiles.clone())
+        options.infiles.clone()
+    };
+    for file in file_list.iter() {
+        if file.is_absolute() {
+            return Err(anyhow!("Input file ({}) must be relative.", file.display()));
+        }
     }
+    Ok(file_list)
 }
 
 struct ProgressBar {
