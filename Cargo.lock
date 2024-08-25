@@ -164,7 +164,7 @@ dependencies = [
 [[package]]
 name = "arx_test_dir"
 version = "0.1.0"
-source = "git+https://github.com/jubako/arx_test_dir.git#4260f7883f493c24950a8b26d02c545b928cf1e9"
+source = "git+https://github.com/jubako/arx_test_dir.git#b818e3c70401edf731748577da376fccb6b2058c"
 dependencies = [
  "clap",
  "fuser",
