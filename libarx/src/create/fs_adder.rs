@@ -170,7 +170,7 @@ impl<'a> FsAdder<'a> {
             let is_root_entry = entry.path() == path.as_ref();
 
             let entry_path = entry.path();
-            let arx_path = match crate::PathBuf::from_path(&entry_path) {
+            let arx_path = match crate::PathBuf::from_path(entry_path) {
                 Ok(p) => p,
                 Err(e) => {
                     return Err(match e.kind() {

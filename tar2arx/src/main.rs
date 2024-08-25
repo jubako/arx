@@ -314,7 +314,12 @@ fn main() -> Result<()> {
             if p == "-" {
                 Box::new(std::io::stdin())
             } else if p.starts_with("https://") || p.starts_with("http://") {
-                Box::new(ureq::get(&p).call()?.into_reader())
+                #[cfg(feature = "http")]
+                {
+                    Box::new(ureq::get(&p).call()?.into_reader())
+                }
+                #[cfg(not(feature = "http"))]
+                return Err(anyhow!("Cannot open remote tar without http feature"));
             } else {
                 let f = std::fs::File::open(p)?;
                 input_size = Some(f.metadata()?.len());
