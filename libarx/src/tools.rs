@@ -203,18 +203,14 @@ where
 
                     // Don't use std::io::copy as it use an internal buffer where it read data into before writing in file.
                     // If content is compressed, we already have a buffer. Same thing for uncompress as the cluster is probably mmapped.
-                    let size = bytes.size().into_usize();
+                    let size = bytes.size().into_u64();
                     let mut offset = 0;
                     loop {
-                        let sub_size = std::cmp::min(size - offset, 4 * 1024);
+                        let sub_size = std::cmp::min(size - offset, 4 * 1024) as usize;
                         let written = file
-                            .write(
-                                &bytes
-                                    .get_slice(offset.into(), jbk::Size::from(sub_size))
-                                    .unwrap(),
-                            )
+                            .write(&bytes.get_slice(offset.into(), sub_size).unwrap())
                             .unwrap();
-                        offset += written;
+                        offset += written as u64;
                         if offset == size {
                             break;
                         }

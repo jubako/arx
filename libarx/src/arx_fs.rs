@@ -292,8 +292,8 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
             EntryType::Dir => (self.dir_nb_children_property.create(&reader)? + 1) * 10,
             EntryType::Link => {
                 let link = self.link_target_property.create(&reader)?;
-                match link.size {
-                    Some(s) => s.into_u64(),
+                match link.size() {
+                    Some(s) => s as u64,
                     None => {
                         let mut vec = vec![];
                         link.resolve_to_vec(&mut vec)?;
@@ -577,11 +577,10 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
     ) {
         self.stats.read();
         let ino = Ino::from(ino);
-        let size = jbk::Size::from(size as u64);
-        let offset = jbk::Offset::new(offset.try_into().unwrap());
+        let offset: u64 = offset.try_into().unwrap();
         let region = &self.region_cache.get(&ino).unwrap().0;
-        let size = min(size, region.size() - offset.into());
-        let data = region.get_slice(offset, size).unwrap();
+        let size = min(size as u64, region.size().into_u64() - offset) as usize;
+        let data = region.get_slice(offset.into(), size).unwrap();
         reply.data(&data)
     }
 
