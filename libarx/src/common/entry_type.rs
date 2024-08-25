@@ -30,7 +30,7 @@ impl ToString for EntryType {
 
 impl jbk::creator::VariantName for EntryType {}
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "fuse"))]
 impl From<EntryType> for fuser::FileType {
     fn from(t: EntryType) -> Self {
         match t {
