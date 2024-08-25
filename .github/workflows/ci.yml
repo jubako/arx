@@ -75,5 +75,7 @@ jobs:
         run: cargo install cross
 
       - name: Test code
+        env:
+          CROSS_CONTAINER_OPTS: "--device /dev/fuse --cap-add SYS_ADMIN"
         run: |
-          cross test --workspace --verbose --target=i686-unknown-linux-gnu
+          cross test --workspace --verbose --target=i686-unknown-linux-gnu --features in_ci

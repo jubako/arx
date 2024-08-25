@@ -1,7 +1,7 @@
 //#![feature(get_mut_unchecked)]
 
 mod arx;
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "fuse"))]
 mod arx_fs;
 #[cfg(feature = "cmd_utils")]
 pub mod cmd_utils;
@@ -12,7 +12,7 @@ mod tools;
 pub mod walk;
 
 pub use arx::Arx;
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "fuse"))]
 pub use arx_fs::{ArxFs, Stats};
 pub use common::{AllProperties, Builder, Entry, FullBuilderTrait, Path, PathBuf, VENDOR_ID};
 pub use entry::*;

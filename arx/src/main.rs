@@ -3,7 +3,7 @@ mod dump;
 mod extract;
 mod light_path;
 mod list;
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "fuse"))]
 mod mount;
 
 use anyhow::Result;
@@ -29,7 +29,7 @@ struct Cli {
             "list",
             "dump",
             "extract",
-            #[cfg(not(windows))]
+            #[cfg(all(not(windows), feature = "fuse"))]
             "mount"
         ])
     )]
@@ -56,7 +56,7 @@ enum Commands {
     #[command(arg_required_else_help = true)]
     Extract(extract::Options),
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature = "fuse"))]
     #[command(arg_required_else_help = true)]
     Mount(mount::Options),
 }
@@ -91,7 +91,7 @@ fn run() -> Result<()> {
             "list" => list::Options::command(),
             "dump" => dump::Options::command(),
             "extract" => extract::Options::command(),
-            #[cfg(not(windows))]
+            #[cfg(all(not(windows), feature = "fuse"))]
             "mount" => mount::Options::command(),
             _ => return Ok(Cli::command().print_help()?),
         };
@@ -114,7 +114,7 @@ fn run() -> Result<()> {
             Commands::List(options) => Ok(list::list(options)?),
             Commands::Dump(options) => Ok(dump::dump(options)?),
             Commands::Extract(options) => Ok(extract::extract(options)?),
-            #[cfg(not(windows))]
+            #[cfg(all(not(windows), feature = "fuse"))]
             Commands::Mount(options) => Ok(mount::mount(options)?),
         },
     }
