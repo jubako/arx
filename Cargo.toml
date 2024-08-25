@@ -21,6 +21,3 @@ anyhow = "1.0.75"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[profile.release]
-#debug = 1
-lto = true
