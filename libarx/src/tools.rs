@@ -254,10 +254,19 @@ pub fn extract(
     progress: bool,
 ) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
-    let mut walker = Walker::new(&arx, Default::default());
+    extract_arx(&arx, outdir, files_to_extract, progress)
+}
+
+pub fn extract_arx(
+    arx: &Arx,
+    outdir: &Path,
+    files_to_extract: HashSet<crate::PathBuf>,
+    progress: bool,
+) -> jbk::Result<()> {
+    let mut walker = Walker::new(arx, Default::default());
     rayon::scope(|scope| {
         let extractor = Extractor {
-            arx: &arx,
+            arx,
             scope,
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),

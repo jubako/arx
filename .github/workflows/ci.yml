@@ -78,4 +78,4 @@ jobs:
         env:
           CROSS_CONTAINER_OPTS: "--device /dev/fuse --cap-add SYS_ADMIN"
         run: |
-          cross test --workspace --verbose --target=i686-unknown-linux-gnu --features in_ci
+          cross test --workspace --verbose --target=i686-unknown-linux-gnu --features in_ci --exclude python-libarx

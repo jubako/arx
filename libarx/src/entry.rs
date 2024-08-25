@@ -2,6 +2,7 @@ use crate::common::{AllProperties, Builder};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 
+#[derive(Clone)]
 pub struct CommonPart {
     idx: jbk::EntryIdx,
     path: Vec<u8>,
@@ -37,6 +38,7 @@ pub trait CommonEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct FileEntry {
     common: CommonPart,
     content: jbk::ContentAddress,
@@ -58,6 +60,7 @@ impl FileEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct Link {
     common: CommonPart,
     target: Vec<u8>,
@@ -75,6 +78,7 @@ impl Link {
     }
 }
 
+#[derive(Clone)]
 pub struct Dir {
     common: CommonPart,
     range: jbk::EntryRange,
