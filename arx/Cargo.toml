@@ -24,7 +24,7 @@ env_logger = "0.10.0"
 log = "0.4.20"
 tempfile = "3.10.1"
 
-[dev-dependencies]
+[target.'cfg(not(windows))'.dev-dependencies]
 arx_test_dir = { git = "https://github.com/jubako/arx_test_dir.git" }
 tempfile = "3.8.0"
 
@@ -34,11 +34,16 @@ in_ci = []
 lz4 = ["arx/lz4"]
 zstd = ["arx/zstd"]
 lzma = ["arx/lzma"]
-fuse = ["arx/fuse"]
+fuse = ["arx/fuse", "arx_test_dir/fuse"]
 
 [[bin]]
 name = "auto_mount"
 required-features = ["fuse"]
+
 [[bin]]
 name = "mount_fuse_arx"
+required-features = ["fuse"]
+
+[[test]]
+name = "create"
 required-features = ["fuse"]

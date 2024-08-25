@@ -76,4 +76,4 @@ jobs:
 
       - name: Test code
         run: |
-          cross test --workspace --verbose --target=i686-unknown-linux-gnu
+          cross test --workspace --verbose --target=i686-unknown-linux-gnu --features in_ci
