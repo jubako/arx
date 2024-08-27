@@ -37,6 +37,27 @@ pub struct Options {
     #[arg(from_global)]
     verbose: u8,
 
+    /// Recursively extract directories
+    ///
+    /// Default value is true if `EXTRACT_FILES` is passed and false is `FILE_LIST` is passed.
+    #[arg(
+        short,
+        long,
+        required = false,
+        default_value_t = false,
+        default_value_ifs([
+            ("no_recurse", clap::builder::ArgPredicate::IsPresent, "false"),
+            ("extract_files", clap::builder::ArgPredicate::IsPresent, "true")
+        ]),
+        conflicts_with = "no_recurse",
+        action
+    )]
+    recurse: bool,
+
+    /// Force `--recurse` to be false.
+    #[arg(long)]
+    no_recurse: bool,
+
     #[arg(
         short = 'f',
         long = "file",
@@ -72,5 +93,11 @@ pub fn extract(options: Options) -> jbk::Result<()> {
         options.infile.as_ref().unwrap()
     };
     info!("Extract archive {:?} in {:?}", &infile, outdir);
-    arx::extract(infile, &outdir, files_to_extract, options.progress)
+    arx::extract(
+        infile,
+        &outdir,
+        files_to_extract,
+        options.recurse,
+        options.progress,
+    )
 }
