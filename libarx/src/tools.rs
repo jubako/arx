@@ -111,6 +111,7 @@ where
     files: HashSet<crate::PathBuf>,
     base_dir: PathBuf,
     print_progress: bool,
+    recurse: bool,
 }
 
 impl Extractor<'_, '_> {
@@ -118,11 +119,25 @@ impl Extractor<'_, '_> {
         if self.files.is_empty() {
             return true;
         }
+
         if self.files.contains(current_file) {
             return true;
-        } else if is_dir {
+        }
+
+        if self.recurse {
+            // We must extract any file/dir child of a directory to extract.
+            let mut parent = current_file.parent();
+            while let Some(p) = parent {
+                if self.files.contains(p) {
+                    return true;
+                }
+                parent = p.parent();
+            }
+        }
+
+        if is_dir {
+            // We must create any dirs parent of files/dirs to extract.
             for file in &self.files {
-                // We must create the dir if it is the parent dir of the file to extract
                 let mut parent = file.parent();
                 while let Some(p) = parent {
                     if current_file == p {
@@ -251,16 +266,18 @@ pub fn extract(
     infile: &Path,
     outdir: &Path,
     files_to_extract: HashSet<crate::PathBuf>,
+    recurse: bool,
     progress: bool,
 ) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
-    extract_arx(&arx, outdir, files_to_extract, progress)
+    extract_arx(&arx, outdir, files_to_extract, recurse, progress)
 }
 
 pub fn extract_arx(
     arx: &Arx,
     outdir: &Path,
     files_to_extract: HashSet<crate::PathBuf>,
+    recurse: bool,
     progress: bool,
 ) -> jbk::Result<()> {
     let mut walker = Walker::new(arx, Default::default());
@@ -271,6 +288,7 @@ pub fn extract_arx(
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
+            recurse,
         };
         walker.run(&extractor)
     })
