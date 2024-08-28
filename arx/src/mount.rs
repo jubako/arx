@@ -1,4 +1,5 @@
 use clap::{Parser, ValueHint};
+use daemonize::Daemonize;
 use log::info;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -101,6 +102,10 @@ pub struct Options {
     #[arg(value_parser, value_hint=ValueHint::DirPath)]
     mountdir: Option<PathBuf>,
 
+    /// Forground operation
+    #[arg(short, long)]
+    foreground: bool,
+
     #[arg(from_global)]
     verbose: u8,
 }
@@ -131,8 +136,25 @@ pub fn mount(options: Options) -> jbk::Result<()> {
             _tmp.as_ref().unwrap().path()
         }
     };
-    info!("Mount {} in {}", abs_path.display(), mount_dir.display());
-    arxfs.mount(abs_path.to_str().unwrap().to_string(), mount_dir)?;
+
+    let mut abs_mount_point = std::env::current_dir().unwrap();
+    abs_mount_point = abs_mount_point.join(mount_dir);
+
+    if !options.foreground {
+        let daemonize = Daemonize::new()
+            .stdout(daemonize::Stdio::keep())
+            .stderr(daemonize::Stdio::keep());
+        if let Err(e) = daemonize.start() {
+            eprintln!("Error daemonize, {}", e);
+            return Err("Failed to daemonize.".into());
+        }
+    }
+    info!(
+        "Mount {} in {}",
+        abs_path.display(),
+        abs_mount_point.display()
+    );
+    arxfs.mount(abs_path.to_str().unwrap().to_string(), abs_mount_point)?;
 
     info!("Stats:\n {stats}");
     Ok(())
