@@ -1,3 +1,30 @@
+# Arx 0.3.0
+
+This release is based on version 0.3.0 of Jubako.
+This is a major release, see Jubako changelog for changes impacting arx.
+Main information to remember of Jubako release is that the format as evolved and compatibility
+with previous version is broken.
+
+If you have existing archives, you can convert it to new format by mounting it (with a previous version of arx)
+and recreate it with a new version.
+
+
+This changelog is about Arx itself.
+
+- Adapt to various change in the Jubako API
+- `tar2arx` accepts now a http(s) url to a tar archive. It will convert the archive as it
+  downloads it.
+- `tar2arx` now infers the name of the arx archive to create from the name of tar archive.
+- `arx mount` not automatically create a temporary mount point is none is given.
+- `arx mount` now run in background (NOHUP). Option `--foreground` is added to keep previous behavior.
+- `tar2arx` and `zip2arx` packages have now features to configure supported compression algorithmes.
+- `arx create` now have an option `--progress` to print progress bar.
+- `arx create` better handle input path (must be a relative utf8 path), symlinks
+- `arx extract` now have an option `--recurse` to extrat a directory and its content.
+- Add a python wrapper onto libarx.
+- Performance improvement, mainly parrallalisation of extract operation
+- Add the `fuse` feature (in default features). This allow user to compile without fuse.
+
 # Arx 0.2.1
 
 - Add README.md in all sub-packages.

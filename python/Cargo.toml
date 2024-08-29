@@ -10,5 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jbk.workspace = true
-arx = { path = "../libarx", version = "0.2.1", package = "libarx"}
+arx = { path = "../libarx", version = "0.3.0", package = "libarx"}
 pyo3 = "0.20.0"
