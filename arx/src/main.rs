@@ -121,7 +121,11 @@ fn run() -> Result<()> {
 }
 
 fn main() -> ExitCode {
-    human_panic::setup_panic!();
+    human_panic::setup_panic!(human_panic::Metadata::new(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    )
+    .homepage(env!("CARGO_PKG_HOMEPAGE")));
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

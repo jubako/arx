@@ -256,7 +256,12 @@ impl<R: Read + Seek> Converter<R> {
 }
 
 fn main() -> jbk::Result<()> {
-    human_panic::setup_panic!();
+    human_panic::setup_panic!(human_panic::Metadata::new(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    )
+    .homepage(env!("CARGO_PKG_HOMEPAGE")));
+
     let args = Cli::parse();
 
     if args.list_compressions {
