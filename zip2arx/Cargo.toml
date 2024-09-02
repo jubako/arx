@@ -19,8 +19,9 @@ indicatif.workspace = true
 clap_mangen.workspace = true
 clap_complete.workspace = true
 human-panic.workspace = true
-zip = "0.6.6"
+zip = "2.2.0"
 flate2 = "1.0.26"
+time = "0.3.36"
 
 [features]
 default = ["zstd"]
