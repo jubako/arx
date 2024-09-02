@@ -1,6 +1,6 @@
 [package]
 name = "arx"
-description = "A file archive based on Jubako container."
+description = "A fast, mountable file archive based on Jubako container. Replacement of tar and zip."
 categories = ["command-line-utilities", "compression", "filesystem"]
 version.workspace = true
 authors.workspace = true

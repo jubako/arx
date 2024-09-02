@@ -2,6 +2,7 @@
 name = "libarx"
 description = "The library to handle arx file, the file archive format based on Jubako."
 categories = ["compression", "filesystem"]
+keywords = ["archive-format", "arx", "extract", "file-format", "compression"]
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

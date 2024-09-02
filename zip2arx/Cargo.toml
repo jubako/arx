@@ -2,6 +2,7 @@
 name = "zip2arx"
 description = "Convert a zip archive into a arx archive."
 categories = ["command-line-utilities", "compression", "filesystem"]
+keywords = ["zip-archive", "arx", "convert", "archive-format", "command-line-tool"]
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
