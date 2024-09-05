@@ -48,6 +48,21 @@ impl<'a, Context> Walker<'a, Context> {
         op.on_stop(&mut self.context)
     }
 
+    pub fn run_from_range<R: Range, B>(
+        &mut self,
+        op: &dyn Operator<Context, B>,
+        range: &R,
+    ) -> jbk::Result<()>
+    where
+        B: FullBuilderTrait,
+    {
+        let builder = RealBuilder::<B>::new(&self.arx.properties);
+
+        op.on_start(&mut self.context)?;
+        self._run(range, &builder, op)?;
+        op.on_stop(&mut self.context)
+    }
+
     fn _run<R: Range, B>(
         &mut self,
         range: &R,
