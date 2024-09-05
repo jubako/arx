@@ -81,7 +81,7 @@ fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>>
     }
 }
 
-pub fn extract(options: Options) -> jbk::Result<()> {
+pub fn extract(options: Options) -> anyhow::Result<()> {
     let files_to_extract = get_files_to_extract(&options)?;
     let outdir = match options.outdir {
         Some(o) => o,
@@ -99,5 +99,6 @@ pub fn extract(options: Options) -> jbk::Result<()> {
         files_to_extract,
         options.recurse,
         options.progress,
-    )
+    )?;
+    Ok(())
 }

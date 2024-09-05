@@ -33,7 +33,9 @@ impl FsEntry {
         is_root_entry: bool,
     ) -> jbk::Result<Box<Self>> {
         let fs_path = dir_entry.path().to_path_buf();
-        let attr = dir_entry.metadata().unwrap();
+        let attr = dir_entry
+            .metadata()
+            .map_err(|walk_err| std::io::Error::from(walk_err))?;
         let kind = if attr.is_dir() {
             FsEntryKind::Dir
         } else if attr.is_file() {
@@ -203,8 +205,7 @@ impl<'a> FsAdder<'a> {
             }
 
             let entry =
-                FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder(), is_root_entry)
-                    .unwrap();
+                FsEntry::new_from_walk_entry(entry, arx_path, self.creator.adder(), is_root_entry)?;
 
             self.creator.add_entry(entry.as_ref())?;
         }
