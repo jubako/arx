@@ -33,9 +33,7 @@ impl FsEntry {
         is_root_entry: bool,
     ) -> jbk::Result<Box<Self>> {
         let fs_path = dir_entry.path().to_path_buf();
-        let attr = dir_entry
-            .metadata()
-            .map_err(|walk_err| std::io::Error::from(walk_err))?;
+        let attr = dir_entry.metadata().map_err(std::io::Error::from)?;
         let kind = if attr.is_dir() {
             FsEntryKind::Dir
         } else if attr.is_file() {

@@ -57,7 +57,10 @@ impl Arx {
         match bytes {
             MayMissPack::FOUND(bytes) => {
                 let mut stream = bytes.stream();
-                let read = |slice: &mut [u8]| Ok(stream.read_exact(slice).unwrap());
+                let read = |slice: &mut [u8]| {
+                    stream.read_exact(slice).unwrap();
+                    Ok(())
+                };
                 pyo3::types::PyBytes::new_with(py, bytes.size().into_usize(), read)
             }
             MayMissPack::MISSING(pack_info) => Err(PyOSError::new_err(format!(
@@ -87,7 +90,7 @@ impl Arx {
                 PyRuntimeError::new_err(format!("{} is not a relative path", path.display()))
             }
             FromPathErrorKind::NonUtf8 => {
-                PyUnicodeDecodeError::new_err(format!("Non utf8 char in path"))
+                PyUnicodeDecodeError::new_err("Non utf8 char in path".to_string())
             }
             FromPathErrorKind::BadSeparator => PyRuntimeError::new_err("Invalid path separator"),
             _ => PyRuntimeError::new_err("Unknown error"),
@@ -104,7 +107,7 @@ impl Arx {
         py: Python<'py>,
         content: ContentAddress,
     ) -> PyResult<&'py pyo3::types::PyBytes> {
-        Self::get_content_rust(&self, py, content.0)
+        Self::get_content_rust(self, py, content.0)
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<EntryIter>> {

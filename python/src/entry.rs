@@ -122,29 +122,17 @@ impl Entry {
 
     /// Return True if the entry is a file entry
     fn is_file(&self) -> bool {
-        if let arx::Entry::File(_) = &self.entry {
-            true
-        } else {
-            false
-        }
+        matches!(&self.entry, arx::Entry::File(_))
     }
 
     /// Return True if the entry is a link entry
     fn is_link(&self) -> bool {
-        if let arx::Entry::Link(_) = &self.entry {
-            true
-        } else {
-            false
-        }
+        matches!(&self.entry, arx::Entry::Link(_))
     }
 
     /// Return True if the entry is a dir entry
     fn is_dir(&self) -> bool {
-        if let arx::Entry::Dir(_, _) = &self.entry {
-            true
-        } else {
-            false
-        }
+        matches!(&self.entry, arx::Entry::Dir(_, _))
     }
 
     /// Get the content address of the file entry.
