@@ -1,3 +1,12 @@
+# Arx 0.3.1
+
+- Use version 0.3.1 of Jubako
+- Do not crash on broken pipe (SIGPIPE)
+- `arx mount` and `arx extract` gain `--root-dir` option. If given, the directory (inside arx) will
+  be used as root instead of default root.
+- Fix Python CI and metadata
+- Small fixes (warning, dependencies, ...)
+
 # Arx 0.3.0
 
 This release is based on version 0.3.0 of Jubako.
