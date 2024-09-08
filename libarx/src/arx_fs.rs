@@ -3,6 +3,7 @@ use crate::common::{AllProperties, Comparator, EntryType, ReadEntry};
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::{MayMissPack, Range};
+use jbk::EntryRange;
 use libc::ENOENT;
 use lru::LruCache;
 use std::cmp::min;
@@ -334,6 +335,7 @@ static mut NOSTATS: () = ();
 pub struct ArxFs<'a, S: Stats> {
     arx: Arx,
     entry_index: jbk::reader::Index,
+    root_range: EntryRange,
     comparator: Comparator,
     light_file_builder: LightFileBuilder,
     light_dir_builder: LightDirBuilder,
@@ -350,12 +352,19 @@ pub struct ArxFs<'a, S: Stats> {
 impl ArxFs<'static, ()> {
     pub fn new(arx: Arx) -> jbk::Result<Self> {
         // SAFETY: No data race can occurs on empty type doing nothing
-        Self::new_with_stats(arx, unsafe { &mut *std::ptr::addr_of_mut!(NOSTATS) })
+        let root_range = (&arx.root_index).into();
+        Self::new_from_root(arx, root_range)
+    }
+    pub fn new_from_root(arx: Arx, root_range: EntryRange) -> jbk::Result<Self> {
+        // SAFETY: No data race can occurs on empty type doing nothing
+        Self::new_with_stats(arx, root_range, unsafe {
+            &mut *std::ptr::addr_of_mut!(NOSTATS)
+        })
     }
 }
 
 impl<'a, S: Stats> ArxFs<'a, S> {
-    pub fn new_with_stats(arx: Arx, stats: &'a mut S) -> jbk::Result<Self> {
+    pub fn new_with_stats(arx: Arx, root_range: EntryRange, stats: &'a mut S) -> jbk::Result<Self> {
         let entry_index = arx.get_index_for_name("arx_entries")?;
         let properties = arx.create_properties(&entry_index)?;
         let comparator = Comparator::new(&properties);
@@ -368,6 +377,7 @@ impl<'a, S: Stats> ArxFs<'a, S> {
         Ok(Self {
             arx,
             entry_index,
+            root_range,
             comparator,
             light_file_builder,
             light_dir_builder,
@@ -390,7 +400,7 @@ impl<'a, S: Stats> ArxFs<'a, S> {
 
     fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
         match ino.try_into() {
-            Err(_) => Ok((&self.arx.root_index).into()),
+            Err(_) => Ok(self.root_range),
             Ok(idx) => match self.entry_index.get_entry(&self.light_dir_builder, idx)? {
                 Ok(r) => Ok(r),
                 Err(_) => Err("No at directory".to_string().into()),
