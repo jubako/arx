@@ -2,6 +2,7 @@
 name = "tar2arx"
 description = "Convert a tar archive into a arx archive."
 categories = ["command-line-utilities", "compression", "filesystem"]
+keywords = ["tar-archive", "arx", "archive-format", "convert", "command-line-tool"]
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

@@ -36,7 +36,11 @@ fn main() -> ExitCode {
     use inner::*;
     use log::{error, info};
 
-    human_panic::setup_panic!();
+    human_panic::setup_panic!(human_panic::Metadata::new(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    )
+    .homepage(env!("CARGO_PKG_HOMEPAGE")));
     let args = Cli::parse();
 
     match env::current_exe() {

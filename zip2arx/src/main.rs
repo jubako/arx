@@ -137,14 +137,29 @@ impl ZipEntry {
         adder: &mut impl ContentAdder,
         archive_path: &Path,
     ) -> jbk::Result<Self> {
-        let mtime = entry.last_modified().to_time().unwrap().unix_timestamp() as u64;
+        let mut mtime = None;
+        for extra_field in entry.extra_data_fields() {
+            match extra_field {
+                zip::ExtraField::ExtendedTimestamp(ex_timestamp) => {
+                    mtime = ex_timestamp.mod_time().map(|ts| ts as u64)
+                }
+            }
+        }
+        let mtime = match mtime {
+            Some(ts) => ts,
+            None => entry
+                .last_modified()
+                .map(|ts| time::OffsetDateTime::try_from(ts).unwrap().unix_timestamp() as u64)
+                .unwrap_or(0),
+        };
         let mode = entry.unix_mode().unwrap_or(0o644) as u64;
         let path = entry.enclosed_name();
         if path.is_none() {
             return Err("Invalid path".into());
         }
-        let path = arx::PathBuf::from_path(path.unwrap())
-            .unwrap_or_else(|_| panic!("{path:?} must be utf8"));
+        let path = path.unwrap();
+        let path =
+            arx::PathBuf::from_path(&path).unwrap_or_else(|_| panic!("{path:?} must be utf8"));
 
         Ok(if entry.is_dir() {
             Self {
@@ -241,7 +256,12 @@ impl<R: Read + Seek> Converter<R> {
 }
 
 fn main() -> jbk::Result<()> {
-    human_panic::setup_panic!();
+    human_panic::setup_panic!(human_panic::Metadata::new(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    )
+    .homepage(env!("CARGO_PKG_HOMEPAGE")));
+
     let args = Cli::parse();
 
     if args.list_compressions {
