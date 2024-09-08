@@ -66,14 +66,7 @@ fn test_extract() -> Result {
     let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
-    arx::extract(
-        arx_file,
-        extract_dir.path(),
-        Default::default(),
-        true,
-        false,
-        arx::Overwrite::Error,
-    )?;
+    arx::extract_all(arx_file, extract_dir.path(), false, arx::Overwrite::Error)?;
     assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
@@ -98,14 +91,16 @@ fn test_extract_filter() -> Result {
     let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
-    arx::extract(
-        arx_file,
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
         extract_dir.path(),
-        ["sub_dir_a".into()].into(),
-        true,
-        true,
-        arx::Overwrite::Error,
-    )?;
+        "--glob",
+        "sub_dir_a/**"
+    )
+    .check_output(Some(b""), Some(b""));
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
     let extract_sub_dir = join!(extract_dir / "sub_dir_a");
@@ -389,5 +384,75 @@ fn test_extract_existing_content_error() -> Result {
         tmp_source_dir,
         SimpleDiffer::new()
     )?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_subdir_filter() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "--root-dir",
+        "sub_dir_a",
+        "-C",
+        extract_dir.path(),
+        "--glob",
+        "*.txt"
+    )
+    .check_output(Some(b""), Some(b""));
+
+    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+
+    println!(
+        "Diff {} and {}",
+        source_sub_dir.display(),
+        extract_dir.path().display()
+    );
+
+    struct DiffOnlyTxt(bool);
+
+    impl Differ for DiffOnlyTxt {
+        type Result = bool;
+
+        fn result(self) -> Self::Result {
+            self.0
+        }
+
+        fn push(&mut self, _entry_name: &OsStr) {}
+
+        fn pop(&mut self) {}
+
+        fn equal(&mut self, entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {
+            // Only txt should be equal
+            if !entry_tested.file_name().to_string_lossy().ends_with(".txt") {
+                self.0 = false
+            }
+        }
+
+        fn added(&mut self, _entry: &TreeEntry) {
+            // We don't want any extra file
+            self.0 = false
+        }
+
+        fn removed(&mut self, entry: &TreeEntry) {
+            // We care only about txt file
+            if entry.file_name().to_string_lossy().ends_with(".txt") {
+                self.0 = false
+            }
+        }
+
+        fn diff(&mut self, _entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {
+            // Existing file must match
+            self.0 = false
+        }
+    }
+
+    assert!(tree_diff(extract_dir, source_sub_dir, DiffOnlyTxt(true))?);
     Ok(())
 }

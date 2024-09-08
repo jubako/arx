@@ -244,7 +244,8 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
                 text "existing_file" 50,
                 link "existing_link" -> "existing_file",
                 text "file_2.txt" (500..1000),
-                loop  (10..50) { text "file{ctx}.txt" (500..1000) }
+                loop  (10..50) { text "file{ctx}.txt" (500..1000) },
+                loop  (10..50) { bin "file{ctx}.bin" (500..1000) }
             },
             dir "sub_dir_b" {
                 loop 10 { bin "file{ctx}.bin" (5000..10000) },
