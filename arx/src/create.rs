@@ -100,7 +100,7 @@ pub struct Options {
         long = "file",
         hide = true,
         conflicts_with("outfile"),
-        required_unless_present("outfile")
+        required_unless_present_any(["list_compressions", "outfile"])
     )]
     outfile_old: Option<PathBuf>,
 }
