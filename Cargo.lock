@@ -167,6 +167,7 @@ dependencies = [
  "indicatif",
  "jubako",
  "libarx",
+ "libc",
  "log",
  "tempfile",
 ]

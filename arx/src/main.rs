@@ -126,6 +126,12 @@ fn main() -> ExitCode {
         env!("CARGO_PKG_VERSION")
     )
     .homepage(env!("CARGO_PKG_HOMEPAGE")));
+
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
