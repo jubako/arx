@@ -293,3 +293,25 @@ pub fn extract_arx(
         walker.run(&extractor)
     })
 }
+
+pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
+    arx: &Arx,
+    outdir: &Path,
+    range: &R,
+    files_to_extract: HashSet<crate::PathBuf>,
+    recurse: bool,
+    progress: bool,
+) -> jbk::Result<()> {
+    let mut walker = Walker::new(arx, Default::default());
+    rayon::scope(|scope| {
+        let extractor = Extractor {
+            arx,
+            scope,
+            files: files_to_extract,
+            base_dir: outdir.to_path_buf(),
+            print_progress: progress,
+            recurse,
+        };
+        walker.run_from_range(&extractor, range)
+    })
+}

@@ -102,6 +102,10 @@ pub struct Options {
     #[arg(value_parser, value_hint=ValueHint::DirPath)]
     mountdir: Option<PathBuf>,
 
+    /// Root directory
+    #[arg(long)]
+    root_dir: Option<PathBuf>,
+
     /// Forground operation
     #[arg(short, long)]
     foreground: bool,
@@ -110,10 +114,25 @@ pub struct Options {
     verbose: u8,
 }
 
-pub fn mount(options: Options) -> jbk::Result<()> {
+type DummyBuilder = ((), (), ());
+
+pub fn mount(options: Options) -> anyhow::Result<()> {
     let mut stats = StatCounter::new();
     let arx = arx::Arx::new(&options.infile)?;
-    let arxfs = arx::ArxFs::new_with_stats(arx, &mut stats)?;
+
+    let root_range = match options.root_dir {
+        None => (&arx.root_index).into(),
+        Some(p) => {
+            let relative_path = arx::Path::from_path(&p)?;
+            let root = arx.get_entry::<DummyBuilder>(relative_path)?;
+            match root {
+                arx::Entry::Dir(range, _) => range,
+                _ => return Err(anyhow::anyhow!("{} must be a directory", p.display())),
+            }
+        }
+    };
+
+    let arxfs = arx::ArxFs::new_with_stats(arx, root_range, &mut stats)?;
 
     let mut abs_path = std::env::current_dir().unwrap();
     abs_path = abs_path.join(options.infile);
@@ -146,7 +165,7 @@ pub fn mount(options: Options) -> jbk::Result<()> {
             .stderr(daemonize::Stdio::keep());
         if let Err(e) = daemonize.start() {
             eprintln!("Error daemonize, {}", e);
-            return Err("Failed to daemonize.".into());
+            return Err(anyhow::anyhow!("Failed to daemonize."));
         }
     }
     info!(

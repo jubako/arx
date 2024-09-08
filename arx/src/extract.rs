@@ -21,6 +21,10 @@ pub struct Options {
     #[arg(group = "input", value_hint=ValueHint::AnyPath)]
     extract_files: Vec<arx::PathBuf>,
 
+    /// Root directory
+    #[arg(long)]
+    root_dir: Option<PathBuf>,
+
     /// Print a progress bar of the extraction
     #[arg(short = 'p', long = "progress", default_value_t = false, action)]
     progress: bool,
@@ -81,6 +85,8 @@ fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>>
     }
 }
 
+type DummyBuilder = ((), (), ());
+
 pub fn extract(options: Options) -> anyhow::Result<()> {
     let files_to_extract = get_files_to_extract(&options)?;
     let outdir = match options.outdir {
@@ -92,13 +98,32 @@ pub fn extract(options: Options) -> anyhow::Result<()> {
     } else {
         options.infile.as_ref().unwrap()
     };
+    let arx = arx::Arx::new(infile)?;
     info!("Extract archive {:?} in {:?}", &infile, outdir);
-    arx::extract(
-        infile,
-        &outdir,
-        files_to_extract,
-        options.recurse,
-        options.progress,
-    )?;
+
+    match options.root_dir {
+        None => arx::extract_arx(
+            &arx,
+            &outdir,
+            files_to_extract,
+            options.recurse,
+            options.progress,
+        )?,
+        Some(p) => {
+            let relative_path = arx::Path::from_path(&p)?;
+            let root = arx.get_entry::<DummyBuilder>(relative_path)?;
+            match root {
+                arx::Entry::Dir(range, _) => arx::extract_arx_range(
+                    &arx,
+                    &outdir,
+                    &range,
+                    files_to_extract,
+                    options.recurse,
+                    options.progress,
+                )?,
+                _ => return Err(anyhow::anyhow!("{} must be a directory", p.display())),
+            }
+        }
+    };
     Ok(())
 }

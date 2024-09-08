@@ -19,5 +19,5 @@ pub use common::{
     PathBuf, VENDOR_ID,
 };
 pub use entry::*;
-pub use tools::{extract, extract_arx};
+pub use tools::{extract, extract_arx, extract_arx_range};
 pub use walk::*;
