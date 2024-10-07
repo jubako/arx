@@ -110,6 +110,20 @@ jobs:
           name: wheels-sdist
           path: python/dist
 
+  test-release:
+    name: Test Release
+    runs-on: ubuntu-latest
+    needs: [linux, windows, macos, sdist]
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: --non-interactive --repository=testpypi --skip-existing wheels-*/*
+
   release:
     name: Release
     runs-on: ubuntu-latest
