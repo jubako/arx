@@ -153,6 +153,70 @@ jobs:
           ${{ env.ASSET }}
         compression-level: 0
 
+  python:
+    name: Python wrapping
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      run: |
+        sudo apt-get install -y libfuse-dev
+
+    - name: Install dependencies
+      if: ${{ matrix.os == 'macos-latest'}}
+      run: |
+        brew install macfuse
+
+    - name: Install Rust 
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build wheels
+      uses: PyO3/maturin-action@v1
+      with:
+        args: --release --out dist --find-interpreter
+        sccache: 'true'
+        container: off
+        working-directory: python
+
+    - name: Upload wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-${{ matrix.os }}
+        path: python/dist
+        compression-level: 0
+
+  python-sdist:
+    name: Python sdist
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Build sdist
+      uses: PyO3/maturin-action@v1
+      with:
+        command: sdist
+        args: --out dist
+        working-directory: python
+    - name: Upload sdist
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-sdist
+        path: python/dist
+
   check-publication:
     name: Check cargo publication
     runs-on: ubuntu-latest
@@ -175,3 +239,19 @@ jobs:
         #cargo publish --dry-run -p arx
         #cargo publish --dry-run -p tar2arx
         #cargo publish --dry-run -p zip2arx
+
+  python-check-publication:
+    name: Check pypi publication
+    runs-on: ubuntu-latest
+    needs: [python, python-sdist]
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: wheels-*
+    - name: Publish to PyPI
+      uses: PyO3/maturin-action@v1
+      with:
+        command: upload
+        args: --non-interactive --repository=testpypi --skip-existing wheels-*/*
