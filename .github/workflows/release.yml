@@ -27,3 +27,24 @@ jobs:
         cargo publish -p arx
         cargo publish -p tar2arx
         cargo publish -p zip2arx
+
+  do_python_publication:
+    name: Publish on PyPi
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+    - name: Get wheels & dist
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: bash
+      run: |
+        version=${{ github.event.release.name }}
+        gh release download "$version" -p "wheels-*"
+
+    - name: Publish to PyPI
+      uses: PyO3/maturin-action@v1
+      with:
+        command: upload
+        args: --non-interactive --skip-existing wheels-*

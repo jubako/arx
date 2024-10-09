@@ -8,7 +8,7 @@ env:
 
 jobs:
   build_and_test:
-    name: Rust project - latest
+    name: Rust
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -63,6 +63,72 @@ jobs:
             target/debug/zip2arx.exe
             target/debug/auto_mount
           compression-level: 0
+
+
+  python:
+    name: Python wrapping
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt-get install -y libfuse-dev
+
+      - name: Install dependencies
+        if: ${{ matrix.os == 'macos-latest'}}
+        run: |
+          brew install macfuse
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --out dist --find-interpreter
+          sccache: 'true'
+          container: off
+          working-directory: python
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.toolchain }}
+          path: python/dist
+          compression-level: 0
+
+  python-sdist:
+    name: Python sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: python
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: python/dist
 
   compilation_32bits:
     name: Test 32 bits compilation
