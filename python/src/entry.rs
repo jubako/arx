@@ -6,7 +6,7 @@ use pyo3::{
     prelude::*,
 };
 
-use crate::{content_address::ContentAddress, iterator::EntryIter};
+use crate::{content_address::ContentAddress, iterator::EntryIter, stream::Stream};
 
 /// An entry i an arx archive.
 ///
@@ -148,9 +148,9 @@ impl Entry {
     /// Get the content of the file entry.
     ///
     /// Raise an exception if entry is not a file.
-    fn get_content<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    fn get_content(&self) -> PyResult<Stream> {
         match &self.entry {
-            arx::Entry::File(f) => super::arx::Arx::get_content_rust(&self.arx, py, f.content()),
+            arx::Entry::File(f) => super::arx::Arx::get_content_rust(&self.arx, f.content()),
             _ => Err(PyTypeError::new_err("Not a file")),
         }
     }
