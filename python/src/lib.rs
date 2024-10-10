@@ -3,6 +3,7 @@ mod content_address;
 mod creator;
 mod entry;
 mod iterator;
+mod stream;
 use pyo3::prelude::*;
 
 /// A Python module implemented in Rust.

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::iterator::EntryIter;
+use crate::stream::Stream;
 
 use super::content_address::ContentAddress;
 use super::entry::Entry;
@@ -10,7 +11,6 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::{PyOSError, PyUnicodeDecodeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyUnicode;
-use std::io::Read;
 
 /// An Arx archive.
 ///
@@ -48,21 +48,13 @@ impl Arx {
         Self(Arc::new(arx))
     }
 
-    pub(crate) fn get_content_rust<'py>(
+    pub(crate) fn get_content_rust(
         arx: &arx::Arx,
-        py: Python<'py>,
         content: jbk::ContentAddress,
-    ) -> PyResult<&'py pyo3::types::PyBytes> {
+    ) -> PyResult<Stream> {
         let bytes = arx.container.get_bytes(content).unwrap();
         match bytes {
-            MayMissPack::FOUND(bytes) => {
-                let mut stream = bytes.stream();
-                let read = |slice: &mut [u8]| {
-                    stream.read_exact(slice).unwrap();
-                    Ok(())
-                };
-                pyo3::types::PyBytes::new_with(py, bytes.size().into_usize(), read)
-            }
+            MayMissPack::FOUND(bytes) => Ok(Stream(bytes.stream())),
             MayMissPack::MISSING(pack_info) => Err(PyOSError::new_err(format!(
                 "Cannot found pack {}",
                 pack_info.uuid
@@ -102,12 +94,8 @@ impl Arx {
     }
 
     /// Get the content associated to contentAddress
-    fn get_content<'py>(
-        &self,
-        py: Python<'py>,
-        content: ContentAddress,
-    ) -> PyResult<&'py pyo3::types::PyBytes> {
-        Self::get_content_rust(self, py, content.0)
+    fn get_content(&self, content: ContentAddress) -> PyResult<Stream> {
+        Self::get_content_rust(self, content.0)
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<EntryIter>> {
