@@ -73,6 +73,8 @@ impl Entry {
                 let arx_entry = self
                     .arx
                     .get_entry_at_idx::<arx::FullBuilder>(i)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+                    .ok_or(arx::ArxFormatError("Invalid parent"))
                     .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
                 let entry = Entry::new(self.arx.clone(), arx_entry);
                 Ok(Some(entry))

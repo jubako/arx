@@ -16,7 +16,7 @@ mod inner {
         pub mountdir: PathBuf,
     }
 
-    pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
+    pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> Result<(), arx::ArxError>
     where
         INP: AsRef<std::path::Path>,
         OUTP: AsRef<std::path::Path>,
@@ -49,17 +49,15 @@ fn main() -> ExitCode {
             }
             match mount(exe_path, args.mountdir) {
                 Ok(()) => ExitCode::SUCCESS,
-                Err(e) => match e.error {
-                    jbk::ErrorKind::NotAJbk => {
-                        eprintln!("Impossible to locate a Jubako archive in the executable.");
-                        eprintln!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
-                        ExitCode::FAILURE
-                    }
-                    _ => {
-                        eprintln!("Error: {e}");
-                        ExitCode::FAILURE
-                    }
-                },
+                Err(arx::ArxError::BaseError(arx::BaseError::Jbk(_))) => {
+                    eprintln!("Impossible to locate a Jubako archive in the executable.");
+                    eprintln!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
+                    ExitCode::FAILURE
+                }
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    ExitCode::FAILURE
+                }
             }
         }
         Err(e) => {

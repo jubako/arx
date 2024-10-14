@@ -75,7 +75,7 @@ pub struct Options {
     overwrite: arx::Overwrite,
 }
 
-fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>> {
+fn get_files_to_extract(options: &Options) -> std::io::Result<HashSet<arx::PathBuf>> {
     if let Some(file_list) = &options.file_list {
         let file = File::open(file_list)?;
         let mut files: HashSet<arx::PathBuf> = Default::default();

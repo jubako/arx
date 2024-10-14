@@ -1,6 +1,7 @@
 use super::entry::*;
 use super::entry_type::EntryType;
 use super::AllProperties;
+use crate::BaseError;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 
@@ -109,28 +110,33 @@ where
     B: FullBuilderTrait,
 {
     type Entry = Entry<B::Entry>;
+    type Error = BaseError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        let file_type = self.variant_id_property.create(&reader)?.try_into()?;
-        Ok(match file_type {
-            EntryType::File => {
-                let entry = self.builder.create_file(idx, &reader)?;
-                Entry::File(entry)
-            }
-            EntryType::Link => {
-                let entry = self.builder.create_link(idx, &reader)?;
-                Entry::Link(entry)
-            }
-            EntryType::Dir => {
-                let first_child: jbk::EntryIdx =
-                    (self.first_child_property.create(&reader)? as u32).into();
-                let nb_children: jbk::EntryCount =
-                    (self.nb_children_property.create(&reader)? as u32).into();
-                let range = jbk::EntryRange::new_from_size(first_child, nb_children);
-                let entry = self.builder.create_dir(idx, &reader)?;
-                Entry::Dir(range, entry)
-            }
-        })
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, Self::Error> {
+        self.store
+            .get_entry_reader(idx)
+            .map(|reader| {
+                let file_type = self.variant_id_property.create(&reader)?.try_into()?;
+                Ok(match file_type {
+                    EntryType::File => {
+                        let entry = self.builder.create_file(idx, &reader)?;
+                        Entry::File(entry)
+                    }
+                    EntryType::Link => {
+                        let entry = self.builder.create_link(idx, &reader)?;
+                        Entry::Link(entry)
+                    }
+                    EntryType::Dir => {
+                        let first_child: jbk::EntryIdx =
+                            (self.first_child_property.create(&reader)? as u32).into();
+                        let nb_children: jbk::EntryCount =
+                            (self.nb_children_property.create(&reader)? as u32).into();
+                        let range = jbk::EntryRange::new_from_size(first_child, nb_children);
+                        let entry = self.builder.create_dir(idx, &reader)?;
+                        Entry::Dir(range, entry)
+                    }
+                })
+            })
+            .transpose()
     }
 }

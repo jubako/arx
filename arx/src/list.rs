@@ -1,5 +1,5 @@
 use crate::light_path::LightPath;
-use arx::CommonEntry;
+use arx::{ArxError, CommonEntry};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 use log::info;
@@ -47,25 +47,34 @@ impl<W> arx::walk::Operator<LightPath, LightBuilder> for Lister<W>
 where
     W: std::io::Write,
 {
-    fn on_start(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
+    type Error = ArxError;
+    fn on_start(&self, _current_path: &mut LightPath) -> Result<(), ArxError> {
         Ok(())
     }
-    fn on_stop(&self, _current_path: &mut LightPath) -> jbk::Result<()> {
+    fn on_stop(&self, _current_path: &mut LightPath) -> Result<(), ArxError> {
         Ok(())
     }
-    fn on_directory_enter(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<bool> {
+    fn on_directory_enter(
+        &self,
+        current_path: &mut LightPath,
+        path: &Path,
+    ) -> Result<bool, ArxError> {
         current_path.push(path.clone());
         current_path.println(self.output.borrow_mut().deref_mut())?;
         Ok(true)
     }
-    fn on_directory_exit(&self, current_path: &mut LightPath, _path: &Path) -> jbk::Result<()> {
+    fn on_directory_exit(
+        &self,
+        current_path: &mut LightPath,
+        _path: &Path,
+    ) -> Result<(), ArxError> {
         current_path.pop();
         Ok(())
     }
-    fn on_file(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
+    fn on_file(&self, current_path: &mut LightPath, path: &Path) -> Result<(), ArxError> {
         Ok(current_path.println2(path, self.output.borrow_mut().deref_mut())?)
     }
-    fn on_link(&self, current_path: &mut LightPath, path: &Path) -> jbk::Result<()> {
+    fn on_link(&self, current_path: &mut LightPath, path: &Path) -> Result<(), ArxError> {
         Ok(current_path.println2(path, self.output.borrow_mut().deref_mut())?)
     }
 }
@@ -81,17 +90,18 @@ impl<W> arx::walk::Operator<arx::PathBuf, arx::FullBuilder> for StableLister<W>
 where
     W: std::io::Write,
 {
-    fn on_start(&self, _current_path: &mut arx::PathBuf) -> jbk::Result<()> {
+    type Error = ArxError;
+    fn on_start(&self, _current_path: &mut arx::PathBuf) -> Result<(), ArxError> {
         Ok(())
     }
-    fn on_stop(&self, _current_path: &mut arx::PathBuf) -> jbk::Result<()> {
+    fn on_stop(&self, _current_path: &mut arx::PathBuf) -> Result<(), ArxError> {
         Ok(())
     }
     fn on_directory_enter(
         &self,
         current_path: &mut arx::PathBuf,
         dir: &arx::Dir,
-    ) -> jbk::Result<bool> {
+    ) -> Result<bool, ArxError> {
         current_path.push(String::from_utf8_lossy(dir.path()).as_ref());
         writeln!(
             self.output.borrow_mut(),
@@ -105,11 +115,15 @@ where
         &self,
         current_path: &mut arx::PathBuf,
         _dir: &arx::Dir,
-    ) -> jbk::Result<()> {
+    ) -> Result<(), ArxError> {
         current_path.pop();
         Ok(())
     }
-    fn on_file(&self, current_path: &mut arx::PathBuf, file: &arx::FileEntry) -> jbk::Result<()> {
+    fn on_file(
+        &self,
+        current_path: &mut arx::PathBuf,
+        file: &arx::FileEntry,
+    ) -> Result<(), ArxError> {
         current_path.push(String::from_utf8_lossy(file.path()).as_ref());
         writeln!(
             self.output.borrow_mut(),
@@ -121,7 +135,7 @@ where
         current_path.pop();
         Ok(())
     }
-    fn on_link(&self, current_path: &mut arx::PathBuf, link: &arx::Link) -> jbk::Result<()> {
+    fn on_link(&self, current_path: &mut arx::PathBuf, link: &arx::Link) -> Result<(), ArxError> {
         current_path.push(String::from_utf8_lossy(link.path()).as_ref());
         let target: PathBuf = String::from_utf8_lossy(link.target()).as_ref().into();
         writeln!(

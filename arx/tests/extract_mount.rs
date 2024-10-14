@@ -68,7 +68,7 @@ fn test_extract() -> Result {
 
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
     arx::extract(
-        &arx_file,
+        arx_file,
         extract_dir.path(),
         Default::default(),
         true,
@@ -100,7 +100,7 @@ fn test_extract_filter() -> Result {
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
     arx::extract(
-        &arx_file,
+        arx_file,
         extract_dir.path(),
         ["sub_dir_a".into()].into(),
         true,
@@ -378,7 +378,7 @@ fn test_extract_existing_content_error() -> Result {
     .check_fail(
         b"",
         &format_bytes!(
-            b"Error : Unknown error : File {} already exists.\n",
+            b"Error : File {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()

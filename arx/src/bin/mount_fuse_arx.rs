@@ -15,7 +15,7 @@ mod inner {
         pub option: Vec<String>,
     }
 
-    pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> jbk::Result<()>
+    pub fn mount<INP, OUTP>(infile: INP, outdir: OUTP) -> Result<(), arx::ArxError>
     where
         INP: AsRef<std::path::Path>,
         OUTP: AsRef<std::path::Path>,
@@ -31,7 +31,7 @@ mod inner {
 }
 
 #[cfg(unix)]
-fn main() -> jbk::Result<()> {
+fn main() -> Result<(), arx::MountError> {
     use inner::*;
 
     human_panic::setup_panic!(human_panic::Metadata::new(
@@ -43,10 +43,10 @@ fn main() -> jbk::Result<()> {
 
     if args.option.contains(&"rw".into()) {
         eprintln!("arx cannot be mounted rw");
-        return Err("arx cannot be mounted rw".into());
+        return Err(arx::MountError::CannotMountRW);
     }
 
-    mount(args.infile, args.mountdir)
+    Ok(mount(args.infile, args.mountdir)?)
 }
 
 #[cfg(windows)]

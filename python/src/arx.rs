@@ -52,13 +52,16 @@ impl Arx {
         arx: &arx::Arx,
         content: jbk::ContentAddress,
     ) -> PyResult<Stream> {
-        let bytes = arx.container.get_bytes(content).unwrap();
-        match bytes {
-            MayMissPack::FOUND(bytes) => Ok(Stream(bytes.stream())),
-            MayMissPack::MISSING(pack_info) => Err(PyOSError::new_err(format!(
-                "Cannot found pack {}",
-                pack_info.uuid
-            ))),
+        match arx.container.get_bytes(content) {
+            Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
+            Ok(bytes) => match bytes.and_then(|m| m.transpose()) {
+                None => Err(PyRuntimeError::new_err("Invalid content")),
+                Some(MayMissPack::FOUND(bytes)) => Ok(Stream(bytes.stream())),
+                Some(MayMissPack::MISSING(pack_info)) => Err(PyOSError::new_err(format!(
+                    "Cannot found pack {}",
+                    pack_info.uuid
+                ))),
+            },
         }
     }
 }

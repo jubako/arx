@@ -1,5 +1,6 @@
 use super::Arx;
 use crate::common::{AllProperties, Comparator, EntryType, ReadEntry};
+use crate::{ArxError, ArxFormatError, BaseError, FsError, WrongType};
 use fxhash::FxBuildHasher;
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::{MayMissPack, Range};
@@ -15,7 +16,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 
-pub type EntryResult<T> = Result<T, EntryType>;
 const TTL: std::time::Duration = std::time::Duration::from_secs(1000); // Nothing change on oar side, TTL is long
 const BLOCK_SIZE: u32 = 512;
 
@@ -93,21 +93,28 @@ impl LightLinkBuilder {
 }
 
 impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
-    type Entry = EntryResult<Vec<u8>>;
+    type Entry = Vec<u8>;
+    type Error = FsError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        Ok(
-            match self.variant_id_property.create(&reader)?.try_into()? {
-                EntryType::Link => {
-                    let target = self.link_property.create(&reader)?;
-                    let mut vec = vec![];
-                    target.resolve_to_vec(&mut vec)?;
-                    Ok(vec)
-                }
-                other => Err(other),
-            },
-        )
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, Self::Error> {
+        self.store
+            .get_entry_reader(idx)
+            .map(
+                |reader| match self.variant_id_property.create(&reader)?.try_into()? {
+                    EntryType::Link => {
+                        let target = self.link_property.create(&reader)?;
+                        let mut vec = vec![];
+                        target.resolve_to_vec(&mut vec)?;
+                        Ok(vec)
+                    }
+                    other => Err(WrongType {
+                        expected: EntryType::Link,
+                        actual: other,
+                    }
+                    .into()),
+                },
+            )
+            .transpose()
     }
 }
 
@@ -128,19 +135,26 @@ impl LightFileBuilder {
 }
 
 impl jbk::reader::builder::BuilderTrait for LightFileBuilder {
-    type Entry = EntryResult<jbk::reader::ContentAddress>;
+    type Entry = jbk::reader::ContentAddress;
+    type Error = FsError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        Ok(
-            match self.variant_id_property.create(&reader)?.try_into()? {
-                EntryType::File => {
-                    let content_address = self.content_address_property.create(&reader)?;
-                    Ok(content_address)
-                }
-                other => Err(other),
-            },
-        )
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, FsError> {
+        self.store
+            .get_entry_reader(idx)
+            .map(
+                |reader| match self.variant_id_property.create(&reader)?.try_into()? {
+                    EntryType::File => {
+                        let content_address = self.content_address_property.create(&reader)?;
+                        Ok(content_address)
+                    }
+                    other => Err(WrongType {
+                        expected: EntryType::File,
+                        actual: other,
+                    }
+                    .into()),
+                },
+            )
+            .transpose()
     }
 }
 
@@ -163,22 +177,29 @@ impl LightDirBuilder {
 }
 
 impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
-    type Entry = EntryResult<jbk::EntryRange>;
+    type Entry = jbk::EntryRange;
+    type Error = FsError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        Ok(
-            match self.variant_id_property.create(&reader)?.try_into()? {
-                EntryType::Dir => {
-                    let first_child: jbk::EntryIdx =
-                        (self.first_child_property.create(&reader)? as u32).into();
-                    let nb_children: jbk::EntryCount =
-                        (self.nb_children_property.create(&reader)? as u32).into();
-                    Ok(jbk::EntryRange::new_from_size(first_child, nb_children))
-                }
-                other => Err(other),
-            },
-        )
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, FsError> {
+        self.store
+            .get_entry_reader(idx)
+            .map(
+                |reader| match self.variant_id_property.create(&reader)?.try_into()? {
+                    EntryType::Dir => {
+                        let first_child: jbk::EntryIdx =
+                            (self.first_child_property.create(&reader)? as u32).into();
+                        let nb_children: jbk::EntryCount =
+                            (self.nb_children_property.create(&reader)? as u32).into();
+                        Ok(jbk::EntryRange::new_from_size(first_child, nb_children))
+                    }
+                    other => Err(WrongType {
+                        expected: EntryType::Dir,
+                        actual: other,
+                    }
+                    .into()),
+                },
+            )
+            .transpose()
     }
 }
 
@@ -205,14 +226,19 @@ impl LightCommonPathBuilder {
 
 impl jbk::reader::builder::BuilderTrait for LightCommonPathBuilder {
     type Entry = LightCommonPath;
+    type Error = ArxError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        let path_prop = self.path_property.create(&reader)?;
-        let mut path = vec![];
-        path_prop.resolve_to_vec(&mut path)?;
-        let file_type = self.variant_id_property.create(&reader)?.try_into()?;
-        Ok(LightCommonPath { file_type, path })
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, ArxError> {
+        self.store
+            .get_entry_reader(idx)
+            .map(|reader| {
+                let path_prop = self.path_property.create(&reader)?;
+                let mut path = vec![];
+                path_prop.resolve_to_vec(&mut path)?;
+                let file_type = self.variant_id_property.create(&reader)?.try_into()?;
+                Ok(LightCommonPath { file_type, path })
+            })
+            .transpose()
     }
 }
 
@@ -232,16 +258,21 @@ impl LightCommonParentBuilder {
 
 impl jbk::reader::builder::BuilderTrait for LightCommonParentBuilder {
     type Entry = Option<jbk::EntryIdx>;
+    type Error = ArxError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        let parent = self.parent_property.create(&reader)?;
-        let parent = if parent == 0 {
-            None
-        } else {
-            Some((parent as u32 - 1).into())
-        };
-        Ok(parent)
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, ArxError> {
+        self.store
+            .get_entry_reader(idx)
+            .map(|reader| {
+                let parent = self.parent_property.create(&reader)?;
+                let parent = if parent == 0 {
+                    None
+                } else {
+                    Some((parent as u32 - 1).into())
+                };
+                Ok(parent)
+            })
+            .transpose()
     }
 }
 
@@ -283,50 +314,55 @@ fn div_ceil(value: u64, rhs: u64) -> u64 {
 
 impl jbk::reader::builder::BuilderTrait for AttrBuilder {
     type Entry = fuser::FileAttr;
+    type Error = BaseError;
 
-    fn create_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<Self::Entry> {
-        let reader = self.store.get_entry_reader(idx);
-        let kind = self.variant_id_property.create(&reader)?.try_into()?;
+    fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, Self::Error> {
+        self.store
+            .get_entry_reader(idx)
+            .map(|reader| {
+                let kind = self.variant_id_property.create(&reader)?.try_into()?;
 
-        let size = match &kind {
-            EntryType::File => self.file_size_property.create(&reader)?,
-            EntryType::Dir => (self.dir_nb_children_property.create(&reader)? + 1) * 10,
-            EntryType::Link => {
-                let link = self.link_target_property.create(&reader)?;
-                match link.size() {
-                    Some(s) => s as u64,
-                    None => {
-                        let mut vec = vec![];
-                        link.resolve_to_vec(&mut vec)?;
-                        vec.len() as u64
+                let size = match &kind {
+                    EntryType::File => self.file_size_property.create(&reader)?,
+                    EntryType::Dir => (self.dir_nb_children_property.create(&reader)? + 1) * 10,
+                    EntryType::Link => {
+                        let link = self.link_target_property.create(&reader)?;
+                        match link.size() {
+                            Some(s) => s as u64,
+                            None => {
+                                let mut vec = vec![];
+                                link.resolve_to_vec(&mut vec)?;
+                                vec.len() as u64
+                            }
+                        }
                     }
-                }
-            }
-        };
-        let rigths = (self.rights_property.create(&reader)? as u16) & 0b1111_1111_0110_1101;
-        // Make kernel sync we allocate by block of 4KB.
-        let allocated_size = match &kind {
-            EntryType::Dir => 0,
-            _ => div_ceil(size, 4 * 1024) * (4 * 1024),
-        };
-        Ok(fuser::FileAttr {
-            ino: Ino::from(idx).get(),
-            size,
-            kind: kind.into(),
-            blocks: div_ceil(allocated_size, BLOCK_SIZE as u64),
-            atime: std::time::UNIX_EPOCH,
-            mtime: std::time::UNIX_EPOCH
-                + std::time::Duration::from_secs(self.mtime_property.create(&reader)?),
-            ctime: std::time::UNIX_EPOCH,
-            crtime: std::time::UNIX_EPOCH,
-            perm: rigths,
-            nlink: 1,
-            uid: self.owner_property.create(&reader)? as u32,
-            gid: self.group_property.create(&reader)? as u32,
-            rdev: 0,
-            blksize: BLOCK_SIZE,
-            flags: 0,
-        })
+                };
+                let rigths = (self.rights_property.create(&reader)? as u16) & 0b1111_1111_0110_1101;
+                // Make kernel sync we allocate by block of 4KB.
+                let allocated_size = match &kind {
+                    EntryType::Dir => 0,
+                    _ => div_ceil(size, 4 * 1024) * (4 * 1024),
+                };
+                Ok(fuser::FileAttr {
+                    ino: Ino::from(idx).get(),
+                    size,
+                    kind: kind.into(),
+                    blocks: div_ceil(allocated_size, BLOCK_SIZE as u64),
+                    atime: std::time::UNIX_EPOCH,
+                    mtime: std::time::UNIX_EPOCH
+                        + std::time::Duration::from_secs(self.mtime_property.create(&reader)?),
+                    ctime: std::time::UNIX_EPOCH,
+                    crtime: std::time::UNIX_EPOCH,
+                    perm: rigths,
+                    nlink: 1,
+                    uid: self.owner_property.create(&reader)? as u32,
+                    gid: self.group_property.create(&reader)? as u32,
+                    rdev: 0,
+                    blksize: BLOCK_SIZE,
+                    flags: 0,
+                })
+            })
+            .transpose()
     }
 }
 
@@ -350,12 +386,12 @@ pub struct ArxFs<'a, S: Stats> {
 }
 
 impl ArxFs<'static, ()> {
-    pub fn new(arx: Arx) -> jbk::Result<Self> {
+    pub fn new(arx: Arx) -> Result<Self, ArxError> {
         // SAFETY: No data race can occurs on empty type doing nothing
         let root_range = (&arx.root_index).into();
         Self::new_from_root(arx, root_range)
     }
-    pub fn new_from_root(arx: Arx, root_range: EntryRange) -> jbk::Result<Self> {
+    pub fn new_from_root(arx: Arx, root_range: EntryRange) -> Result<Self, ArxError> {
         // SAFETY: No data race can occurs on empty type doing nothing
         Self::new_with_stats(arx, root_range, unsafe {
             &mut *std::ptr::addr_of_mut!(NOSTATS)
@@ -364,8 +400,14 @@ impl ArxFs<'static, ()> {
 }
 
 impl<'a, S: Stats> ArxFs<'a, S> {
-    pub fn new_with_stats(arx: Arx, root_range: EntryRange, stats: &'a mut S) -> jbk::Result<Self> {
-        let entry_index = arx.get_index_for_name("arx_entries")?;
+    pub fn new_with_stats(
+        arx: Arx,
+        root_range: EntryRange,
+        stats: &'a mut S,
+    ) -> Result<Self, ArxError> {
+        let entry_index = arx
+            .get_index_for_name("arx_entries")?
+            .ok_or(ArxFormatError("No arx_entries"))?;
         let properties = arx.create_properties(&entry_index)?;
         let comparator = Comparator::new(&properties);
         let light_file_builder = LightFileBuilder::new(&properties);
@@ -398,13 +440,13 @@ impl<'a, S: Stats> ArxFs<'a, S> {
         })
     }
 
-    fn get_entry_range(&self, ino: Ino) -> jbk::Result<jbk::EntryRange> {
+    fn get_entry_range(&self, ino: Ino) -> Result<jbk::EntryRange, FsError> {
         match ino.try_into() {
             Err(_) => Ok(self.root_range),
-            Ok(idx) => match self.entry_index.get_entry(&self.light_dir_builder, idx)? {
-                Ok(r) => Ok(r),
-                Err(_) => Err("No at directory".to_string().into()),
-            },
+            Ok(idx) => self
+                .entry_index
+                .get_entry(&self.light_dir_builder, idx)?
+                .ok_or(FsError::NotFound),
         }
     }
 
@@ -417,7 +459,7 @@ impl<'a, S: Stats> ArxFs<'a, S> {
         ]
     }
 
-    pub fn mount<P: AsRef<Path>>(self, name: String, mount_point: P) -> jbk::Result<()> {
+    pub fn mount<P: AsRef<Path>>(self, name: String, mount_point: P) -> Result<(), ArxError> {
         let options = self.mount_options(name);
         fuser::mount2(self, &mount_point, &options)?;
         Ok(())
@@ -429,7 +471,7 @@ impl<S: Stats + Send> ArxFs<'static, S> {
         self,
         name: String,
         mount_point: P,
-    ) -> jbk::Result<fuser::BackgroundSession> {
+    ) -> Result<fuser::BackgroundSession, ArxError> {
         let options = self.mount_options(name);
         Ok(fuser::spawn_mount2(self, &mount_point, &options)?)
     }
@@ -462,37 +504,47 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         reply: fuser::ReplyEntry,
     ) {
         self.stats.lookup();
-        let parent = Ino::from(parent);
-        // Lookup for entry `name` in directory `parent`
-        // First get parent finder
-        let idx = self.resolve_cache.get(&(parent, name.to_os_string()));
-        let idx = match idx {
-            Some(idx) => *idx,
-            None => {
-                let range = self.get_entry_range(parent).unwrap();
-                let comparator = self.comparator.compare_with(name.as_bytes());
-                let idx = range
-                    .find(&comparator)
-                    .unwrap()
-                    .map(|idx| idx + range.offset());
-                self.resolve_cache.put((parent, name.to_os_string()), idx);
-                idx
+        let mut inner = || -> Result<jbk::EntryIdx, FsError> {
+            let parent = Ino::from(parent);
+            // Lookup for entry `name` in directory `parent`
+            // First get parent finder
+            let idx = self.resolve_cache.get(&(parent, name.to_os_string()));
+            let idx = match idx {
+                Some(idx) => *idx,
+                None => {
+                    let range = self.get_entry_range(parent).unwrap();
+                    let comparator = self.comparator.compare_with(name.as_bytes());
+                    let idx = range
+                        .find(&comparator)
+                        .unwrap()
+                        .map(|idx| idx + range.offset());
+                    self.resolve_cache.put((parent, name.to_os_string()), idx);
+                    idx
+                }
+            };
+            match idx {
+                None => Err(FsError::NotFound),
+                Some(idx) => {
+                    let attr = self.attr_cache.get(&idx);
+                    match attr {
+                        Some(_) => Ok(idx),
+                        None => {
+                            let attr = self
+                                .entry_index
+                                .get_entry(&self.attr_builder, idx)?
+                                .ok_or(FsError::NotFound)?;
+                            self.attr_cache.push(idx, attr);
+                            Ok(idx)
+                        }
+                    }
+                }
             }
         };
-        match idx {
-            None => reply.error(ENOENT),
-            Some(idx) => {
-                let attr = self.attr_cache.get(&idx);
-                let attr = match attr {
-                    Some(attr) => attr,
-                    None => {
-                        let attr = self.entry_index.get_entry(&self.attr_builder, idx).unwrap();
-                        self.attr_cache.push(idx, attr);
-                        self.attr_cache.get(&idx).unwrap()
-                    }
-                };
-                reply.entry(&TTL, attr, 0)
-            }
+        match inner() {
+            Ok(idx) => reply.entry(&TTL, self.attr_cache.get(&idx).unwrap(), 0),
+            Err(FsError::NotFound) => reply.error(ENOENT),
+            Err(FsError::WrongType(_)) => unreachable!("We accept any kind of entry"),
+            _ => reply.error(libc::ENOTRECOVERABLE),
         }
     }
 
@@ -504,79 +556,107 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         reply: fuser::ReplyAttr,
     ) {
         self.stats.getattr();
-        let ino = Ino::from(ino);
-        match ino.try_into() {
-            Err(_) => {
-                reply.attr(&TTL, &ROOT_ATTR);
-            }
-            Ok(idx) => {
-                let attr = self.attr_cache.get(&idx);
-                let attr = match attr {
-                    Some(attr) => attr,
-                    None => {
-                        let attr = self.entry_index.get_entry(&self.attr_builder, idx).unwrap();
-                        self.attr_cache.push(idx, attr);
-                        self.attr_cache.get(&idx).unwrap()
+        let mut inner = || -> Result<Option<jbk::EntryIdx>, FsError> {
+            let ino = Ino::from(ino);
+            match ino.try_into() {
+                Err(_) => Ok(None),
+                Ok(idx) => {
+                    let attr = self.attr_cache.get(&idx);
+                    match attr {
+                        Some(_) => Ok(Some(idx)),
+                        None => {
+                            let attr = self
+                                .entry_index
+                                .get_entry(&self.attr_builder, idx)?
+                                .ok_or(FsError::NotFound)?;
+                            self.attr_cache.push(idx, attr);
+                            Ok(Some(idx))
+                        }
                     }
-                };
-                reply.attr(&TTL, attr);
+                }
             }
+        };
+        match inner() {
+            Ok(None) => reply.attr(&TTL, &ROOT_ATTR),
+            Ok(Some(idx)) => reply.attr(&TTL, self.attr_cache.get(&idx).unwrap()),
+            Err(FsError::NotFound) => reply.error(ENOENT),
+            Err(FsError::WrongType(_)) => unreachable!("We accept any kind of entry"),
+            _ => reply.error(libc::ENOTRECOVERABLE),
         }
     }
 
     fn readlink(&mut self, _req: &fuser::Request, ino: u64, reply: fuser::ReplyData) {
         self.stats.readlink();
-        let ino = Ino::from(ino);
-        match ino.try_into() {
-            Err(_) => reply.error(libc::ENOLINK),
-            Ok(idx) => {
-                let entry = self
+        let inner = || {
+            let ino = Ino::from(ino);
+            match ino.try_into() {
+                Ok(idx) => Ok(self
                     .entry_index
-                    .get_entry(&self.light_link_builder, idx)
-                    .unwrap();
-                match &entry {
-                    Ok(link) => reply.data(link),
-                    Err(_) => reply.error(libc::ENOLINK),
-                }
+                    .get_entry(&self.light_link_builder, idx)?
+                    .ok_or(FsError::NotFound)?),
+                Err(_) => Err(FsError::NotFound),
             }
+        };
+        match inner() {
+            Ok(link) => reply.data(&link),
+            Err(FsError::NotFound) => reply.error(libc::ENOLINK),
+            Err(FsError::WrongType(_)) => reply.error(libc::ENOLINK),
+            _ => reply.error(libc::ENOTRECOVERABLE),
         }
     }
 
     fn open(&mut self, _req: &fuser::Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
         self.stats.open();
-        let ino = Ino::from(ino);
-        match self.region_cache.get_mut(&ino) {
-            Some((_r, c)) => {
-                *c += 1;
-                reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
-            }
-            None => match ino.try_into() {
-                Err(_) => reply.error(libc::EISDIR),
-                Ok(idx) => {
-                    let entry = self
-                        .entry_index
-                        .get_entry(&self.light_file_builder, idx)
-                        .unwrap();
-                    match &entry {
-                        Ok(content_address) => match self.arx.get_bytes(*content_address) {
-                            Err(_e) => reply.error(libc::EIO),
-                            Ok(MayMissPack::MISSING(_pack_info)) => reply.error(
-                                #[cfg(not(target_os = "linux"))]
-                                libc::ENODATA,
-                                #[cfg(target_os = "linux")]
-                                libc::ENOMEDIUM,
-                            ),
-                            Ok(MayMissPack::FOUND(bytes)) => {
-                                self.region_cache.insert(ino, (bytes, 1));
-                                reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE);
-                            }
-                        },
-                        Err(EntryType::Dir) => reply.error(libc::EISDIR),
-                        Err(EntryType::Link) => reply.error(libc::ENOENT), // [FIXME] What to return here ?
-                        Err(EntryType::File) => unreachable!(),
-                    }
+        let mut inner = || {
+            let ino = Ino::from(ino);
+            match self.region_cache.get_mut(&ino) {
+                Some((_r, c)) => {
+                    *c += 1;
+                    Ok(())
                 }
-            },
+                None => match ino.try_into() {
+                    Err(_) => Err(FsError::NotFound),
+                    Ok(idx) => {
+                        let entry = self.entry_index.get_entry(&self.light_file_builder, idx)?;
+                        match &entry {
+                            None => Err(FsError::NotFound),
+                            Some(content_address) => {
+                                match self
+                                    .arx
+                                    .get_bytes(*content_address)?
+                                    .and_then(|m| m.transpose())
+                                    .ok_or(ArxFormatError("Entry content should be valid"))?
+                                {
+                                    MayMissPack::MISSING(_pack_info) => Err(FsError::MissingPack),
+                                    MayMissPack::FOUND(bytes) => {
+                                        self.region_cache.insert(ino, (bytes, 1));
+                                        Ok(())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        };
+        match inner() {
+            Ok(_) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
+            Err(FsError::NotFound) => reply.error(libc::ENOENT),
+            Err(FsError::WrongType(WrongType {
+                expected: _,
+                actual: EntryType::Dir,
+            })) => reply.error(libc::EISDIR),
+            Err(FsError::WrongType(WrongType {
+                expected: _,
+                actual: EntryType::Link,
+            })) => reply.error(libc::ENOENT), // FIXME: What to return here ?
+            Err(FsError::MissingPack) => reply.error(
+                #[cfg(not(target_os = "linux"))]
+                libc::ENODATA,
+                #[cfg(target_os = "linux")]
+                libc::ENOMEDIUM,
+            ),
+            _ => reply.error(libc::ENOTRECOVERABLE),
         }
     }
 
@@ -630,12 +710,10 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         match ino.try_into() {
             Err(_) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
             Ok(idx) => {
-                let entry = self
-                    .entry_index
-                    .get_entry(&self.light_dir_builder, idx)
-                    .unwrap();
+                let entry = self.entry_index.get_entry(&self.light_dir_builder, idx);
                 match &entry {
-                    Ok(_) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
+                    Ok(None) => reply.error(libc::ENOENT),
+                    Ok(Some(_)) => reply.opened(0, fuser::consts::FOPEN_KEEP_CACHE),
                     Err(_) => reply.error(libc::ENOTDIR),
                 }
             }
@@ -672,11 +750,18 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                     Ok(idx) => {
                         let parent = self
                             .entry_index
-                            .get_entry(&self.light_common_parent_builder, idx)
-                            .unwrap();
+                            .get_entry(&self.light_common_parent_builder, idx);
                         match parent {
-                            None => Ino::from(1),
-                            Some(parent_id) => parent_id.into(),
+                            Ok(None) => {
+                                reply.error(libc::ENOENT);
+                                return;
+                            }
+                            Ok(Some(None)) => Ino::from(1),
+                            Ok(Some(Some(parent_id))) => parent_id.into(),
+                            Err(_) => {
+                                reply.error(libc::EIO);
+                                return;
+                            }
                         }
                     }
                 };
