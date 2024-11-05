@@ -20,7 +20,7 @@ pub struct Options {
         short,
         long,
         value_parser,
-        required_unless_present_any(["list_compressions","outfile_old"]),
+        required_unless_present("list_compressions"),
         value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
@@ -94,15 +94,6 @@ pub struct Options {
 
     #[arg(from_global)]
     verbose: u8,
-
-    #[arg(
-        short = 'f',
-        long = "file",
-        hide = true,
-        conflicts_with("outfile"),
-        required_unless_present_any(["list_compressions", "outfile"])
-    )]
-    outfile_old: Option<PathBuf>,
 }
 
 fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
@@ -200,11 +191,9 @@ pub fn create(options: Options) -> Result<()> {
         None => arx::PathBuf::new(),
     };
 
-    let out_file = if let Some(ref outfile) = options.outfile_old {
-        outfile
-    } else {
-        options.outfile.as_ref().unwrap()
-    };
+    let out_file = options.outfile.as_ref().expect(
+        "Clap unsure it is Some, except if we have list_compressions, and so we return early",
+    );
     let out_file = std::env::current_dir()?.join(out_file);
     let files_to_add = get_files_to_add(&options)?;
 
