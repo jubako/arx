@@ -34,6 +34,27 @@ macro_rules! cmd {
     }};
 }
 
+#[test]
+fn test_crate_non_existant_input() {
+    use std::path::Path;
+
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
+    let output = cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    println!("Out : {}", stdout);
+    println!("Err : {}", stderr);
+    assert_eq!("", stdout);
+    assert_eq!(
+        "[ERROR arx] Error : Input non_existant_dir path doesn't exist or cannot be accessed\n",
+        stderr
+    );
+    assert!(!output.status.success());
+    assert!(!arx_file.exists());
+}
+
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
 fn test_create_and_mount() {
