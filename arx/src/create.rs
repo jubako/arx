@@ -92,6 +92,9 @@ pub struct Options {
     #[arg(long, default_value_t = false, action)]
     progress: bool,
 
+    #[arg(short, long, required = false, default_value_t = false, action)]
+    force: bool,
+
     #[arg(from_global)]
     verbose: u8,
 }
@@ -133,11 +136,16 @@ fn check_input_paths_exist(file_list: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-fn check_output_path_writable(out_file: &Path) -> Result<()> {
+fn check_output_path_writable(out_file: &Path, force: bool) -> Result<()> {
     if !out_file.parent().unwrap().is_dir() {
         Err(anyhow!(
             "Directory {} doesn't exist",
             out_file.parent().unwrap().display()
+        ))
+    } else if out_file.exists() && !force {
+        Err(anyhow!(
+            "File {} already exists. Use option --force to overwrite it.",
+            out_file.display()
         ))
     } else {
         Ok(())
@@ -223,7 +231,7 @@ pub fn create(options: Options) -> Result<()> {
         "Clap unsure it is Some, except if we have list_compressions, and so we return early",
     );
     let out_file = std::env::current_dir()?.join(out_file);
-    check_output_path_writable(&out_file)?;
+    check_output_path_writable(&out_file, options.force)?;
     let files_to_add = get_files_to_add(&options)?;
     if let Some(base_dir) = &options.base_dir {
         std::env::set_current_dir(base_dir)?;

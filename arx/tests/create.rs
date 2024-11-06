@@ -1,3 +1,5 @@
+use std::io::Read;
+
 #[cfg(all(unix, not(feature = "in_ci")))]
 mod inner {
     pub use std::path::Path;
@@ -94,6 +96,78 @@ fn test_crate_non_existant_output_directory() {
     );
     assert!(!output.status.success());
     assert!(!arx_file.exists());
+}
+
+#[cfg(all(unix, not(feature = "in_ci")))]
+#[test]
+fn test_crate_existant_output() {
+    use inner::*;
+    use std::path::Path;
+
+    let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&arx_file).unwrap();
+        f.write_all(b"Some dummy content").unwrap();
+    }
+
+    // Try to write without --force
+    let output = cmd!(
+        "arx",
+        "create",
+        "--outfile",
+        &arx_file,
+        "-C",
+        source_mount_point.parent().unwrap(),
+        "--strip-prefix",
+        source_mount_point.file_name().unwrap(),
+        source_mount_point.file_name().unwrap()
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    println!("Out : {}", stdout);
+    println!("Err : {}", stderr);
+    assert_eq!("", stdout);
+    assert_eq!(
+        format!(
+            "[ERROR arx] Error : File {} already exists. Use option --force to overwrite it.\n",
+            arx_file.display()
+        ),
+        stderr
+    );
+    assert!(!output.status.success());
+    assert_eq!(std::fs::read(&arx_file).unwrap(), b"Some dummy content");
+
+    // Try to write without --force
+    let output = cmd!(
+        "arx",
+        "create",
+        "--outfile",
+        &arx_file,
+        "-C",
+        source_mount_point.parent().unwrap(),
+        "--strip-prefix",
+        source_mount_point.file_name().unwrap(),
+        source_mount_point.file_name().unwrap(),
+        "--force"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    println!("Out : {}", stdout);
+    println!("Err : {}", stderr);
+    assert_eq!("", stdout);
+    assert_eq!("", stderr);
+    assert!(output.status.success());
+    {
+        let mut f = std::fs::File::open(&arx_file).unwrap();
+        let mut buf = [0; 10];
+        f.read_exact(&mut buf).unwrap();
+        assert_eq!(&buf, b"jbkC\x00\x00\x00\x00\x00\x02");
+    }
 }
 
 #[cfg(all(unix, not(feature = "in_ci")))]
