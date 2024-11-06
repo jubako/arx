@@ -66,7 +66,7 @@ impl Arx {
 #[pymethods]
 impl Arx {
     #[new]
-    fn py_new(path: &PyUnicode) -> PyResult<Self> {
+    fn py_new<'py>(path: Bound<'py, PyUnicode>) -> PyResult<Self> {
         let path: std::path::PathBuf = path.extract()?;
         match arx::Arx::new(path) {
             Ok(a) => Ok(Self::new(a)),
