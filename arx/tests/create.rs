@@ -1,19 +1,16 @@
 #[cfg(all(unix, not(feature = "in_ci")))]
 mod inner {
-    pub use std::path::{Path, PathBuf};
+    pub use std::path::Path;
 
     // Generate a fake directory with fake content.
-    pub fn spawn_mount() -> std::io::Result<(arx_test_dir::BackgroundSession, PathBuf)> {
+    pub fn spawn_mount() -> std::io::Result<(arx_test_dir::BackgroundSession, tempfile::TempDir)> {
         let mount_path =
             tempfile::TempDir::with_prefix_in("source_", env!("CARGO_TARGET_TMPDIR")).unwrap();
         let builder = arx_test_dir::ContextBuilder::new();
         let context = builder.create();
         let dir = arx_test_dir::DirEntry::new_root(context);
         let mount_dir = arx_test_dir::TreeFs::new(dir);
-        Ok((
-            mount_dir.spawn(mount_path.path())?,
-            mount_path.path().into(),
-        ))
+        Ok((mount_dir.spawn(mount_path.path())?, mount_path))
     }
 }
 
@@ -43,7 +40,10 @@ fn test_create_and_mount() {
     use inner::*;
 
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
-    let arx_file = Path::new(env!("CARGO_TARGET_TMPDIR")).join("test.arx");
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
     let output = cmd!(
         "arx",
         "create",
@@ -78,7 +78,10 @@ fn test_create_and_extract() {
     use inner::*;
 
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
-    let arx_file = Path::new(env!("CARGO_TARGET_TMPDIR")).join("test.arx");
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
     let output = cmd!(
         "arx",
         "create",
@@ -116,7 +119,10 @@ fn test_create_and_extract_filter() {
     use inner::*;
 
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
-    let arx_file = Path::new(env!("CARGO_TARGET_TMPDIR")).join("test.arx");
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
     let output = cmd!(
         "arx",
         "create",
@@ -144,7 +150,7 @@ fn test_create_and_extract_filter() {
     )
     .unwrap();
 
-    let mut source_sub_dir = source_mount_point;
+    let mut source_sub_dir = source_mount_point.to_path_buf();
     source_sub_dir.push("OrcBlIw");
     let mut extract_sub_dir = extract_dir.path().to_path_buf();
     extract_sub_dir.push("OrcBlIw");
@@ -166,8 +172,10 @@ fn test_create_and_extract_subdir() {
     use inner::*;
 
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
-    let arx_file = Path::new(env!("CARGO_TARGET_TMPDIR")).join("test.arx");
-    let output = Command::new(bin_path)
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
     let output = cmd!(
         "arx",
         "create",
@@ -198,7 +206,7 @@ fn test_create_and_extract_subdir() {
     );
     assert!(output.status.success());
 
-    let mut source_sub_dir = source_mount_point;
+    let mut source_sub_dir = source_mount_point.to_path_buf();
     source_sub_dir.push("OrcBlIw");
     source_sub_dir.push("tuyuMO7");
 
@@ -219,7 +227,10 @@ fn test_create_and_extract_subfile() {
     use inner::*;
 
     let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
-    let arx_file = Path::new(env!("CARGO_TARGET_TMPDIR")).join("test.arx");
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir.path().join("test.arx");
     let output = cmd!(
         "arx",
         "create",
