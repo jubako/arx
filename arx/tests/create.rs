@@ -57,6 +57,47 @@ fn test_crate_non_existant_input() {
 
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
+fn test_crate_non_existant_output_directory() {
+    use inner::*;
+    use std::path::Path;
+
+    let (_source_mount_handle, source_mount_point) = spawn_mount().unwrap();
+    let source_mount_point = source_mount_point.path();
+    let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tempdir should work");
+    let arx_file = arx_tmp_dir
+        .path()
+        .join("non_existant_directory")
+        .join("test.arx");
+    let output = cmd!(
+        "arx",
+        "create",
+        "--outfile",
+        &arx_file,
+        "-C",
+        source_mount_point.parent().unwrap(),
+        "--strip-prefix",
+        source_mount_point.file_name().unwrap(),
+        source_mount_point.file_name().unwrap()
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    println!("Out : {}", stdout);
+    println!("Err : {}", stderr);
+    assert_eq!("", stdout);
+    assert_eq!(
+        format!(
+            "[ERROR arx] Error : Directory {} doesn't exist\n",
+            arx_file.parent().unwrap().display()
+        ),
+        stderr
+    );
+    assert!(!output.status.success());
+    assert!(!arx_file.exists());
+}
+
+#[cfg(all(unix, not(feature = "in_ci")))]
+#[test]
 fn test_create_and_mount() {
     use inner::*;
 
