@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_empty() -> jbk::Result<()> {
-        let arx_file = tempfile::NamedTempFile::new_in(&std::env::temp_dir())?;
+        let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
         let mut creator = jbk::creator::DirectoryPackCreator::new(
             jbk::PackId::from(0),
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_one_content() -> jbk::Result<()> {
-        let arx_file = tempfile::NamedTempFile::new_in(&std::env::temp_dir())?;
+        let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
 
         let mut creator = jbk::creator::DirectoryPackCreator::new(
