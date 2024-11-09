@@ -3,7 +3,7 @@ use log::{debug, info};
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ pub struct Options {
         short,
         long,
         value_parser,
-        required_unless_present_any(["list_compressions","outfile_old"]),
+        required_unless_present("list_compressions"),
         value_hint=ValueHint::FilePath
     )]
     outfile: Option<PathBuf>,
@@ -92,37 +92,64 @@ pub struct Options {
     #[arg(long, default_value_t = false, action)]
     progress: bool,
 
+    #[arg(short, long, required = false, default_value_t = false, action)]
+    force: bool,
+
     #[arg(from_global)]
     verbose: u8,
-
-    #[arg(
-        short = 'f',
-        long = "file",
-        hide = true,
-        conflicts_with("outfile"),
-        required_unless_present_any(["list_compressions", "outfile"])
-    )]
-    outfile_old: Option<PathBuf>,
 }
 
 fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
     let file_list = if let Some(file_list) = &options.file_list {
         let file = File::open(file_list)
             .with_context(|| format!("Cannot open {}", file_list.display()))?;
-        let mut files = Vec::new();
-        for line in BufReader::new(file).lines() {
-            files.push(line?.into());
-        }
-        files
+        BufReader::new(file)
+            .lines()
+            .map(|l| -> Result<PathBuf> { Ok(l?.into()) })
+            .collect::<Result<Vec<_>>>()?
     } else {
-        options.infiles.clone()
+        options
+            .infiles
+            .iter()
+            .map(|f| -> Result<PathBuf> {
+                if f.is_absolute() {
+                    Err(anyhow!("Input file ({}) must be relative.", f.display()))
+                } else {
+                    Ok(f.clone())
+                }
+            })
+            .collect::<Result<Vec<_>>>()?
     };
+    Ok(file_list)
+}
+
+fn check_input_paths_exist(file_list: &[PathBuf]) -> Result<()> {
+    // Check that input files actually exists
     for file in file_list.iter() {
-        if file.is_absolute() {
-            return Err(anyhow!("Input file ({}) must be relative.", file.display()));
+        if !file.exists() {
+            return Err(anyhow!(
+                "Input {} path doesn't exist or cannot be accessed",
+                file.display()
+            ));
         }
     }
-    Ok(file_list)
+    Ok(())
+}
+
+fn check_output_path_writable(out_file: &Path, force: bool) -> Result<()> {
+    if !out_file.parent().unwrap().is_dir() {
+        Err(anyhow!(
+            "Directory {} doesn't exist",
+            out_file.parent().unwrap().display()
+        ))
+    } else if out_file.exists() && !force {
+        Err(anyhow!(
+            "File {} already exists. Use option --force to overwrite it.",
+            out_file.display()
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 struct ProgressBar {
@@ -200,13 +227,16 @@ pub fn create(options: Options) -> Result<()> {
         None => arx::PathBuf::new(),
     };
 
-    let out_file = if let Some(ref outfile) = options.outfile_old {
-        outfile
-    } else {
-        options.outfile.as_ref().unwrap()
-    };
+    let out_file = options.outfile.as_ref().expect(
+        "Clap unsure it is Some, except if we have list_compressions, and so we return early",
+    );
     let out_file = std::env::current_dir()?.join(out_file);
+    check_output_path_writable(&out_file, options.force)?;
     let files_to_add = get_files_to_add(&options)?;
+    if let Some(base_dir) = &options.base_dir {
+        std::env::set_current_dir(base_dir)?;
+    };
+    check_input_paths_exist(&files_to_add)?;
 
     let jbk_progress: Arc<dyn jbk::creator::Progress> = if options.progress {
         Arc::new(ProgressBar::new())
@@ -224,10 +254,6 @@ pub fn create(options: Options) -> Result<()> {
         cache_progress.clone(),
         options.compression,
     )?;
-
-    if let Some(base_dir) = &options.base_dir {
-        std::env::set_current_dir(base_dir)?;
-    };
 
     let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
     for infile in files_to_add {
