@@ -171,7 +171,6 @@ impl<'a> FsAdder<'a> {
         log::trace!("add_from_path_with_filter(path:{path:?}, recurse:{recurse})");
         let (tx, rx) = mpsc::channel();
         let path_copy = path.to_path_buf();
-        let strip_prefix = self.strip_prefix.clone();
 
         spawn(move || {
             let mut walker = walkdir::WalkDir::new(path_copy);
@@ -187,51 +186,52 @@ impl<'a> FsAdder<'a> {
         });
 
         while let Ok(entry) = rx.recv() {
-            // Walkdir behaves differently if root is a link to a directory
+            // We always want to follow link if this is the root entry.
+            // This allow user to create a link to a file/dir to add the entry under a different name.
+            // Walkdir will do the same anyway if it is a directory.
             let is_root_entry = entry.path() == path;
 
-            let entry_path = entry.path();
-            let arx_path = match crate::PathBuf::from_path(entry_path) {
-                Ok(p) => p,
-                Err(e) => {
-                    return Err(match e.kind() {
-                        relative_path::FromPathErrorKind::NonRelative => {
-                            format!("{} is not a relative path", entry_path.display())
-                        }
-                        relative_path::FromPathErrorKind::NonUtf8 => {
-                            format!("Non utf8 char in {}", entry_path.display())
-                        }
-                        relative_path::FromPathErrorKind::BadSeparator => {
-                            format!("Invalid path separator in {}", entry_path.display(),)
-                        }
-                        _ => {
-                            format!(
-                                "Unknown error converting {} to relative utf-8 path.",
-                                entry_path.display()
-                            )
-                        }
-                    }
-                    .into())
-                }
-            };
-            let arx_path: crate::PathBuf = match arx_path.strip_prefix(&strip_prefix) {
-                Ok(p) => p,
-                Err(_e) => return Err(format!("{strip_prefix} is not in {arx_path}").into()),
-            }
-            .into();
-            if arx_path.as_str().is_empty() {
-                continue;
-            }
-
-            let entry = FsEntry::new_from_path(
-                entry.path(),
-                arx_path,
-                self.creator.adder(),
-                is_root_entry,
-            )?;
-
-            self.creator.add_entry(entry.as_ref())?;
+            self.add_entry_from_path(entry.path(), is_root_entry)?;
         }
         Ok(())
+    }
+
+    pub fn add_entry_from_path(&mut self, path: &std::path::Path, follow_symlink: bool) -> Void {
+        log::debug!("add_path(path:{path:?}, follow_symlink:{follow_symlink})");
+
+        let arx_path = match crate::PathBuf::from_path(path) {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(match e.kind() {
+                    relative_path::FromPathErrorKind::NonRelative => {
+                        format!("{} is not a relative path", path.display())
+                    }
+                    relative_path::FromPathErrorKind::NonUtf8 => {
+                        format!("Non utf8 char in {}", path.display())
+                    }
+                    relative_path::FromPathErrorKind::BadSeparator => {
+                        format!("Invalid path separator in {}", path.display(),)
+                    }
+                    _ => {
+                        format!(
+                            "Unknown error converting {} to relative utf-8 path.",
+                            path.display()
+                        )
+                    }
+                }
+                .into())
+            }
+        };
+        let arx_path: crate::PathBuf = match arx_path.strip_prefix(&self.strip_prefix) {
+            Ok(p) => p,
+            Err(_e) => return Err(format!("{} is not in {arx_path}", self.strip_prefix).into()),
+        }
+        .into();
+        if arx_path.as_str().is_empty() {
+            return Ok(());
+        }
+        let entry = FsEntry::new_from_path(path, arx_path, self.creator.adder(), follow_symlink)?;
+
+        self.creator.add_entry(entry.as_ref())
     }
 }
