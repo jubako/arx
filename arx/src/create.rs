@@ -95,32 +95,11 @@ pub struct Options {
     #[arg(short, long, required = false, default_value_t = false, action)]
     force: bool,
 
+    #[arg(long, required = false, default_value_t = false, action)]
+    follow_symlink: bool,
+
     #[arg(from_global)]
     verbose: u8,
-}
-
-fn get_files_to_add(options: &Options) -> Result<Vec<PathBuf>> {
-    let file_list = if let Some(file_list) = &options.file_list {
-        let file = File::open(file_list)
-            .with_context(|| format!("Cannot open {}", file_list.display()))?;
-        BufReader::new(file)
-            .lines()
-            .map(|l| -> Result<PathBuf> { Ok(l?.into()) })
-            .collect::<Result<Vec<_>>>()?
-    } else {
-        options
-            .infiles
-            .iter()
-            .map(|f| -> Result<PathBuf> {
-                if f.is_absolute() {
-                    Err(anyhow!("Input file ({}) must be relative.", f.display()))
-                } else {
-                    Ok(f.clone())
-                }
-            })
-            .collect::<Result<Vec<_>>>()?
-    };
-    Ok(file_list)
 }
 
 fn check_input_paths_exist(file_list: &[PathBuf]) -> Result<()> {
@@ -219,9 +198,6 @@ pub fn create(options: Options) -> Result<()> {
         return Ok(());
     }
 
-    info!("Creating archive {:?}", options.outfile);
-    info!("With files {:?}", options.infiles);
-
     let strip_prefix = match &options.strip_prefix {
         Some(s) => s.clone(),
         None => arx::PathBuf::new(),
@@ -232,11 +208,15 @@ pub fn create(options: Options) -> Result<()> {
     );
     let out_file = std::env::current_dir()?.join(out_file);
     check_output_path_writable(&out_file, options.force)?;
-    let files_to_add = get_files_to_add(&options)?;
+    info!("Creating archive {:?}", out_file);
+    let file_list = options
+        .file_list
+        .as_ref()
+        .map(std::path::absolute)
+        .transpose()?;
     if let Some(base_dir) = &options.base_dir {
         std::env::set_current_dir(base_dir)?;
     };
-    check_input_paths_exist(&files_to_add)?;
 
     let jbk_progress: Arc<dyn jbk::creator::Progress> = if options.progress {
         Arc::new(ProgressBar::new())
@@ -255,10 +235,34 @@ pub fn create(options: Options) -> Result<()> {
         options.compression,
     )?;
 
-    let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
-    for infile in files_to_add {
-        fs_adder.add_from_path(&infile, options.recurse)?;
-    }
+    if let Some(file_list) = file_list {
+        let file = File::open(&file_list)
+            .with_context(|| format!("Cannot open {}", file_list.display()))?;
+        let files_list = BufReader::new(file)
+            .lines()
+            .map(|l| -> Result<PathBuf> { Ok(l?.into()) })
+            .collect::<Result<Vec<_>>>()?;
+        let mut list_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
+        list_adder.add_from_list(files_list.into_iter(), options.follow_symlink)?;
+    } else {
+        let files_list = options
+            .infiles
+            .iter()
+            .map(|f| -> Result<PathBuf> {
+                if f.is_absolute() {
+                    Err(anyhow!("Input file ({}) must be relative.", f.display()))
+                } else {
+                    Ok(f.clone())
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        check_input_paths_exist(&files_list)?;
+        let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
+        for infile in files_list {
+            debug!("Adding file {infile:?}");
+            fs_adder.add_from_path(&infile, options.recurse)?;
+        }
+    };
 
     let ret = creator.finalize(&out_file);
     debug!("Saved place is {}", cache_progress.0.get());

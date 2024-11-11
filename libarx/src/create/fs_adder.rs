@@ -196,6 +196,16 @@ impl<'a> FsAdder<'a> {
         Ok(())
     }
 
+    pub fn add_from_list<Iter>(&mut self, paths: Iter, follow_symlink: bool) -> Void
+    where
+        Iter: Iterator<Item = std::path::PathBuf>,
+    {
+        for path in paths {
+            self.add_entry_from_path(&path, follow_symlink)?;
+        }
+        Ok(())
+    }
+
     pub fn add_entry_from_path(&mut self, path: &std::path::Path, follow_symlink: bool) -> Void {
         log::debug!("add_path(path:{path:?}, follow_symlink:{follow_symlink})");
 
