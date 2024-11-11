@@ -29,7 +29,7 @@ libc = "0.2.158"
 daemonize = "0.5.0"
 
 [target.'cfg(not(windows))'.dev-dependencies]
-arx_test_dir = { git = "https://github.com/jubako/arx_test_dir.git" }
+arx_test_dir = { git = "https://github.com/jubako/arx_test_dir.git", features = ["fuse"] }
 tempfile = "3.8.0"
 
 [features]
@@ -38,7 +38,7 @@ in_ci = []
 lz4 = ["arx/lz4"]
 zstd = ["arx/zstd"]
 lzma = ["arx/lzma"]
-fuse = ["arx/fuse", "arx_test_dir/fuse"]
+fuse = ["arx/fuse"]
 
 [[bin]]
 name = "auto_mount"
