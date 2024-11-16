@@ -11,71 +11,55 @@ type EntryStore = jbk::creator::EntryStore<
     Box<jbk::creator::BasicEntry<Property, EntryType>>,
 >;
 
-type DirCache = HashMap<String, DirEntry>;
+type DirCache = HashMap<String, DirOrFile>;
 type EntryIdx = jbk::Bound<jbk::EntryIdx>;
+
+enum DirOrFile {
+    Dir(DirEntry),
+    File(EntryIdx),
+}
 
 /// A DirEntry structure to keep track of added direcotry in the archive.
 /// This is needed as we may adde file without recursion, and so we need
 /// to find the parent of "foo/bar/baz.txt" ("foo/bar") when we add it.
 struct DirEntry {
     idx: Option<EntryIdx>,
-    dir_children: Arc<RwLock<DirCache>>,
-    file_children: Arc<RwLock<Vec<EntryIdx>>>,
+    children: Arc<RwLock<DirCache>>,
 }
 
 impl DirEntry {
     fn new_root() -> Self {
         Self {
             idx: None,
-            dir_children: Default::default(),
-            file_children: Default::default(),
+            children: Default::default(),
         }
     }
     fn new(idx: EntryIdx) -> Self {
         Self {
             idx: Some(idx),
-            dir_children: Default::default(),
-            file_children: Default::default(),
+            children: Default::default(),
         }
     }
 
     fn first_entry_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
-        let dir_children = Arc::clone(&self.dir_children);
-        let file_children = Arc::clone(&self.file_children);
+        let children = Arc::clone(&self.children);
         Box::new(move || {
-            if dir_children.try_read().unwrap().is_empty()
-                && file_children.try_read().unwrap().is_empty()
-            {
-                0
-            } else {
-                std::cmp::min(
-                    file_children
-                        .try_read()
-                        .unwrap()
-                        .iter()
-                        .map(|i| i.get().into_u64())
-                        .min()
-                        .unwrap_or(u64::MAX),
-                    dir_children
-                        .try_read()
-                        .unwrap()
-                        .values()
-                        // Unwrap is safe because children are not root, and idx is Some
-                        .map(|i| i.idx.as_ref().unwrap().get().into_u64())
-                        .min()
-                        .unwrap_or(u64::MAX),
-                )
-            }
+            children
+                .try_read()
+                .unwrap()
+                .values()
+                .map(|e| match e {
+                    DirOrFile::File(i) => i.get().into_u64(),
+                    DirOrFile::Dir(e) => e.idx.as_ref().unwrap().get().into_u64(),
+                })
+                .min()
+                .unwrap_or(0)
         })
     }
 
     fn entry_count_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
-        let dir_children = Arc::clone(&self.dir_children);
-        let file_children = Arc::clone(&self.file_children);
-        Box::new(move || {
-            (dir_children.try_read().unwrap().len() + file_children.try_read().unwrap().len())
-                as u64
-        })
+        let children = Arc::clone(&self.children);
+        Box::new(move || (children.try_read().unwrap().len()) as u64)
     }
 
     fn as_parent_idx_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
@@ -97,18 +81,19 @@ impl DirEntry {
             None => self.add_entry(entry, entry_store),
             Some(component) => {
                 self.ensure_dir(component.as_str(), entry_store)?;
-                let mut write_dir_children = self.dir_children.try_write().unwrap();
-                write_dir_children.get_mut(component.as_str()).unwrap().add(
-                    entry,
-                    components,
-                    entry_store,
-                )
+                let mut write_children = self.children.try_write().unwrap();
+                match write_children.get_mut(component.as_str()).unwrap() {
+                    DirOrFile::Dir(e) => e.add(entry, components, entry_store),
+                    DirOrFile::File(_) => {
+                        Err("Cannot add a entry to something which is not a directory".into())
+                    }
+                }
             }
         }
     }
 
     fn ensure_dir(&mut self, dir_name: &str, entry_store: &mut EntryStore) -> Void {
-        self.dir_children
+        self.children
             .try_write()
             .unwrap()
             .entry(dir_name.into())
@@ -145,7 +130,7 @@ impl DirEntry {
                     values,
                 ));
                 entry_store.add_entry(entry);
-                dir_entry
+                DirOrFile::Dir(dir_entry)
             });
 
         Ok(())
@@ -182,14 +167,13 @@ impl DirEntry {
 
         match entry_kind {
             EntryKind::Dir => {
-                if self
-                    .dir_children
-                    .try_read()
-                    .unwrap()
-                    .contains_key(entry_name)
-                {
-                    return Ok(());
-                }
+                match self.children.try_read().unwrap().get(entry_name) {
+                    Some(DirOrFile::Dir(_)) => return Ok(()),
+                    Some(DirOrFile::File(_)) => {
+                        return Err("Cannot add a dir when file or link already exists".into())
+                    }
+                    None => {}
+                };
                 let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
                 let dir_entry = DirEntry::new(entry_idx.bind());
 
@@ -211,14 +195,16 @@ impl DirEntry {
                     entry_store.add_entry(entry);
                 }
 
-                self.dir_children
+                self.children
                     .try_write()
                     .unwrap()
-                    .entry(entry_name.into())
-                    .or_insert(dir_entry);
+                    .insert(entry_name.into(), DirOrFile::Dir(dir_entry));
                 Ok(())
             }
             EntryKind::File(size, content_address) => {
+                if self.children.try_read().unwrap().contains_key(entry_name) {
+                    return Err("Cannot add a file when one already exists".into());
+                }
                 values.insert(Property::Content, jbk::Value::Content(content_address));
                 values.insert(Property::Size, jbk::Value::Unsigned(size.into_u64()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
@@ -227,10 +213,16 @@ impl DirEntry {
                     values,
                 ));
                 let current_idx = entry_store.add_entry(entry);
-                self.file_children.try_write().unwrap().push(current_idx);
+                self.children
+                    .try_write()
+                    .unwrap()
+                    .insert(entry_name.into(), DirOrFile::File(current_idx));
                 Ok(())
             }
             EntryKind::Link(target) => {
+                if self.children.try_read().unwrap().contains_key(entry_name) {
+                    return Err("Cannot add a link when one already exists".into());
+                }
                 values.insert(Property::Target, jbk::Value::Array(target.into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
@@ -238,7 +230,10 @@ impl DirEntry {
                     values,
                 ));
                 let current_idx = entry_store.add_entry(entry);
-                self.file_children.try_write().unwrap().push(current_idx);
+                self.children
+                    .try_write()
+                    .unwrap()
+                    .insert(entry_name.into(), DirOrFile::File(current_idx));
                 Ok(())
             }
         }

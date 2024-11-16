@@ -67,15 +67,36 @@ impl std::error::Error for InvalidCompression {}
 #[derive(clap::Args, Debug)]
 #[group(required = false, multiple = false)]
 pub struct ConcatMode {
-    #[arg(short = '1', long, required = false, default_value_t = false, action)]
+    #[arg(
+        short = '1',
+        long,
+        required = false,
+        default_value_t = false,
+        action,
+        help_heading = "Advanced options"
+    )]
     /// Create only one file (default)
     one_file: bool,
 
-    #[arg(short = '2', long, required = false, default_value_t = false, action)]
+    #[arg(
+        short = '2',
+        long,
+        required = false,
+        default_value_t = false,
+        action,
+        help_heading = "Advanced options"
+    )]
     /// Create two files (a content pack and other)
     two_files: bool,
 
-    #[arg(short = 'N', long, required = false, default_value_t = false, action)]
+    #[arg(
+        short = 'N',
+        long,
+        required = false,
+        default_value_t = false,
+        action,
+        help_heading = "Advanced options"
+    )]
     /// Create mulitples files (one per pack)
     multiple_files: bool,
 }
