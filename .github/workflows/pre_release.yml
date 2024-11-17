@@ -74,6 +74,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-tags: true
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
