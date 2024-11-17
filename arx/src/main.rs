@@ -11,8 +11,14 @@ use clap::{CommandFactory, Parser};
 use log::error;
 use std::process::ExitCode;
 
+const VERSION: &str = const_format::formatcp!(
+    "{} (git:{})",
+    clap::crate_version!(),
+    git_version::git_version!(args = ["--dirty=*", "--tags", "--always"])
+);
+
 #[derive(Parser, Debug)]
-#[command(name = "arx", author, version, about, long_about=None)]
+#[command(name = "arx", author, version, long_version=VERSION, about, long_about=None)]
 struct Cli {
     /// Set verbose level. Can be specify several times to augment verbose level.
     #[arg(short, long, action=clap::ArgAction::Count, global=true)]
