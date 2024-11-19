@@ -1,155 +1,134 @@
-What is arx
-===========
+# arx: A Fast, Mountable File Archive
 
-Arx is a file archive format based on the
-[jubako container format](https://github.com/jubako/jubako).
+Arx is a high-performance file archive format built upon the [Jubako container format](https://github.com/jubako/jubako).
+It offers a compelling alternative to traditional archive formats like zip and tar, providing significant speed advantages,
+especially for large archives and random access operations. Arx archives can even be mounted as read-only filesystems.
 
-It allow you to create, read, extract file archive (as zip or tar does).
+## Key Features
 
-Arx (and Jubako) is in active development.
-While it works pretty well, I do not recommand to use it to do backups.
-However, you can use it to transfer data or explore archives.
+* **Fast Creation and Extraction:**  Arx leverages optimized compression algorithms and a structured data layout for significantly faster archive creation and extraction times compared to traditional methods, particularly for larger datasets.
+* **Random Access:**  Access individual files within the archive without needing to decompress the entire archive.  This is particularly beneficial for large archives.
+* **Read-Only Mounting (Linux and MacoOS):** Mount Arx archives as read-only filesystems using FUSE, allowing you to directly access and work with files within the archive without decompression.
+* **Versatile Compression:** Supports various compression algorithms, including zstd (default), lz4, and lzma, allowing you to choose the best option for your data and performance needs.
+* **Comprehensive CLI Tool:** A command-line interface simplifies archive creation, extraction, listing, and mounting.
+* **Python Bindings:**  A Python wrapper facilitates integration with Python projects.
 
 
-How it works
-============
+## Installation
 
+### Using Cargo
 
-Jubako is a versatile container format, allowing to store data, compressed or
-not in a structured way. It main advantage (apart from its versability) is
-that is designed to allow quick retrieval of data fro the archive without
-needing to uncompress the whole archive.
+The easiest way to install `arx` is via Cargo, Rust's package manager:
 
-Arx use the jubako format and create arx archive which:
-- Store file's data compressed.
-- Store files using a directory/tree structure.
-- Can do random access on the arx archive to get a specific files
-- Allow to mount the archive to explore and use (read only) the files in the
-  archive without decompressing it.
-
-Install arx
-===========
-
-Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
-You can also install arx using Cargo:
-
-```
+```bash
 cargo install arx
 ```
 
-Use arx
-=======
+### Pre-built Binaries
 
-Create an archive
------------------
+Pre-built binaries for Windows, macOS, and Linux are available for each release on [GitHub Releases](https://github.com/jubako/arx/releases). Download the appropriate binary for your operating system and add it to your system's `PATH` environment variable.
 
-Creating an archive is simple :
+## Usage Examples
 
+**Create an Archive:**
 
-```
+Create an archive named `my_archive.arx` from the directory `my_directory`:
+
+```bash
 arx create -o my_archive.arx -r my_directory
 ```
+The `-r` flag indicates recursive inclusion of subdirectories.  You can omit this for non-recursive creation.
 
-It will one file : `my_archive.arx`, which will contains the `my_directory` directory.
+To strip a common prefix from the file paths within the archive, use the `--strip-prefix` option:
 
-
-Extract an archive
-------------------
-
-Extracting (decompressing) an archive is done with :
-
-```
-arx extract my_archive.arx -C my_out_dir
+```bash
+arx create -o my_archive.arx -r --strip-prefix /home/user/documents /home/user/documents/my_directory
 ```
 
+**Extract an Archive:**
 
-Listing the content of an archive
----------------------------------
+Extract the contents of `my_archive.arx` to the directory `my_output_dir`:
 
-You can list the content of (the list of files in) the archive with :
-
+```bash
+arx extract my_archive.arx -C my_output_dir
 ```
+
+The `-C` flag specifies the output directory. If omitted, extraction happens in the current directory.
+
+**List Archive Contents:**
+
+List the files and directories within `my_archive.arx`:
+
+```bash
 arx list my_archive.arx
 ```
 
-And if you want to access to the content of only one file :
+For a more machine-readable output suitable for scripting, use the `--stable-output` option:
 
-```
-arx dump my_archive.arx my_directory/path/to/my_file > my_file
-# or
-arx dump my_archive.arx my_directory/path/to/my_file -o my_file
+```bash
+arx list --stable-output my_archive.arx
 ```
 
-Mounting the archive
---------------------
+**Dump a Single File:**
 
-On linux, you can mount the archive using fuse.
+Dump the contents of a specific file (`my_directory/my_file.txt`) within the archive to standard output:
 
+```bash
+arx dump my_archive.arx my_directory/my_file.txt
 ```
+
+To redirect the output to a file, use redirection:
+
+```bash
+arx dump my_archive.arx my_directory/my_file.txt my_file.txt
+```
+
+**Mount the Archive (Linux and MacOS):**
+
+Mount `my_archive.arx` to a mount point (requires `libfuse-dev` on Linux and `macfuse` on macOS):
+
+```bash
 mkdir mount_point
 arx mount my_archive.arx mount_point
 ```
 
-If you don't provide a `mount_point`, arx will create a temporary one for you
+Unmount using the standard `umount` command. If `mount_point` is not provided, a temporary mount point will be created.
+The `arx mount` command runs in the background by default. Use the `--foreground` flag to keep it in the foreground.
 
-```
-arx mount my_archive.arx # Will create my_archive.arx.xxxxxx
-```
+**Convert Zip/Tar Archives:**
 
-`arx` will be running until you unmount `mount_point`.
 
-Converting a zip archive to an arx archive
-------------------------------------------
+Convert a zip archive (`my_archive.zip`) or a tar archive (`my_archive.tar.gz`) to an Arx archive:
 
-```
-zip2arx -o my_archive.arx my_zip_archive.zip
+```bash
+zip2arx -o my_archive.arx my_archive.zip
+tar2arx -o my_archive.arx my_archive.tar.gz
 ```
 
-Converting a tar archive to an arx archive
-------------------------------------------
+You may need to install `zip2arx` and `tar2arx` tools, the same you have installed `arx` tool.
 
-```
-tar2arx -o my_archive.arx my_tar_archive.tar.gz
-```
+Remote tar archives can also be converted using `tar2arx`:
 
-or
-
-```
-tar2arx -o my_archive.arx https://example.com/my_tar_archive.tar.gz
+```bash
+tar2arx -o my_archive.arx https://example.com/my_archive.tar.gz
 ```
 
+## Performance
 
-Performance
-===========
+The following tables compare the performance of Arx to different archive formats.
+Tests were conducted on various datasets (the entire Linux kernel, its drivers directory, and its documentation directory) stored on an SSD.
+All tests were run on a tmpfs (archive and extracted files stored in memory).
+Mount diff time measures the time to diff the mounted archive with the source directory using `diff -r`.
+Mounting of tar and zip archives was performed using the `archivemount` tool.
+Arx mount is implemented using the fuse API.
+Squashfs was mounted using the kernel; SquashfsFuse was mounted using the fuse API; Only `Mount diff` differs between the two.
 
-The following compare the performance of Arx to different archive formats.
+"Mount diff" times for tar and zip are significantly longer and may not always be fully measured depending on the dataset and system specifications.
 
-- Arx, Tar, Squasfs is compressed the content using zstd, level 5.
-- Zip is compressed using level 9
-- Fs is FileSystem (no archive). Archive creation and extraction is simulated with `cp -a`.
+The comparaison script is available at [script/compare_archive.py](https://github.com/jubako/arx/blob/main/script/compare_archive.py)
 
-Tests has been done on different data sets :
-- the whole linux kernel (linux-5.19)
-- the drivers directory in linux kernel
-- the document directory in the linux kernel
 
-Source directory is stored on a sdd. All test are run on a tmpfs (archive and
-extracted files are stored in memory).
-
-Mount diff time is the time to diff the mounted archive with the source directory
-```
-arx mount archive.arx mount_point &
-time diff -r mount_point/linux-5.19 linux-5.19
-umount mount_point
-```
-Mounting the tar and zip archive is made with `archivemount` tool.
-Squashfs is mounted using kernel. SquashfsFuse is mounted using fuse API.
-Arx mount is implemented using fuse API.
-
-Linux doc
----------
-
-Documentation directory only of linux source code:
+**Linux doc (Documentation directory only of Linux source code):**
 
 |     Type     |  Creation  |   Size   |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | ---------- | -------- | ---------- | ---------- | ---------- | ---------- |
@@ -160,8 +139,7 @@ Documentation directory only of linux source code:
 |          Tar | 141ms079μs |  9.68 MB | 065ms744μs | 041ms015μs |     02m41s | 042ms143μs |
 |          Zip |   01s083ms | 15.22 MB | 388ms720μs | 037ms044μs |     03m06s | 014ms088μs |
 
-This is the ratio <Archive> time / Arx time.
-A ratio greater than 100% means Arx is better.
+**Ratio `<Archive> time / Arx time` (A ratio > 100% means Arx is better):**
 
 |     Type     | Creation | Size | Extract | Listing | Mount diff | Dump |
 | ------------ | -------- | ---- | ------- | ------- | ---------- | ---- |
@@ -172,10 +150,7 @@ A ratio greater than 100% means Arx is better.
 |          Zip |     718% | 137% |   1012% |    914% |     62350% | 251% |
 
 
-Linux Driver
-------------
-
-Driver directory only of linux source code:
+**Linux Driver (Driver directory only of Linux source code):**
 
 |     Type     |  Creation  |   Size    |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | ---------- | --------- | ---------- | ---------- | ---------- | ---------- |
@@ -186,8 +161,7 @@ Driver directory only of linux source code:
 |          Tar | 911ms042μs |  97.96 MB | 515ms178μs | 472ms060μs |          - | 504ms231μs |
 |          Zip |   20s498ms | 141.91 MB |   03s665ms | 098ms194μs |          - | 034ms481μs |
 
-This is the ratio <Archive> time / Arx time.
-A ratio greater than 100% means Arx is better.
+**Ratio `<Archive> time / Arx time` (A ratio > 100% means Arx is better):**
 
 |     Type     | Creation | Size | Extract | Listing | Mount diff | Dump  |
 | ------------ | -------- | ---- | ------- | ------- | ---------- | ----- |
@@ -198,8 +172,7 @@ A ratio greater than 100% means Arx is better.
 |          Zip |    1932% | 144% |   1516% |   1032% |          - |  479% |
 
 
-Linux Source Code
------------------
+**Linux Source Code (Entire Linux source code):**
 
 |     Type     | Creation |   Size    |  Extract   |  Listing   | Mount diff |    Dump    |
 | ------------ | -------- | --------- | ---------- | ---------- | ---------- | ---------- |
@@ -210,8 +183,7 @@ Linux Source Code
 |          Tar | 01s479ms | 168.77 MB | 938ms758μs | 799ms550μs |          - | 802ms427μs |
 |          Zip | 31s810ms | 252.96 MB |   06s260ms | 256ms137μs |          - | 045ms722μs |
 
-This is the ratio <Archive> time / Arx time.
-A ratio greater than 100% means Arx is better.
+**Ratio `<Archive> time / Arx time` (A ratio > 100% means Arx is better):**
 
 |     Type     | Creation | Size | Extract | Listing | Mount diff | Dump  |
 | ------------ | -------- | ---- | ------- | ------- | ---------- | ----- |
@@ -221,12 +193,7 @@ A ratio greater than 100% means Arx is better.
 |          Tar |      70% |  99% |    215% |   3595% |          - | 7561% |
 |          Zip |    1511% | 148% |   1436% |   1152% |          - |  431% |
 
-The kernel compilation is the time needed to compile the whole kernel with the
-default configuration (-j8). For arx, we are compiling the kernel using the
-source in the archive mounted in mount_point.
-
-Kernel compilation is made is "real" condition. Source or arx archive are stored on ssd.
-
+**Kernel Compilation Time (Time needed to compile the whole kernel with default configuration `-j8`):**
 
 | Type | Compilation |
 | ---- | ----------- |
@@ -234,22 +201,19 @@ Kernel compilation is made is "real" condition. Source or arx archive are stored
 |   FS |         32m |
 
 
-Arx archive are a bit bigger (about 1%) than tar.zst archive but 15% smaller that squashfr.
-Creation and full extraction time are a bit longer for arx but times are comparable.
+Arx archives are slightly larger (about 1%) than tar.zst archives but 15% smaller than squashfs. Creation and full extraction times are comparable to other formats, but listing files and accessing individual files from the archive are much faster using arx or squashfs. Access time is almost constant independently of the archive size, unlike tar, where access time increases significantly with archive size. Mounting an arx archive makes the archive usable without extraction.
 
-Listing files ar accessing individual files from the archive is far more rapid using arx or squash.
-Access time is almost constant indpendently of the size of the archive.
-For tar however, time to access individual file is greatly increasing when the
-archive size is increasing.
 
-Mounting a arx archive make the archive usable without extracting it.
-A simple `diff -r` takes 4 more time than a plain diff between two directories but
-it is a particular use case (access all files "sequentially" and only once).
+## Contributing
 
-But for linux documentation arx is 444 time quicker than tar (several hours).
-The bigger the tar archive is the bigger is this ratio. I haven't try to do a
-mount-diff for the full kernel.
+Contributions are welcome! Please open an issue or submit a pull request.
 
-For kernel compilation, the overhead is about 25%.
-But on the opposite side, you can compile the kernel without storing 1.3GB of
-source on your hard drive.
+## Sponsoring
+
+I ([@mgautierfr](https://github.com/mgautierfr)) am a freelance developer. All jubako projects are created in my free time, which competes with my paid work.
+If you want me to be able to spend more time on Jubako projects, please consider [sponsoring me](https://github.com/sponsors/jubako).
+You can also donate on [liberapay](https://liberapay.com/jubako/donate) or [buy me a coffee](https://buymeacoffee.com/jubako).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE-MIT](LICENSE-MIT) file for details.
