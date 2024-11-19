@@ -1,74 +1,82 @@
-Tar2Arx
-=======
+# tar2arx: Tar to Arx Archive Converter
 
-`tar2arx` is a command line tool to convert tar archive to arx format.
+`tar2arx` is a command-line tool that converts tar archives to the Arx archive format.
+Arx ([https://crates.io/crates/arx](https://crates.io/crates/arx)) offers a modern and performant alternative to traditional archive formats.
+This tool streamlines the process of migrating existing tar archives to the benefits of Arx.
 
-[Arx](https://crates.io/crates/arx) is a new file archive format.
+## Installation
 
-Install tar2arx
-===============
+### Using Cargo
 
-Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
-You can also install tar2arx using Cargo:
+The recommended installation method is using Cargo, Rust's package manager:
 
-```
+```bash
 cargo install tar2arx arx
 ```
 
-You will need `arx` to read the archive.
+This command will install both `tar2arx` and its dependency, the `arx` library, which is necessary for reading and manipulating Arx archives.
 
 
-Use tar2arx
-===========
+### Pre-built Binaries
 
+Pre-built binaries for Windows, macOS, and Linux are available for each release on the [GitHub releases page](https://github.com/jubako/arx/releases). Download the appropriate binary for your operating system and place it in your system's PATH.
 
-Convert a tar archive
----------------------
+## Usage Examples
 
-Creating an archive is simple :
+**Converting a Local Tar Archive:**
 
-
-```
-tar2arx -o foo.arx foo.tar.gz
+```bash
+tar2arx -o output.arx input.tar.gz
 ```
 
-With feature `http` (default), you can directly convert a remote tar archive with:
+This command converts `input.tar.gz` to `output.arx`.
 
-```
-tar2arx -o foo.arg https://example.com/foo.tar.gz
-```
 
-Read arx archive
-----------------
+**Converting a Remote Tar Archive:**
 
-See the arx documentation for full command.
-
-- List the content of the archive
-
-```
-arx list foo.arx | less
+```bash
+tar2arx -o remote.arx https://example.com/data.tar.gz
 ```
 
-- Extract the archive
-
-```
-arx extract -f foo.arx -C my_out_dir
-```
-
-- Extract only one file
+This converts a remote tar archive from the specified URL (requires the `http` feature, which is enabled by default).
 
 
-```
-arx dump foo.arx my_directory/path/to/my_file > my_file
-```
+**Working with Arx Archives (using the `arx` command):**
 
-- Mounting the archive
+After converting to Arx, use the `arx` command to interact with the created archive.  Here are some examples:
 
-On linux and macOs, you can mount the archive using fuse.
+* **List archive contents:**
+  ```bash
+  arx list output.arx | less
+  ```
 
-```
-mkdir mount_point
-arx mount foo.arx mount_point
-```
+* **Extract the archive:**
+  ```bash
+  arx extract output.arx -C my_output_directory
+  ```
 
-`arx` will be running until you unmount `mount_point`.
+* **Extract a single file:**
+  ```bash
+  arx dump output.arx path/to/my/file.txt my_file.txt
+  ```
+
+* **Mount the archive (Linux/macOS):**
+  ```bash
+  mkdir mount_point
+  arx mount output.arx mount_point
+  ```
+  Remember to unmount the archive using `umount mount_point` when finished.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## Sponsoring
+
+I ([@mgautierfr](https://github.com/mgautierfr)) am a freelance developer. All jubako projects are created in my free time, which competes with my paid work.
+If you want me to be able to spend more time on Jubako projects, please consider [sponsoring me](https://github.com/sponsors/jubako).
+You can also donate on [liberapay](https://liberapay.com/jubako/donate) or [buy me a coffee](https://buymeacoffee.com/jubako).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE-MIT](LICENSE-MIT) file for details.

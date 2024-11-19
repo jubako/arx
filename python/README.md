@@ -1,12 +1,23 @@
-# Libarx
+# libarx: A Python Wrapper for the Arx Archive Library
 
-`libarx` module allows you to read and write Arx
-archives in Python. It provides a shallow python
-interface on top of the [Rust `libarx` library](https://github.com/jubako/arx).
+`libarx` is a Python library providing a user-friendly interface to interact with Arx archives.
+Arx is a high-performance, content-addressable archive format.
+This library allows you to easily create, read, and manipulate Arx archives from your Python code.
+
+## Key Features
+
+* **Create Arx archives:**  Easily create new Arx archives from files and directories.
+* **Read Arx archives:** Efficiently read and extract data from existing Arx archives.
+* **Iterate over archive contents:**  Traverse the archive's tree structure and access individual entries.
+* **Access individual entries:** Directly access specific files within the archive by path.
+* **Stream-based access:** Read file contents as streams, optimizing memory usage for large files.
+
 
 ## Installation
 
-```sh
+Install it using pip:
+
+```bash
 pip install libarx
 ```
 
@@ -18,75 +29,72 @@ Our [PyPI wheels](https://pypi.org/project/libarx/) bundle the Rust libarx and a
 
 Wheels are available for CPython only.
 
-Users on other platforms can install the source distribution (see [Building](#Building) below). 
+Users on other platforms can install the source distribution (see [Building](#Building) below).
 
+## Usage Examples
 
-## Usage
-
-### Read an Arx archive
+### Creating an Archive
 
 ```python
-from libarx import Arx
+import libarx
 
-archive = Arx("my_archive.arx")
-entry = arx.get_entry("foo/bar")
+# Create a new archive (replace with your desired output path)
+archive_path = "my_archive.arx"
+with libarx.Creator(archive_path) as creator:
+    # Add files and directories to the archive
+    creator.add("path/to/file1.txt")  #adds file
+    creator.add("path/to/directory") #adds directory and its content recursively
+```
 
-print(f"Entry (idx: {entry.idx}) name is {entry.path}")
-if entry.is_file():
-    print("Entry is a file").
-    content = entry.get_content()
-    print(content)
-elif entry.is_link():
-    print(f"Entry is a link pointing to {entry.get_target()}")
-else:
-    print("Entry is a directory.")
-    print(f"children are ranged from {entry.first_child()} to {entry.first_child()+entry.nb_children()}")
+### Reading an Archive
 
-# We can also iterate on entries in arx
+```python
+import libarx
+
+archive_path = "my_archive.arx"
+
+# Open the archive
+arx = libarx.Arx(archive_path)
+
 def iterate(iterable, root=""):
     for entry in iterable:
-        path = root + "/" + entry.pathi
+        path = root + "/" + entry.path
+        print(f"Entry: {path}")
         if entry.is_file():
-            content = entry.get_content()[..512]
-            print(f"File {path} : {content}")
+            content_stream = entry.get_content()
+            print(f"  Content size: {content_stream.size()} bytes")
+            content = content_stream.read(min(100, content_stream.size()))
+            print(f"  Content: {content}")
+        elif entry.is_dir():
+            print(f"  Nb Children: {entry.nb_childen()}")
+            loop_on_entry_generator(entry)
         elif entry.is_link():
-            print(f"Link {path} -> {entry.get_target()}")
-        else:
-            print(f"Dir {path}")
-            iterate(entry, path)
+            print(f"  Link to {entry.get_target()}")
 
-iterate(arx)        
-    
+# Walk the entries in the archive
+iterate(arx)
 
-# Arx archive can simply be extracted with :
-arx.extract("target/directory/where/to/extract")
+# Access a specific entry
+specific_entry = arx.get_entry("path/to/file1.txt")
+assert specific_entry.path == "file1.txt"
+assert entry.parent.path == "to"
+assert entry.parent.parent.path == "path"
+assert entry.parent.parent.parent == None
+
+#Extract the archive
+arx.extract("extracted/archive/path")
 ```
 
-### Create an Arx archive
+## Contributing
 
-```python
-from libarx import Creator
+Contributions are welcome! Please open an issue or submit a pull request.
 
-with Creator("my_archive.arx") as creator:
-  creator.add("path/to/entry/to/add", recursive=(False or True))
-```
+## Sponsoring
 
-## Building
-
-Python `libarx` is compiled using [maturin](https://www.maturin.rs/)
-
-- Install rust (https://www.rust-lang.org/learn/get-started)
-- Install python
-- Install maturin : `pip install maturin`
-- Build everything : `maturin build`
+I ([@mgautierfr](https://github.com/mgautierfr)) am a freelance developer. All jubako projects are created in my free time, which competes with my paid work.
+If you want me to be able to spend more time on Jubako projects, please consider [sponsoring me](https://github.com/sponsors/jubako).
+You can also donate on [liberapay](https://liberapay.com/jubako/donate) or [buy me a coffee](https://buymeacoffee.com/jubako).
 
 ## License
 
-[MIT](https://mit-license.org/)
-
-
-## Support
-
-libarx, Arx and all Jubako project is developed on my spare time. If you liked it, please
-consider sponsor me. At your convinence: (Github)[https://github.com/sponsors/jubako],
-(liberapay)[https://liberapay.com/jubako/donate] or (buy me a coffe)[https://buymeacoffee.com/jubako]
+This project is licensed under the MIT License - see the [LICENSE-MIT](LICENSE-MIT) file for details.

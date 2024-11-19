@@ -1,68 +1,72 @@
-Zip2Arx
-=======
+# Zip2Arx: Zip to Arx Archive Converter
 
-`zip2arx` is a command line tool to convert zip archive to arx format.
+`zip2arx` is a command-line tool that converts zip archives to the Arx archive format.
+Arx ([https://crates.io/crates/arx](https://crates.io/crates/arx)) offers a modern and performant alternative to traditional archive formats.
+This tool streamlines the process of migrating existing zip archives to the benefits of Arx.
 
-[Arx](https://crates.io/crates/arx) is a new file archive format.
+## Installation
 
-Install zip2arx
-===============
+### Using Cargo
 
-Binaries for Windows, MacOS and Linux are available for [every release](https://github.com/jubako/arx/releases).
-You can also install zip2arx using Cargo:
+The recommended installation method is using Cargo, Rust's package manager:
 
-```
+```bash
 cargo install zip2arx arx
 ```
 
-You will need `arx` to read the archive.
+This command will install both `zip2arx` and its dependency, the `arx` library, which is necessary for reading and manipulating Arx archives.
 
 
-Use zip2arx
-===========
+### Pre-built Binaries
 
+Pre-built binaries for Windows, macOS, and Linux are available for each release on the [GitHub releases page](https://github.com/jubako/arx/releases). Download the appropriate binary for your operating system and place it in your system's PATH.
 
-Convert a zip archive
----------------------
+## Usage Examples
 
-Creating an archive is simple :
+**Converting a Zip Archive:**
 
-
-```
-zip2arx -o foo.arx foo.zip
+```bash
+zip2arx -o output.arx input.zip
 ```
 
-Read arx archive
-----------------
+This command converts `input.zip` to `output.arx`.
 
-See the arx documentation for full command.
+**Working with Arx Archives (using the `arx` command):**
 
-- List the content of the archive
+After converting to Arx, use the `arx` command to interact with the created archive.  Here are some examples:
 
-```
-arx list foo.arx | less
-```
+* **List archive contents:**
+  ```bash
+  arx list output.arx | less
+  ```
 
-- Extract the archive
+* **Extract the archive:**
+  ```bash
+  arx extract output.arx -C my_output_directory
+  ```
 
-```
-arx extract -f foo.arx -C my_out_dir
-```
+* **Extract a single file:**
+  ```bash
+  arx dump output.arx path/to/my/file.txt my_file.txt
+  ```
 
-- Extract only one file
+* **Mount the archive (Linux/macOS):**
+  ```bash
+  mkdir mount_point
+  arx mount output.arx mount_point
+  ```
+  Remember to unmount the archive using `umount mount_point` when finished.
 
+## Contributing
 
-```
-arx dump foo.arx my_directory/path/to/my_file > my_file
-```
+Contributions are welcome! Please open an issue or submit a pull request.
 
-- Mounting the archive
+## Sponsoring
 
-On linux and macOs, you can mount the archive using fuse.
+I ([@mgautierfr](https://github.com/mgautierfr)) am a freelance developer. All jubako projects are created in my free time, which competes with my paid work.
+If you want me to be able to spend more time on Jubako projects, please consider [sponsoring me](https://github.com/sponsors/jubako).
+You can also donate on [liberapay](https://liberapay.com/jubako/donate) or [buy me a coffee](https://buymeacoffee.com/jubako).
 
-```
-mkdir mount_point
-arx mount foo.arx mount_point
-```
+## License
 
-`arx` will be running until you unmount `mount_point`.
+This project is licensed under the MIT License - see the [LICENSE-MIT](LICENSE-MIT) file for details.
