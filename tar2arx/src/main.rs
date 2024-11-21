@@ -28,13 +28,13 @@ struct Cli {
     outfile: Option<PathBuf>,
 
     #[command(flatten)]
-    concat_mode: Option<arx::cmd_utils::ConcatMode>,
+    concat_mode: Option<jbk::cmd_utils::ConcatMode>,
 
     /// Set compression algorithm to use
     #[arg(
         short,
         long,
-        value_parser=arx::cmd_utils::compression_arg_parser,
+        value_parser=jbk::cmd_utils::compression_arg_parser,
         required=false,
         default_value = "zstd"
     )]
@@ -276,7 +276,7 @@ fn main() -> Result<()> {
     let args = Cli::parse();
 
     if args.list_compressions {
-        arx::cmd_utils::list_compressions();
+        jbk::cmd_utils::list_compressions();
         return Ok(());
     }
 

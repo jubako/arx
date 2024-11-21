@@ -33,7 +33,7 @@ struct Cli {
     outfile: Option<PathBuf>,
 
     #[command(flatten)]
-    concat_mode: Option<arx::cmd_utils::ConcatMode>,
+    concat_mode: Option<jbk::cmd_utils::ConcatMode>,
 
     /// Set compression algorithm to use
     #[arg(
@@ -265,7 +265,7 @@ fn main() -> jbk::Result<()> {
     let args = Cli::parse();
 
     if args.list_compressions {
-        arx::cmd_utils::list_compressions();
+        jbk::cmd_utils::list_compressions();
         return Ok(());
     }
 
