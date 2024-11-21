@@ -146,10 +146,10 @@ pub struct Options {
     no_recurse: bool,
 
     #[command(flatten)]
-    concat_mode: Option<arx::cmd_utils::ConcatMode>,
+    concat_mode: Option<jbk::cmd_utils::ConcatMode>,
 
     /// Set compression algorithm to use
-    #[arg(short,long, value_parser=arx::cmd_utils::compression_arg_parser, required=false, default_value = "zstd")]
+    #[arg(short,long, value_parser=jbk::cmd_utils::compression_arg_parser, required=false, default_value = "zstd")]
     compression: jbk::creator::Compression,
 
     /// List available compression algorithms
@@ -270,7 +270,7 @@ impl CachedSize {
 
 pub fn create(options: Options) -> Result<()> {
     if options.list_compressions {
-        arx::cmd_utils::list_compressions();
+        jbk::cmd_utils::list_compressions();
         return Ok(());
     }
 
@@ -284,6 +284,7 @@ pub fn create(options: Options) -> Result<()> {
     );
     let out_file = std::env::current_dir()?.join(out_file);
     check_output_path_writable(&out_file, options.force)?;
+
     info!("Creating archive {:?}", out_file);
     let file_list = options
         .file_list
