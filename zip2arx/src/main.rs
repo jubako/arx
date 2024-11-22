@@ -6,9 +6,20 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+const VERSION: &str = const_format::formatcp!(
+    "{}{}",
+    clap::crate_version!(),
+    git_version::git_version!(
+        args = ["--dirty=*", "--tags", "--always"],
+        fallback = "",
+        prefix = " (git:",
+        suffix = ")"
+    )
+);
+
 /// Convert a zip archive into an Arx archive.
 #[derive(Parser)]
-#[command(name = "tar2arx", author, version, about, long_about=None)]
+#[command(name = "tar2arx", author, version, long_version=VERSION, about, long_about=None)]
 struct Cli {
     /// Zip file to convert
     #[arg(

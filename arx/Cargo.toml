@@ -21,13 +21,14 @@ clap_complete.workspace = true
 indicatif.workspace = true
 human-panic.workspace = true
 anyhow.workspace = true
+git-version.workspace = true
+const_format.workspace = true
 env_logger = "0.10.0"
 log = "0.4.20"
 tempfile = "3.10.1"
 libc = "0.2.158"
 color-print = "0.3.7"
-git-version = "0.3.9"
-const_format = "0.2.33"
+
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5.0"
