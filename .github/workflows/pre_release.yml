@@ -216,6 +216,7 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
+        cd python
         gh release upload "$version" dist/*
 
   python-sdist:
@@ -237,4 +238,5 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
+        cd python
         gh release upload "$version" dist/*
