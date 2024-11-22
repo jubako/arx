@@ -8,11 +8,22 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+const VERSION: &str = const_format::formatcp!(
+    "{}{}",
+    clap::crate_version!(),
+    git_version::git_version!(
+        args = ["--dirty=*", "--tags", "--always"],
+        fallback = "",
+        prefix = " (git:",
+        suffix = ")"
+    )
+);
+
 /// Convert a tar archive into an Arx archive.
 ///
 /// The tar content (uncompressed) must be passed to stdin.
 #[derive(Parser)]
-#[command(name = "tar2arx", author, version, about, long_about=None)]
+#[command(name = "tar2arx", author, version, long_version=VERSION, about, long_about=None)]
 struct Cli {
     /// Tar file to convert
     #[arg(value_parser, value_hint=ValueHint::FilePath)]

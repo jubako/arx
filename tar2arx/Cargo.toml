@@ -21,6 +21,8 @@ clap_mangen.workspace = true
 clap_complete.workspace = true
 human-panic.workspace = true
 anyhow.workspace = true
+git-version.workspace = true
+const_format.workspace = true
 tar = "0.4.39"
 niffler = "2.5.0"
 ureq = { version = "2.9.6", optional = true }
