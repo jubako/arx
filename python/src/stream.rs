@@ -20,7 +20,7 @@ impl Stream {
             self.0.read_exact(slice).unwrap();
             Ok(())
         };
-        pyo3::types::PyBytes::new_bound_with(py, size, read_fn)
+        pyo3::types::PyBytes::new_with(py, size, read_fn)
     }
 
     /// Get the full size of the stream.

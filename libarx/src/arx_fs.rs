@@ -496,7 +496,13 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
         }
     }
 
-    fn getattr(&mut self, _req: &fuser::Request, ino: u64, reply: fuser::ReplyAttr) {
+    fn getattr(
+        &mut self,
+        _req: &fuser::Request,
+        ino: u64,
+        _fh: Option<u64>,
+        reply: fuser::ReplyAttr,
+    ) {
         self.stats.getattr();
         let ino = Ino::from(ino);
         match ino.try_into() {

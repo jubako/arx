@@ -27,7 +27,7 @@ bstr = "1.9.1"
 log = "0.4.22"
 
 [target.'cfg(not(windows))'.dependencies]
-fuser = { version = "0.14.0", optional = true }
+fuser = { version = "0.15.0", optional = true }
 
 [features]
 cmd_utils = [ "dep:clap"]
