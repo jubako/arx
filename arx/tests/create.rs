@@ -28,6 +28,7 @@ macro_rules! cmd {
     ("arx", $sub_command:literal, $($args:expr),*) => {{
         let arx_bin = env!("CARGO_BIN_EXE_arx");
         let mut command = std::process::Command::new(&arx_bin);
+        command.env("NO_COLOR", "1");
         cmd!("{cmd}", command, $sub_command, $($args),*)
     }};
     ($prog:literal, $($args:expr),*) => {{

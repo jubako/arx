@@ -10,7 +10,7 @@ use jbk::reader::MayMissPack;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::{PyOSError, PyUnicodeDecodeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyUnicode;
+use pyo3::types::PyString;
 
 /// An Arx archive.
 ///
@@ -66,7 +66,7 @@ impl Arx {
 #[pymethods]
 impl Arx {
     #[new]
-    fn py_new(path: Bound<PyUnicode>) -> PyResult<Self> {
+    fn py_new(path: Bound<PyString>) -> PyResult<Self> {
         let path: std::path::PathBuf = path.extract()?;
         match arx::Arx::new(path) {
             Ok(a) => Ok(Self::new(a)),

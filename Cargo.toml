@@ -11,7 +11,7 @@ homepage = "https://github.com/jubako/arx"
 license = "MIT"
 
 [workspace.dependencies]
-jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", features = ["clap"], version = "0.3.2-dev" }
+jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", features = ["clap"], version = "0.3.3" }
 clap = { version = "4.4.5", features = ["derive", "cargo"] }
 clap_mangen = "0.2.20"
 clap_complete = "4.5.0"
