@@ -1,3 +1,17 @@
+# Arx 0.3.2
+
+- `--version` option now includes the git commit.
+- `arx create` has a new option `--follow-symlink` telling if arx must follow symlink or
+  create the entry as a symlink.
+- Fix various small issues when creating a arx giving a file to add through a file list (`-L` option).
+- Check input paths given on command line before starting arx creation.
+- Add help content to `arx create --help`.
+- Add more testing on arx command line.
+- Fix 32bits compilation of python wrapping.
+- Fix python CI publishing.
+- Use `jbk::cmd_utils` instead of our own.
+- Update README
+
 # Arx 0.3.1
 
 - Use version 0.3.1 of Jubako
