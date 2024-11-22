@@ -176,6 +176,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        build: [linux, macos, windows]
+        include:
         - os: ubuntu-latest
           build: linux
         - os: macos-latest
