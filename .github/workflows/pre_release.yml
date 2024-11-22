@@ -172,14 +172,16 @@ jobs:
   python:
     name: Python wrapping
     needs: ['create-release']
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        - os: ubuntu-latest
+          build: linux
+        - os: macos-latest
+          build: macos
+        - os: windows-latest
+          build: windows
     steps:
     - uses: actions/setup-python@v5
       with:
@@ -212,7 +214,7 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
-        gh release upload "$version" ${{ env.ASSET }} ${{ env.ASSET_SUM }}
+        gh release upload "$version" dist/wheels-${{ matrix.build }}-*
 
   python-sdist:
     name: Python sdist
@@ -233,4 +235,4 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
-        gh release upload "$version" ${{ env.ASSET }} ${{ env.ASSET_SUM }}
+        gh release upload "$version" dist/wheels-sdist
