@@ -216,7 +216,7 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
-        gh release upload "$version" dist/wheels-${{ matrix.build }}-*
+        gh release upload "$version" dist/*
 
   python-sdist:
     name: Python sdist
@@ -237,4 +237,4 @@ jobs:
       shell: bash
       run: |
         version="${{ needs.create-release.outputs.version }}"
-        gh release upload "$version" dist/wheels-sdist
+        gh release upload "$version" dist/*
