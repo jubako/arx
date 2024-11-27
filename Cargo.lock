@@ -139,7 +139,6 @@ name = "arx"
 version = "0.3.2"
 dependencies = [
  "anyhow",
- "arx_test_dir",
  "clap",
  "clap_complete",
  "clap_mangen",
@@ -153,20 +152,10 @@ dependencies = [
  "jubako",
  "libarx",
  "libc",
- "log",
- "tempfile",
-]
-
-[[package]]
-name = "arx_test_dir"
-version = "0.1.0"
-source = "git+https://github.com/jubako/arx_test_dir.git#b818e3c70401edf731748577da376fccb6b2058c"
-dependencies = [
- "clap",
- "fuser 0.13.0",
- "libc",
  "lipsum",
+ "log",
  "rand",
+ "tempfile",
 ]
 
 [[package]]
@@ -704,21 +693,6 @@ dependencies = [
 
 [[package]]
 name = "fuser"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21370f84640642c8ea36dfb2a6bfc4c55941f476fcf431f6fef25a5ddcf0169b"
-dependencies = [
- "libc",
- "log",
- "memchr",
- "page_size 0.5.0",
- "pkg-config",
- "smallvec",
- "zerocopy 0.6.6",
-]
-
-[[package]]
-name = "fuser"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e469ac6d2cdfaeb56c5ede4dc00d8a24a4267d5eab9ab365ee783179087ab2e3"
@@ -727,7 +701,7 @@ dependencies = [
  "log",
  "memchr",
  "nix",
- "page_size 0.6.0",
+ "page_size",
  "pkg-config",
  "smallvec",
  "zerocopy 0.8.10",
@@ -1101,7 +1075,7 @@ dependencies = [
  "bstr",
  "clap",
  "epochs",
- "fuser 0.15.0",
+ "fuser",
  "fxhash",
  "jubako",
  "libc",
@@ -1334,16 +1308,6 @@ dependencies = [
  "log",
  "serde",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "page_size"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b7663cbd190cfd818d08efa8497f6cd383076688c49a391ef7c0d03cd12b561"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -2304,16 +2268,6 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "854e949ac82d619ee9a14c66a1b674ac730422372ccb759ce0c39cabcf2bf8e6"
-dependencies = [
- "byteorder",
- "zerocopy-derive 0.6.6",
-]
-
-[[package]]
-name = "zerocopy"
 version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
@@ -2329,17 +2283,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a13a42ed30c63171d820889b2981318736915150575b8d2d6dbee7edd68336ca"
 dependencies = [
  "zerocopy-derive 0.8.10",
-]
-
-[[package]]
-name = "zerocopy-derive"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "125139de3f6b9d625c39e2efdd73d41bdac468ccd556556440e322be0e1bbd91"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
