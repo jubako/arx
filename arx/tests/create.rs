@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, sync::LazyLock};
 
 use rand::prelude::*;
 use std::fs::{create_dir, write};
@@ -231,27 +231,29 @@ macro_rules! temp_tree {
     };
 }
 
-// Generate a fake directory with fake content.
-fn new_test_source() -> std::io::Result<tempfile::TempDir> {
-    temp_tree!(1, {
-        dir "sub_dir_a" {
-            text "file_2.txt" (500..1000),
-            loop  (10..50) { text "file{ctx}.txt" (500..1000) }
-        },
-        dir "sub_dir_b" {
-            loop 10 { bin "file{ctx}.bin" (5000..10000) },
-            loop 10 { link "link_to_file{ctx}" -> "file{ctx}.bin" },
-        },
-        link_dir "sub_dir_link" -> "sub_dir_b",
-        dir "empty_sub_dir" {},
-        loop dir_ctx=(1..5) {
-            dir "gen_sub_dir_{dir_ctx}" {
-                loop (1..10) { text "gen_sub_file_{dir_ctx}_{ctx}" (500..1000)},
-                loop (1..2) { dir "gen_sub_empty_dir_{ctx}{dir_ctx:0}" {} }
+static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
+    (|| -> std::io::Result<tempfile::TempDir> {
+        temp_tree!(1, {
+            dir "sub_dir_a" {
+                text "file_2.txt" (500..1000),
+                loop  (10..50) { text "file{ctx}.txt" (500..1000) }
+            },
+            dir "sub_dir_b" {
+                loop 10 { bin "file{ctx}.bin" (5000..10000) },
+                loop 10 { link "link_to_file{ctx}" -> "file{ctx}.bin" },
+            },
+            link_dir "sub_dir_link" -> "sub_dir_b",
+            dir "empty_sub_dir" {},
+            loop dir_ctx=(1..5) {
+                dir "gen_sub_dir_{dir_ctx}" {
+                    loop (1..10) { text "gen_sub_file_{dir_ctx}_{ctx}" (500..1000)},
+                    loop (1..2) { dir "gen_sub_empty_dir_{ctx}{dir_ctx:0}" {} }
+                }
             }
-        }
-    })
-}
+        })
+    })()
+    .unwrap()
+});
 
 macro_rules! cmd {
     ("{cmd}", $command:ident, $arg:expr) => {{
@@ -299,8 +301,7 @@ fn test_crate_non_existant_input() {
 fn test_crate_non_existant_output_directory() {
     use std::path::Path;
 
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir
@@ -338,8 +339,7 @@ fn test_crate_non_existant_output_directory() {
 fn test_crate_existant_output() {
     use std::path::Path;
 
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
@@ -407,8 +407,7 @@ fn test_crate_existant_output() {
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
 fn test_create_and_mount() {
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
@@ -442,8 +441,7 @@ fn test_create_and_mount() {
 
 #[test]
 fn test_create_and_extract() {
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
@@ -480,8 +478,7 @@ fn test_create_and_extract() {
 
 #[test]
 fn test_create_and_extract_filter() {
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
@@ -530,8 +527,7 @@ fn test_create_and_extract_filter() {
 
 #[test]
 fn test_create_and_extract_subdir() {
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
@@ -581,8 +577,7 @@ fn test_create_and_extract_subdir() {
 
 #[test]
 fn test_create_and_extract_subfile() {
-    let tmp_source_dir = new_test_source().unwrap();
-    let tmp_source_dir = tmp_source_dir.path();
+    let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_tmp_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tempdir should work");
     let arx_file = arx_tmp_dir.path().join("test.arx");
