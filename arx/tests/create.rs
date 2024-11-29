@@ -120,22 +120,7 @@ fn test_crate_existant_output() {
 #[test]
 fn test_create_and_mount() {
     let tmp_source_dir = SHARED_TEST_DIR.path();
-    temp_arx!(arx_file);
-    let output = cmd!(
-        "arx",
-        "create",
-        "--outfile",
-        &arx_file,
-        "-C",
-        tmp_source_dir.parent().unwrap(),
-        "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
-    );
-    println!("Out : {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err : {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
-    assert!(arx_file.is_file());
+    let arx_file = BASE_ARX_FILE.path();
 
     let mount_point = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     let arx = arx::Arx::new(arx_file).unwrap();
@@ -152,22 +137,7 @@ fn test_create_and_mount() {
 #[test]
 fn test_create_and_extract() {
     let tmp_source_dir = SHARED_TEST_DIR.path();
-    temp_arx!(arx_file);
-    let output = cmd!(
-        "arx",
-        "create",
-        "--outfile",
-        &arx_file,
-        "-C",
-        tmp_source_dir.parent().unwrap(),
-        "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
-    );
-    println!("Out : {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err : {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
-    assert!(arx_file.is_file());
+    let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     arx::extract(
@@ -187,22 +157,7 @@ fn test_create_and_extract() {
 #[test]
 fn test_create_and_extract_filter() {
     let tmp_source_dir = SHARED_TEST_DIR.path();
-    temp_arx!(arx_file);
-    let output = cmd!(
-        "arx",
-        "create",
-        "--outfile",
-        &arx_file,
-        "-C",
-        tmp_source_dir.parent().unwrap(),
-        "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
-    );
-    println!("Out : {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err : {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
-    assert!(arx_file.is_file());
+    let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir =
         tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR")).unwrap();
@@ -234,22 +189,7 @@ fn test_create_and_extract_filter() {
 #[test]
 fn test_create_and_extract_subdir() {
     let tmp_source_dir = SHARED_TEST_DIR.path();
-    temp_arx!(arx_file);
-    let output = cmd!(
-        "arx",
-        "create",
-        "--outfile",
-        &arx_file,
-        "-C",
-        tmp_source_dir.parent().unwrap(),
-        "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
-    );
-    println!("Out : {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err : {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
-    assert!(arx_file.is_file());
+    let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir =
         tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR")).unwrap();
@@ -281,23 +221,7 @@ fn test_create_and_extract_subdir() {
 
 #[test]
 fn test_create_and_extract_subfile() {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    temp_arx!(arx_file);
-    let output = cmd!(
-        "arx",
-        "create",
-        "--outfile",
-        &arx_file,
-        "-C",
-        tmp_source_dir.parent().unwrap(),
-        "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
-    );
-    println!("Out : {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err : {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
-    assert!(arx_file.is_file());
+    let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir =
         tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR")).unwrap();

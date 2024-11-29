@@ -1,7 +1,7 @@
 use std::{
     fs::{create_dir, write},
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
     sync::LazyLock,
 };
 
@@ -280,6 +280,46 @@ macro_rules! cmd {
         cmd!("{cmd}", command, $($args),*)
     }};
 }
+
+pub struct TmpArx {
+    _tmp: tempfile::TempDir,
+    path: PathBuf,
+}
+
+impl TmpArx {
+    pub(self) fn new(tmp_dir: tempfile::TempDir, path: PathBuf) -> Self {
+        Self {
+            _tmp: tmp_dir,
+            path,
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
+    let source_dir = SHARED_TEST_DIR.path();
+    let tmp_arx_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+        .expect("Creating tmpdir should work");
+    let tmp_arx = tmp_arx_dir.path().join("test.arx");
+    let output = cmd!(
+        "arx",
+        "create",
+        "--outfile",
+        &tmp_arx,
+        "-C",
+        source_dir.parent().unwrap(),
+        "--strip-prefix",
+        source_dir.file_name().unwrap(),
+        source_dir.file_name().unwrap()
+    );
+    println!("Out: {}", String::from_utf8(output.stdout).unwrap());
+    println!("Err: {}", String::from_utf8(output.stderr).unwrap());
+    assert!(output.status.success());
+    TmpArx::new(tmp_arx_dir, tmp_arx)
+});
 
 #[macro_export]
 macro_rules! temp_arx {
