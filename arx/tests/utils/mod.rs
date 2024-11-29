@@ -280,3 +280,15 @@ macro_rules! cmd {
         cmd!("{cmd}", command, $($args),*)
     }};
 }
+
+#[macro_export]
+macro_rules! temp_arx {
+    ($name:ident) => {
+        temp_arx!($name, "test.arx")
+    };
+    ($name:ident, $filename:literal) => {
+        let tmp_arx_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
+            .expect("Creating tmpdir should work");
+        let $name = tmp_arx_dir.path().join($filename);
+    };
+}
