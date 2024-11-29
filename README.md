@@ -18,6 +18,11 @@ especially for large archives and random access operations. Arx archives can eve
 
 ### Using Cargo
 
+Fist, make sure you have the following dependencies installed:
+
+* fuse3: you need the `fuse3.pc` pkgconfig file, depending on your OS it should
+come with the development package of the `fuse3` library
+
 The easiest way to install `arx` is via Cargo, Rust's package manager:
 
 ```bash
