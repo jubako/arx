@@ -9,6 +9,7 @@ authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
 repository = "https://github.com/jubako/arx"
 homepage = "https://github.com/jubako/arx"
 license = "MIT"
+license-file = "LICENSE-MIT"
 
 [workspace.dependencies]
 jbk = { git = "https://github.com/jubako/jubako.git", package = "jubako", features = ["clap"], version = "0.3.3" }
