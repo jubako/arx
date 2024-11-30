@@ -1,5 +1,6 @@
 mod utils;
 
+use format_bytes::format_bytes;
 use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -70,6 +71,7 @@ fn test_extract() -> Result {
         Default::default(),
         true,
         false,
+        arx::Overwrite::Error,
     )?;
     assert!(tree_equal(tmp_source_dir, extract_dir)?);
     Ok(())
@@ -87,6 +89,7 @@ fn test_extract_filter() -> Result {
         ["sub_dir_a".into()].into(),
         true,
         true,
+        arx::Overwrite::Error,
     )?;
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
@@ -139,5 +142,174 @@ fn test_extract_subfile() -> Result {
         b"",
         b"[ERROR arx] Error : sub_dir_a/file1.txt must be a directory\n",
     );
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_skip() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=skip"
+    )
+    .check_output(b"", b"");
+    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_warn() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=warn"
+    )
+    .check_output(
+        b"",
+        &format_bytes!(
+            b"File {} already exists.\n",
+            join!((extract_dir.path()) / "sub_dir_a" / "file1.txt")
+                .to_str()
+                .unwrap()
+                .as_bytes()
+        ),
+    );
+    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_newer_true() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    // File is modified far before arx created, so we should overwrite
+    filetime::set_file_mtime(
+        join!((extract_dir.path()) / "sub_dir_a" / "file1.txt"),
+        filetime::FileTime::from_unix_time(0, 0),
+    )?;
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=newer"
+    )
+    .check_output(b"", b"");
+    assert!(tree_equal(tmp_source_dir, extract_dir)?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_newer_false() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    // File is created after source, so we should not overwrite
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=newer"
+    )
+    .check_output(b"", b"");
+    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_overwrite() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=overwrite"
+    )
+    .check_output(b"", b"");
+    assert!(tree_equal(tmp_source_dir, extract_dir)?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_existing_content_error() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = temp_tree!(0, {
+        dir "sub_dir_a" {
+            text "file1.txt" 0
+        }
+    });
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
+        extract_dir.path(),
+        "--overwrite=error"
+    )
+    .check_fail(
+        b"",
+        &format_bytes!(
+            b"[ERROR arx] Error : Unknown error : File {} already exists.\n",
+            join!((extract_dir.path()) / "sub_dir_a" / "file1.txt")
+                .to_str()
+                .unwrap()
+                .as_bytes()
+        ),
+    );
+    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
     Ok(())
 }

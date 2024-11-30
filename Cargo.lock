@@ -146,6 +146,7 @@ dependencies = [
  "const_format",
  "daemonize",
  "env_logger",
+ "filetime",
  "format-bytes",
  "git-version",
  "human-panic",

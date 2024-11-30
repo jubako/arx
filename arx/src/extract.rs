@@ -70,6 +70,9 @@ pub struct Options {
         required_unless_present("infile")
     )]
     infile_old: Option<PathBuf>,
+
+    #[arg(long, default_value = "warn")]
+    overwrite: arx::Overwrite,
 }
 
 fn get_files_to_extract(options: &Options) -> jbk::Result<HashSet<arx::PathBuf>> {
@@ -108,6 +111,7 @@ pub fn extract(options: Options) -> anyhow::Result<()> {
             files_to_extract,
             options.recurse,
             options.progress,
+            options.overwrite,
         )?,
         Some(p) => {
             let relative_path = arx::Path::from_path(&p)?;
@@ -120,6 +124,7 @@ pub fn extract(options: Options) -> anyhow::Result<()> {
                     files_to_extract,
                     options.recurse,
                     options.progress,
+                    options.overwrite,
                 )?,
                 _ => return Err(anyhow::anyhow!("{} must be a directory", p.display())),
             }
