@@ -6,7 +6,9 @@ use utils::*;
 #[test]
 fn test_crate_non_existant_input() {
     temp_arx!(arx_file);
-    let output = cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir");
+    let output = cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir")
+        .output()
+        .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     println!("Out : {}", stdout);
@@ -34,7 +36,9 @@ fn test_crate_non_existant_output_directory() {
         "--strip-prefix",
         tmp_source_dir.file_name().unwrap(),
         tmp_source_dir.file_name().unwrap()
-    );
+    )
+    .output()
+    .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     println!("Out : {}", stdout);
@@ -72,7 +76,9 @@ fn test_crate_existant_output() {
         "--strip-prefix",
         tmp_source_dir.file_name().unwrap(),
         tmp_source_dir.file_name().unwrap()
-    );
+    )
+    .output()
+    .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     println!("Out : {}", stdout);
@@ -100,7 +106,9 @@ fn test_crate_existant_output() {
         tmp_source_dir.file_name().unwrap(),
         tmp_source_dir.file_name().unwrap(),
         "--force"
-    );
+    )
+    .output()
+    .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     println!("Out : {}", stdout);

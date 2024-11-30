@@ -39,7 +39,9 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
         "--strip-prefix",
         source_dir.file_name().unwrap(),
         source_dir.file_name().unwrap()
-    );
+    )
+    .output()
+    .unwrap();
     println!("Out: {}", String::from_utf8(output.stdout).unwrap());
     println!("Err: {}", String::from_utf8(output.stderr).unwrap());
     assert!(output.status.success());
@@ -58,7 +60,9 @@ fn test_mount() {
     let _mount_handle = arxfs
         .spawn_mount("Test mounted arx".into(), mount_point.path())
         .unwrap();
-    let output = cmd!("diff", "-r", tmp_source_dir, mount_point.path());
+    let output = cmd!("diff", "-r", tmp_source_dir, mount_point.path())
+        .output()
+        .unwrap();
     println!("Out : {}", String::from_utf8(output.stdout).unwrap());
     println!("Err: {}", String::from_utf8(output.stderr).unwrap());
     assert!(output.status.success());
@@ -78,7 +82,9 @@ fn test_extract() {
         false,
     )
     .unwrap();
-    let output = cmd!("diff", "-r", tmp_source_dir, extract_dir.path());
+    let output = cmd!("diff", "-r", tmp_source_dir, extract_dir.path())
+        .output()
+        .unwrap();
     println!("Out : {}", String::from_utf8(output.stdout).unwrap());
     println!("Err: {}", String::from_utf8(output.stderr).unwrap());
     assert!(output.status.success());
@@ -110,7 +116,9 @@ fn test_extract_filter() {
         source_sub_dir.display(),
         extract_sub_dir.display()
     );
-    let output = cmd!("diff", "-r", &source_sub_dir, &extract_sub_dir);
+    let output = cmd!("diff", "-r", &source_sub_dir, &extract_sub_dir)
+        .output()
+        .unwrap();
     println!("Out : {}", String::from_utf8(output.stdout).unwrap());
     println!("Err: {}", String::from_utf8(output.stderr).unwrap());
     assert!(output.status.success());
@@ -132,7 +140,9 @@ fn test_extract_subdir() {
         "sub_dir_a",
         "-C",
         extract_dir.path()
-    );
+    )
+    .output()
+    .unwrap();
     assert!(output.status.success());
 
     let mut source_sub_dir = tmp_source_dir.to_path_buf();
@@ -143,7 +153,9 @@ fn test_extract_subdir() {
         source_sub_dir.display(),
         extract_dir.path().display()
     );
-    let output = cmd!("diff", "-r", &source_sub_dir, extract_dir.path());
+    let output = cmd!("diff", "-r", &source_sub_dir, extract_dir.path())
+        .output()
+        .unwrap();
     println!("Out: {}", String::from_utf8(output.stdout).unwrap());
     println!("Err: {}", String::from_utf8(output.stderr).unwrap());
     assert!(output.status.success());
@@ -164,6 +176,8 @@ fn test_extract_subfile() {
         "sub_dir_a/file1.txt",
         "-C",
         extract_dir.path()
-    );
+    )
+    .output()
+    .unwrap();
     assert!(!output.status.success());
 }

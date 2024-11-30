@@ -263,7 +263,7 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
 macro_rules! cmd {
     ("{cmd}", $command:ident, $arg:expr) => {{
         $command.arg($arg);
-        $command.output().expect("Launching arx command should work.")
+        $command
     }};
     ("{cmd}", $command:ident, $arg:expr, $($args:expr),+) => {{
         $command.arg($arg);
