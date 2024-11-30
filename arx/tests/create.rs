@@ -4,13 +4,11 @@ use std::{io::Read, path::Path};
 use utils::*;
 
 #[test]
-fn test_crate_non_existant_input() {
+fn test_crate_non_existant_input() -> Result {
     temp_arx!(arx_file);
-    let output = cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    let output = cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir").output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     println!("Out : {}", stdout);
     println!("Err : {}", stderr);
     assert_eq!("", stdout);
@@ -20,10 +18,11 @@ fn test_crate_non_existant_input() {
     );
     assert!(!output.status.success());
     assert!(!arx_file.exists());
+    Ok(())
 }
 
 #[test]
-fn test_crate_non_existant_output_directory() {
+fn test_crate_non_existant_output_directory() -> Result {
     let tmp_source_dir = SHARED_TEST_DIR.path();
     temp_arx!(arx_file, "non_existant_directory/test.arx");
     let output = cmd!(
@@ -37,10 +36,9 @@ fn test_crate_non_existant_output_directory() {
         tmp_source_dir.file_name().unwrap(),
         tmp_source_dir.file_name().unwrap()
     )
-    .output()
-    .unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    .output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     println!("Out : {}", stdout);
     println!("Err : {}", stderr);
     assert_eq!("", stdout);
@@ -53,16 +51,17 @@ fn test_crate_non_existant_output_directory() {
     );
     assert!(!output.status.success());
     assert!(!arx_file.exists());
+    Ok(())
 }
 
 #[test]
-fn test_crate_existant_output() {
+fn test_crate_existant_output() -> Result {
     let tmp_source_dir = SHARED_TEST_DIR.path();
     temp_arx!(arx_file);
     {
         use std::io::Write;
-        let mut f = std::fs::File::create(&arx_file).unwrap();
-        f.write_all(b"Some dummy content").unwrap();
+        let mut f = std::fs::File::create(&arx_file)?;
+        f.write_all(b"Some dummy content")?;
     }
 
     // Try to write without --force
@@ -77,10 +76,9 @@ fn test_crate_existant_output() {
         tmp_source_dir.file_name().unwrap(),
         tmp_source_dir.file_name().unwrap()
     )
-    .output()
-    .unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    .output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     println!("Out : {}", stdout);
     println!("Err : {}", stderr);
     assert_eq!("", stdout);
@@ -92,7 +90,7 @@ fn test_crate_existant_output() {
         stderr
     );
     assert!(!output.status.success());
-    assert_eq!(std::fs::read(&arx_file).unwrap(), b"Some dummy content");
+    assert_eq!(std::fs::read(&arx_file)?, b"Some dummy content");
 
     // Try to write without --force
     let output = cmd!(
@@ -107,19 +105,19 @@ fn test_crate_existant_output() {
         tmp_source_dir.file_name().unwrap(),
         "--force"
     )
-    .output()
-    .unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    .output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     println!("Out : {}", stdout);
     println!("Err : {}", stderr);
     assert_eq!("", stdout);
     assert_eq!("", stderr);
     assert!(output.status.success());
     {
-        let mut f = std::fs::File::open(&arx_file).unwrap();
+        let mut f = std::fs::File::open(&arx_file)?;
         let mut buf = [0; 10];
-        f.read_exact(&mut buf).unwrap();
+        f.read_exact(&mut buf)?;
         assert_eq!(&buf, b"jbkC\x00\x00\x00\x00\x00\x02");
     }
+    Ok(())
 }

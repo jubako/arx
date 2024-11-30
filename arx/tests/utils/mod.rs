@@ -6,6 +6,7 @@ use std::{
 };
 
 use rand::prelude::*;
+pub type Result = anyhow::Result<()>;
 
 #[cfg(unix)]
 fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
@@ -74,7 +75,7 @@ macro_rules! temp_tree {
     ($seed:literal, { $($what:tt)* }) => {
         {
             let temp_path =
-            tempfile::TempDir::with_prefix_in("source_", env!("CARGO_TARGET_TMPDIR")).unwrap();
+            tempfile::TempDir::with_prefix_in("source_", env!("CARGO_TARGET_TMPDIR"))?;
             let mut rng = SmallRng::seed_from_u64($seed);
             temp_tree!(@instr, temp_path.path(), rng, [], $($what)*);
             Ok(temp_path)
