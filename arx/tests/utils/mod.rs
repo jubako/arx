@@ -1,29 +1,23 @@
-use std::{
-    fs::{create_dir, write},
-    io::Read,
-    path::Path,
-    process::Command,
-    sync::LazyLock,
-};
+use std::{io::Read, path::Path, process::Command, sync::LazyLock};
 
 use rand::prelude::*;
 pub type Result = anyhow::Result<()>;
 
 #[cfg(unix)]
-fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, path)
 }
 #[cfg(unix)]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, path)
 }
 
 #[cfg(windows)]
-fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::windows::fs::symlink_file(target, path)
 }
 #[cfg(windows)]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(target, path)
 }
 
@@ -77,9 +71,9 @@ macro_rules! temp_tree {
         {
             let temp_path =
             tempfile::TempDir::with_prefix_in("source_", env!("CARGO_TARGET_TMPDIR"))?;
-            let mut rng = SmallRng::seed_from_u64($seed);
+            let mut rng = <rand::rngs::SmallRng as rand::SeedableRng>::seed_from_u64($seed);
             temp_tree!(@instr, temp_path.path(), rng, [], $($what)*);
-            Ok(temp_path)
+            temp_path
         }
     };
 
@@ -160,13 +154,13 @@ macro_rules! temp_tree {
 
     // Empty dir
     (@dir, $path:expr, $rng:ident, $context:tt, $sub_path:tt, { }) => {
-        create_dir($path.join(&temp_tree!(@ctx, $sub_path, $context)))?;
+        std::fs::create_dir($path.join(&temp_tree!(@ctx, $sub_path, $context)))?;
     };
     // Dir with content
     (@dir, $path:expr, $rng:ident, $context:tt, $sub_path:tt, { $($what:tt)+ }) => {
         {
             let new_path = $path.join(&temp_tree!(@ctx, $sub_path, $context));
-            create_dir(&new_path)?;
+            std::fs::create_dir(&new_path)?;
             temp_tree!(@instr, new_path, $rng, $context, $($what)+) ;
         }
     };
@@ -175,7 +169,7 @@ macro_rules! temp_tree {
     (@text, $path:expr, $rng:ident, $context:tt, $sub_path:tt, $len:tt) => {
         let len = temp_tree!(@num, $rng, $len);
         let data = lipsum::lipsum_words_with_rng(&mut $rng, len);
-        write($path.join(&temp_tree!(@ctx, $sub_path, $context)), data.as_bytes())?;
+        std::fs::write($path.join(&temp_tree!(@ctx, $sub_path, $context)), data.as_bytes())?;
     };
 
 
@@ -192,7 +186,7 @@ macro_rules! temp_tree {
         {
             let sub_path = $path.join(temp_tree!(@ctx, $sub_path, $context));
             let target = temp_tree!(@ctx, $target, $context);
-            symlink(sub_path, target)?;
+            $crate::utils::symlink(sub_path, target)?;
         }
     };
 
@@ -201,7 +195,7 @@ macro_rules! temp_tree {
         {
             let sub_path = $path.join(temp_tree!(@ctx, $sub_path, $context));
             let target = temp_tree!(@ctx, $target, $context);
-            symlink_dir(sub_path, target)?;
+            $crate::utils::symlink_dir(sub_path, target)?;
         }
     };
 
@@ -239,7 +233,7 @@ macro_rules! temp_tree {
 
 pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
     (|| -> std::io::Result<tempfile::TempDir> {
-        temp_tree!(1, {
+        Ok(temp_tree!(1, {
             dir "sub_dir_a" {
                 text "file_2.txt" (500..1000),
                 loop  (10..50) { text "file{ctx}.txt" (500..1000) }
@@ -256,7 +250,7 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
                     loop (1..2) { dir "gen_sub_empty_dir_{ctx}{dir_ctx:0}" {} }
                 }
             }
-        })
+        }))
     })()
     .unwrap()
 });
@@ -329,7 +323,7 @@ pub fn tree_equal<P: AsRef<Path>, Q: AsRef<Path>>(a: P, b: Q) -> anyhow::Result<
             "Diff failed between {a} and {b}:\n{err}",
             a = a.display(),
             b = b.display(),
-            err = String::from_utf8_lossy(&output.stderr)
+            err = String::from_utf8_lossy(&output.stdout)
         );
         Ok(false)
     }
@@ -346,19 +340,22 @@ impl CheckCommand for Command {
     fn check_output(&mut self, stdout: &[u8], stderr: &[u8]) {
         println!("Running command {self:?}");
         let output = self.output().expect("Running command should work.");
-        assert_eq!(
-            output.stdout,
-            stdout,
-            "Output is {}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        assert_eq!(
-            output.stderr,
-            stderr,
-            "Err is {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(output.status.success());
+        if !output.status.success() || output.stdout != stdout || output.stderr != stderr {
+            println!("Command failed. Status is {}", output.status);
+            println!(
+                "Output is {}\nExpected is {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(stdout)
+            );
+            println!(
+                "Err is {}\nExpected is {}",
+                String::from_utf8_lossy(&output.stderr),
+                String::from_utf8_lossy(stderr)
+            );
+            panic!("Running command {self:?} fails.")
+        } else {
+            println!("Command run succeed.");
+        }
     }
     fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
         println!("Running command {self:?}");
@@ -366,14 +363,16 @@ impl CheckCommand for Command {
         assert_eq!(
             output.stdout,
             stdout,
-            "Output is {}",
-            String::from_utf8_lossy(&output.stdout)
+            "Output is {}\nExpected is {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(stdout),
         );
         assert_eq!(
             output.stderr,
             stderr,
-            "Err is {}",
-            String::from_utf8_lossy(&output.stderr)
+            "Err is {}\nExpected is {}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(stderr)
         );
         assert!(!output.status.success());
     }
