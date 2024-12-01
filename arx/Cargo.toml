@@ -33,9 +33,11 @@ color-print = "0.3.7"
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5.0"
 
-[target.'cfg(not(windows))'.dev-dependencies]
-arx_test_dir = { git = "https://github.com/jubako/arx_test_dir.git", features = ["fuse"] }
+[dev-dependencies]
+rand = { version = "0.8.5", features = ["small_rng"]}
+lipsum = "0.9.0"
 tempfile = "3.8.0"
+format-bytes = "0.3.0"
 
 [features]
 default = ["zstd", "fuse"]
