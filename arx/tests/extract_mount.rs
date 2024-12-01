@@ -58,7 +58,7 @@ fn test_mount() -> Result {
     let arx = arx::Arx::new(arx_file)?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    let output = cmd!("diff", "-r", tmp_source_dir, mount_point.path()).output()?;
+    let output = run!(output, "diff", "-r", tmp_source_dir, mount_point.path());
     println!("Out: {}", String::from_utf8(output.stdout)?);
     println!("Err: {}", String::from_utf8(output.stderr)?);
     assert!(output.status.success());
@@ -78,7 +78,7 @@ fn test_extract() -> Result {
         true,
         false,
     )?;
-    let output = cmd!("diff", "-r", tmp_source_dir, extract_dir.path()).output()?;
+    let output = run!(output, "diff", "-r", tmp_source_dir, extract_dir.path());
     println!("Out : {}", String::from_utf8(output.stdout)?);
     println!("Err: {}", String::from_utf8(output.stderr)?);
     assert!(output.status.success());
@@ -109,7 +109,7 @@ fn test_extract_filter() -> Result {
         source_sub_dir.display(),
         extract_sub_dir.display()
     );
-    let output = cmd!("diff", "-r", &source_sub_dir, &extract_sub_dir).output()?;
+    let output = run!(output, "diff", "-r", &source_sub_dir, &extract_sub_dir);
     println!("Out : {}", String::from_utf8(output.stdout)?);
     println!("Err: {}", String::from_utf8(output.stderr)?);
     assert!(output.status.success());
@@ -123,7 +123,8 @@ fn test_extract_subdir() -> Result {
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
-    let output = cmd!(
+    let output = run!(
+        output,
         "arx",
         "extract",
         &arx_file,
@@ -131,8 +132,7 @@ fn test_extract_subdir() -> Result {
         "sub_dir_a",
         "-C",
         extract_dir.path()
-    )
-    .output()?;
+    );
     assert!(output.status.success());
 
     let mut source_sub_dir = tmp_source_dir.to_path_buf();
@@ -143,7 +143,7 @@ fn test_extract_subdir() -> Result {
         source_sub_dir.display(),
         extract_dir.path().display()
     );
-    let output = cmd!("diff", "-r", &source_sub_dir, extract_dir.path()).output()?;
+    let output = run!(output, "diff", "-r", &source_sub_dir, extract_dir.path());
     println!("Out: {}", String::from_utf8(output.stdout)?);
     println!("Err: {}", String::from_utf8(output.stderr)?);
     assert!(output.status.success());
@@ -156,7 +156,8 @@ fn test_extract_subfile() -> Result {
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
-    let output = cmd!(
+    let output = run!(
+        output,
         "arx",
         "extract",
         &arx_file,
@@ -164,8 +165,7 @@ fn test_extract_subfile() -> Result {
         "sub_dir_a/file1.txt",
         "-C",
         extract_dir.path()
-    )
-    .output()?;
+    );
     assert!(!output.status.success());
     Ok(())
 }

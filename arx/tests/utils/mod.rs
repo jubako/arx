@@ -283,6 +283,29 @@ macro_rules! cmd {
 }
 
 #[macro_export]
+macro_rules! run {
+    (status, $prog:tt, $($args:expr),+) => {
+        {
+            let mut command = cmd!($prog, $($args),+);
+            command.status()?
+        }
+    };
+    (output, $prog:tt, $($args:expr),+) => {
+        {
+            let mut command = cmd!($prog, $($args),+);
+            command.output()?
+        }
+    };
+    (spawn, $prog:tt, $($args:expr),+) => {
+        {
+            let mut command = cmd!($prog, $($args),+);
+            command.spawn()?
+        }
+    };
+
+}
+
+#[macro_export]
 macro_rules! temp_arx {
     ($name:ident) => {
         temp_arx!($name, "test.arx")
