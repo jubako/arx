@@ -33,7 +33,6 @@ mod inner {
 #[cfg(unix)]
 fn main() -> jbk::Result<()> {
     use inner::*;
-    use log::error;
 
     human_panic::setup_panic!(human_panic::Metadata::new(
         env!("CARGO_PKG_NAME"),
@@ -43,7 +42,7 @@ fn main() -> jbk::Result<()> {
     let args = Cli::parse();
 
     if args.option.contains(&"rw".into()) {
-        error!("arx cannot be mounted rw");
+        eprintln!("arx cannot be mounted rw");
         return Err("arx cannot be mounted rw".into());
     }
 

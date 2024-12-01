@@ -34,7 +34,6 @@ mod inner {
 #[cfg(unix)]
 fn main() -> ExitCode {
     use inner::*;
-    use log::{error, info};
 
     human_panic::setup_panic!(human_panic::Metadata::new(
         env!("CARGO_PKG_NAME"),
@@ -46,18 +45,18 @@ fn main() -> ExitCode {
     match env::current_exe() {
         Ok(exe_path) => {
             if args.verbose > 0 {
-                info!("Auto Mount archive {:?} in {:?}", exe_path, args.mountdir);
+                print!("Auto Mount archive {:?} in {:?}", exe_path, args.mountdir);
             }
             match mount(exe_path, args.mountdir) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => match e.error {
                     jbk::ErrorKind::NotAJbk => {
-                        error!("Impossible to locate a Jubako archive in the executable.");
-                        error!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
+                        eprintln!("Impossible to locate a Jubako archive in the executable.");
+                        eprintln!("This binary is not intented to be directly used, you must put a Jubako archive at its end.");
                         ExitCode::FAILURE
                     }
                     _ => {
-                        error!("Error: {e}");
+                        eprintln!("Error: {e}");
                         ExitCode::FAILURE
                     }
                 },

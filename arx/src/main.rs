@@ -8,7 +8,6 @@ mod mount;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
-use log::error;
 use std::process::ExitCode;
 
 const VERSION: &str = const_format::formatcp!(
@@ -146,7 +145,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            error!("Error : {e:#}");
+            eprintln!("Error : {e:#}");
             ExitCode::FAILURE
         }
     }

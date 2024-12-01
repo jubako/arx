@@ -138,10 +138,7 @@ fn test_extract_subfile() -> Result {
         "-C",
         extract_dir.path()
     )
-    .check_fail(
-        b"",
-        b"[ERROR arx] Error : sub_dir_a/file1.txt must be a directory\n",
-    );
+    .check_fail(b"", b"Error : sub_dir_a/file1.txt must be a directory\n");
     Ok(())
 }
 
@@ -303,7 +300,7 @@ fn test_extract_existing_content_error() -> Result {
     .check_fail(
         b"",
         &format_bytes!(
-            b"[ERROR arx] Error : Unknown error : File {} already exists.\n",
+            b"Error : Unknown error : File {} already exists.\n",
             join!((extract_dir.path()) / "sub_dir_a" / "file1.txt")
                 .to_str()
                 .unwrap()
