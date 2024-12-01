@@ -29,7 +29,7 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
     let tmp_arx_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tmpdir should work");
     let tmp_arx = tmp_arx_dir.path().join("test.arx");
-    let output = cmd!(
+    cmd!(
         "arx",
         "create",
         "--outfile",
@@ -40,11 +40,7 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
         source_dir.file_name().unwrap(),
         source_dir.file_name().unwrap()
     )
-    .output()
-    .unwrap();
-    println!("Out: {}", String::from_utf8(output.stdout).unwrap());
-    println!("Err: {}", String::from_utf8(output.stderr).unwrap());
-    assert!(output.status.success());
+    .check();
     TmpArx::new(tmp_arx_dir, tmp_arx)
 });
 
@@ -109,8 +105,7 @@ fn test_extract_subdir() -> Result {
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
-    let output = run!(
-        output,
+    cmd!(
         "arx",
         "extract",
         &arx_file,
@@ -118,8 +113,8 @@ fn test_extract_subdir() -> Result {
         "sub_dir_a",
         "-C",
         extract_dir.path()
-    );
-    assert!(output.status.success());
+    )
+    .check_output(b"", b"");
 
     let mut source_sub_dir = tmp_source_dir.to_path_buf();
     source_sub_dir.push("sub_dir_a");
@@ -134,8 +129,7 @@ fn test_extract_subfile() -> Result {
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
-    let output = run!(
-        output,
+    cmd!(
         "arx",
         "extract",
         &arx_file,
@@ -143,7 +137,10 @@ fn test_extract_subfile() -> Result {
         "sub_dir_a/file1.txt",
         "-C",
         extract_dir.path()
+    )
+    .check_fail(
+        b"",
+        b"[ERROR arx] Error : sub_dir_a/file1.txt must be a directory\n",
     );
-    assert!(!output.status.success());
     Ok(())
 }

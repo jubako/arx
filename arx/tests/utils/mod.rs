@@ -2,6 +2,7 @@ use std::{
     fs::{create_dir, write},
     io::Read,
     path::Path,
+    process::Command,
     sync::LazyLock,
 };
 
@@ -302,7 +303,6 @@ macro_rules! run {
             command.spawn()?
         }
     };
-
 }
 
 #[macro_export]
@@ -332,5 +332,54 @@ pub fn tree_equal<P: AsRef<Path>, Q: AsRef<Path>>(a: P, b: Q) -> anyhow::Result<
             err = String::from_utf8_lossy(&output.stderr)
         );
         Ok(false)
+    }
+}
+
+#[allow(dead_code)]
+pub trait CheckCommand {
+    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]);
+    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]);
+    fn check(&mut self);
+}
+
+impl CheckCommand for Command {
+    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]) {
+        println!("Running command {self:?}");
+        let output = self.output().expect("Running command should work.");
+        assert_eq!(
+            output.stdout,
+            stdout,
+            "Output is {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert_eq!(
+            output.stderr,
+            stderr,
+            "Err is {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.status.success());
+    }
+    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
+        println!("Running command {self:?}");
+        let output = self.output().expect("Running command should work.");
+        assert_eq!(
+            output.stdout,
+            stdout,
+            "Output is {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert_eq!(
+            output.stderr,
+            stderr,
+            "Err is {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!output.status.success());
+    }
+    fn check(&mut self) {
+        println!("Running command {self:?}");
+        let status = self.status().expect("Running command should work.");
+        assert!(status.success());
     }
 }
