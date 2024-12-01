@@ -383,3 +383,21 @@ impl CheckCommand for Command {
         assert!(status.success());
     }
 }
+
+#[macro_export]
+macro_rules! join {
+    ($first:tt / $($args:tt)/+) => {
+        {
+            let mut path = $first.to_path_buf();
+            join!(@append, path, $($args),+);
+            path
+        }
+    };
+    (@append, $path:ident, $args:expr) => {
+        $path.push($args);
+    };
+    (@append, $path:ident, $args:expr, $($left:expr),+) => {
+        $path.push($args);
+        join!(@append, $path, $($left),+)
+    };
+}

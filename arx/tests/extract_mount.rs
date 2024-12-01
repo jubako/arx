@@ -89,10 +89,8 @@ fn test_extract_filter() -> Result {
         true,
     )?;
 
-    let mut source_sub_dir = tmp_source_dir.to_path_buf();
-    source_sub_dir.push("sub_dir_a");
-    let mut extract_sub_dir = extract_dir.path().to_path_buf();
-    extract_sub_dir.push("sub_dir_a");
+    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+    let extract_sub_dir = join!((extract_dir.path()) / "sub_dir_a");
 
     assert!(tree_equal(source_sub_dir, extract_sub_dir)?);
     Ok(())
@@ -116,8 +114,7 @@ fn test_extract_subdir() -> Result {
     )
     .check_output(b"", b"");
 
-    let mut source_sub_dir = tmp_source_dir.to_path_buf();
-    source_sub_dir.push("sub_dir_a");
+    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
     assert!(tree_equal(source_sub_dir, extract_dir)?);
     Ok(())
