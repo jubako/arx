@@ -58,10 +58,7 @@ fn test_mount() -> Result {
     let arx = arx::Arx::new(arx_file)?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    let output = run!(output, "diff", "-r", tmp_source_dir, mount_point.path());
-    println!("Out: {}", String::from_utf8(output.stdout)?);
-    println!("Err: {}", String::from_utf8(output.stderr)?);
-    assert!(output.status.success());
+    assert!(tree_equal(tmp_source_dir, mount_point)?);
     Ok(())
 }
 
@@ -78,10 +75,7 @@ fn test_extract() -> Result {
         true,
         false,
     )?;
-    let output = run!(output, "diff", "-r", tmp_source_dir, extract_dir.path());
-    println!("Out : {}", String::from_utf8(output.stdout)?);
-    println!("Err: {}", String::from_utf8(output.stderr)?);
-    assert!(output.status.success());
+    assert!(tree_equal(tmp_source_dir, extract_dir)?);
     Ok(())
 }
 
@@ -104,15 +98,7 @@ fn test_extract_filter() -> Result {
     let mut extract_sub_dir = extract_dir.path().to_path_buf();
     extract_sub_dir.push("sub_dir_a");
 
-    println!(
-        "Diff {} and {}",
-        source_sub_dir.display(),
-        extract_sub_dir.display()
-    );
-    let output = run!(output, "diff", "-r", &source_sub_dir, &extract_sub_dir);
-    println!("Out : {}", String::from_utf8(output.stdout)?);
-    println!("Err: {}", String::from_utf8(output.stderr)?);
-    assert!(output.status.success());
+    assert!(tree_equal(source_sub_dir, extract_sub_dir)?);
     Ok(())
 }
 
@@ -138,15 +124,7 @@ fn test_extract_subdir() -> Result {
     let mut source_sub_dir = tmp_source_dir.to_path_buf();
     source_sub_dir.push("sub_dir_a");
 
-    println!(
-        "Diff {} and {}",
-        source_sub_dir.display(),
-        extract_dir.path().display()
-    );
-    let output = run!(output, "diff", "-r", &source_sub_dir, extract_dir.path());
-    println!("Out: {}", String::from_utf8(output.stdout)?);
-    println!("Err: {}", String::from_utf8(output.stderr)?);
-    assert!(output.status.success());
+    assert!(tree_equal(source_sub_dir, extract_dir)?);
     Ok(())
 }
 

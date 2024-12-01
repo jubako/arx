@@ -316,3 +316,21 @@ macro_rules! temp_arx {
         let $name = tmp_arx_dir.path().join($filename);
     };
 }
+
+#[allow(dead_code)]
+pub fn tree_equal<P: AsRef<Path>, Q: AsRef<Path>>(a: P, b: Q) -> anyhow::Result<bool> {
+    let a = a.as_ref();
+    let b = b.as_ref();
+    let output = run!(output, "diff", "-r", a, b);
+    if output.status.success() {
+        Ok(true)
+    } else {
+        println!(
+            "Diff failed between {a} and {b}:\n{err}",
+            a = a.display(),
+            b = b.display(),
+            err = String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(false)
+    }
+}
