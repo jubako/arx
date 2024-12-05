@@ -41,7 +41,7 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
         source_dir.file_name().unwrap(),
         source_dir.file_name().unwrap()
     )
-    .check();
+    .check_output(b"", b"");
     TmpArx::new(tmp_arx_dir, tmp_arx)
 });
 

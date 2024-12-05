@@ -252,7 +252,7 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
             }
         }))
     })()
-    .unwrap()
+    .expect("Error creating the directory tree")
 });
 
 #[macro_export]
