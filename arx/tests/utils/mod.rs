@@ -386,11 +386,15 @@ impl CheckCommand for Command {
 #[macro_export]
 macro_rules! join {
     ($first:tt / $($args:tt)/+) => {
+        join!(@init, $first, $($args),+)
+    };
+    (@init, $first:expr, $($args:tt),+) => {
         {
-            let mut path = $first.to_path_buf();
+            let mut path:PathBuf = AsRef::<Path>::as_ref(&$first).to_path_buf();
             join!(@append, path, $($args),+);
             path
         }
+
     };
     (@append, $path:ident, $args:expr) => {
         $path.push($args);

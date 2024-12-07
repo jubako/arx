@@ -93,7 +93,7 @@ fn test_extract_filter() -> Result {
     )?;
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
-    let extract_sub_dir = join!((extract_dir.path()) / "sub_dir_a");
+    let extract_sub_dir = join!(extract_dir / "sub_dir_a");
 
     assert!(tree_equal(source_sub_dir, extract_sub_dir)?);
     Ok(())
@@ -189,7 +189,7 @@ fn test_extract_existing_content_warn() -> Result {
         b"",
         &format_bytes!(
             b"File {} already exists.\n",
-            join!((extract_dir.path()) / "sub_dir_a" / "file1.txt")
+            join!(extract_dir / "sub_dir_a" / "file1.txt")
                 .to_str()
                 .unwrap()
                 .as_bytes()
@@ -212,7 +212,7 @@ fn test_extract_existing_content_newer_true() -> Result {
 
     // File is modified far before arx created, so we should overwrite
     filetime::set_file_mtime(
-        join!((extract_dir.path()) / "sub_dir_a" / "file1.txt"),
+        join!(extract_dir / "sub_dir_a" / "file1.txt"),
         filetime::FileTime::from_unix_time(0, 0),
     )?;
 
@@ -301,7 +301,7 @@ fn test_extract_existing_content_error() -> Result {
         b"",
         &format_bytes!(
             b"Error : Unknown error : File {} already exists.\n",
-            join!((extract_dir.path()) / "sub_dir_a" / "file1.txt")
+            join!(extract_dir / "sub_dir_a" / "file1.txt")
                 .to_str()
                 .unwrap()
                 .as_bytes()
