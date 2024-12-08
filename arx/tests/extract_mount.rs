@@ -2,6 +2,7 @@ mod utils;
 
 use format_bytes::format_bytes;
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -55,7 +56,7 @@ fn test_mount() -> Result {
     let arx = arx::Arx::new(arx_file)?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    assert!(tree_equal(tmp_source_dir, mount_point)?);
+    assert!(tree_diff(mount_point, tmp_source_dir, Default::default())?);
     Ok(())
 }
 
@@ -73,7 +74,7 @@ fn test_extract() -> Result {
         false,
         arx::Overwrite::Error,
     )?;
-    assert!(tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }
 
@@ -95,7 +96,11 @@ fn test_extract_filter() -> Result {
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
     let extract_sub_dir = join!(extract_dir / "sub_dir_a");
 
-    assert!(tree_equal(source_sub_dir, extract_sub_dir)?);
+    assert!(tree_diff(
+        extract_sub_dir,
+        source_sub_dir,
+        Default::default()
+    )?);
     Ok(())
 }
 
@@ -119,7 +124,7 @@ fn test_extract_subdir() -> Result {
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
-    assert!(tree_equal(source_sub_dir, extract_dir)?);
+    assert!(tree_diff(extract_dir, source_sub_dir, Default::default())?);
     Ok(())
 }
 
@@ -149,9 +154,10 @@ fn test_extract_existing_content_skip() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
+    let file_content = std::fs::read(join!(extract_dir / "sub_dir_a" / "existing_file"))?;
 
     cmd!(
         "arx",
@@ -162,7 +168,11 @@ fn test_extract_existing_content_skip() -> Result {
         "--overwrite=skip"
     )
     .check_output(b"", b"");
-    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(
+        extract_dir,
+        tmp_source_dir,
+        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+    )?);
     Ok(())
 }
 
@@ -173,9 +183,10 @@ fn test_extract_existing_content_warn() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
+    let file_content = std::fs::read(join!(extract_dir / "sub_dir_a" / "existing_file"))?;
 
     cmd!(
         "arx",
@@ -189,13 +200,17 @@ fn test_extract_existing_content_warn() -> Result {
         b"",
         &format_bytes!(
             b"File {} already exists.\n",
-            join!(extract_dir / "sub_dir_a" / "file1.txt")
+            join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()
                 .as_bytes()
         ),
     );
-    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(
+        extract_dir,
+        tmp_source_dir,
+        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+    )?);
     Ok(())
 }
 
@@ -206,13 +221,13 @@ fn test_extract_existing_content_newer_true() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
 
     // File is modified far before arx created, so we should overwrite
     filetime::set_file_mtime(
-        join!(extract_dir / "sub_dir_a" / "file1.txt"),
+        join!(extract_dir / "sub_dir_a" / "existing_file"),
         filetime::FileTime::from_unix_time(0, 0),
     )?;
 
@@ -225,7 +240,7 @@ fn test_extract_existing_content_newer_true() -> Result {
         "--overwrite=newer"
     )
     .check_output(b"", b"");
-    assert!(tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }
 
@@ -237,9 +252,11 @@ fn test_extract_existing_content_newer_false() -> Result {
     // File is created after source, so we should not overwrite
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
+
+    let file_content = std::fs::read(join!(extract_dir / "sub_dir_a" / "existing_file"))?;
 
     cmd!(
         "arx",
@@ -250,7 +267,11 @@ fn test_extract_existing_content_newer_false() -> Result {
         "--overwrite=newer"
     )
     .check_output(b"", b"");
-    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(
+        extract_dir,
+        tmp_source_dir,
+        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+    )?);
     Ok(())
 }
 
@@ -261,7 +282,7 @@ fn test_extract_existing_content_overwrite() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
 
@@ -274,7 +295,7 @@ fn test_extract_existing_content_overwrite() -> Result {
         "--overwrite=overwrite"
     )
     .check_output(b"", b"");
-    assert!(tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }
 
@@ -285,7 +306,7 @@ fn test_extract_existing_content_error() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "file1.txt" 0
+            text "existing_file" 100
         }
     });
 
@@ -301,12 +322,12 @@ fn test_extract_existing_content_error() -> Result {
         b"",
         &format_bytes!(
             b"Error : Unknown error : File {} already exists.\n",
-            join!(extract_dir / "sub_dir_a" / "file1.txt")
+            join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()
                 .as_bytes()
         ),
     );
-    assert!(!tree_equal(tmp_source_dir, extract_dir)?);
+    assert!(!tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }

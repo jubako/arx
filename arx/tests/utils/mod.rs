@@ -1,7 +1,11 @@
+mod tree_diff;
 use std::{io::Read, path::Path, process::Command, sync::LazyLock};
 
 use rand::prelude::*;
 pub type Result = anyhow::Result<()>;
+
+#[allow(unused_imports)]
+pub use tree_diff::tree_diff;
 
 #[cfg(unix)]
 pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
@@ -235,6 +239,7 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
     (|| -> std::io::Result<tempfile::TempDir> {
         Ok(temp_tree!(1, {
             dir "sub_dir_a" {
+                text "existing_file" 50,
                 text "file_2.txt" (500..1000),
                 loop  (10..50) { text "file{ctx}.txt" (500..1000) }
             },
@@ -309,24 +314,6 @@ macro_rules! temp_arx {
             .expect("Creating tmpdir should work");
         let $name = tmp_arx_dir.path().join($filename);
     };
-}
-
-#[allow(dead_code)]
-pub fn tree_equal<P: AsRef<Path>, Q: AsRef<Path>>(a: P, b: Q) -> anyhow::Result<bool> {
-    let a = a.as_ref();
-    let b = b.as_ref();
-    let output = run!(output, "diff", "-r", a, b);
-    if output.status.success() {
-        Ok(true)
-    } else {
-        println!(
-            "Diff failed between {a} and {b}:\n{err}",
-            a = a.display(),
-            b = b.display(),
-            err = String::from_utf8_lossy(&output.stdout)
-        );
-        Ok(false)
-    }
 }
 
 #[allow(dead_code)]
