@@ -85,7 +85,7 @@ fn test_crate_existant_output() -> Result {
         tmp_source_dir.file_name().unwrap(),
         "--force"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     {
         let mut f = std::fs::File::open(&arx_file)?;
         let mut buf = [0; 10];

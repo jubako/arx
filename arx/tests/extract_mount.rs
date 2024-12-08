@@ -42,7 +42,7 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
         source_dir.file_name().unwrap(),
         source_dir.file_name().unwrap()
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     TmpArx::new(tmp_arx_dir, tmp_arx)
 });
 
@@ -120,7 +120,7 @@ fn test_extract_subdir() -> Result {
         "-C",
         extract_dir.path()
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
@@ -167,7 +167,7 @@ fn test_extract_existing_content_skip() -> Result {
         extract_dir.path(),
         "--overwrite=skip"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
@@ -197,14 +197,14 @@ fn test_extract_existing_content_warn() -> Result {
         "--overwrite=warn"
     )
     .check_output(
-        b"",
-        &format_bytes!(
+        Some(b""),
+        Some(&format_bytes!(
             b"File {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()
                 .as_bytes()
-        ),
+        )),
     );
     assert!(tree_diff(
         extract_dir,
@@ -239,7 +239,7 @@ fn test_extract_existing_content_newer_true() -> Result {
         extract_dir.path(),
         "--overwrite=newer"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }
@@ -266,7 +266,7 @@ fn test_extract_existing_content_newer_false() -> Result {
         extract_dir.path(),
         "--overwrite=newer"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
@@ -294,7 +294,7 @@ fn test_extract_existing_content_overwrite() -> Result {
         extract_dir.path(),
         "--overwrite=overwrite"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
     Ok(())
 }

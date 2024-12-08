@@ -319,26 +319,37 @@ macro_rules! temp_arx {
 #[allow(dead_code)]
 pub trait CheckCommand {
     fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]);
-    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]);
+    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>);
     fn check(&mut self);
 }
 
 impl CheckCommand for Command {
-    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]) {
+    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>) {
         println!("Running command {self:?}");
         let output = self.output().expect("Running command should work.");
-        if !output.status.success() || output.stdout != stdout || output.stderr != stderr {
+        let mut success = output.status.success();
+        if let Some(stdout) = stdout {
+            success &= output.stdout == stdout
+        }
+        if let Some(stderr) = stderr {
+            success &= output.stderr == stderr
+        }
+        if !success {
             println!("Command failed. Status is {}", output.status);
-            println!(
-                "Output is {}\nExpected is {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(stdout)
-            );
-            println!(
-                "Err is {}\nExpected is {}",
-                String::from_utf8_lossy(&output.stderr),
-                String::from_utf8_lossy(stderr)
-            );
+            if let Some(stdout) = stdout {
+                println!(
+                    "Output is {}\nExpected is {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(stdout)
+                );
+            }
+            if let Some(stderr) = stderr {
+                println!(
+                    "Err is {}\nExpected is {}",
+                    String::from_utf8_lossy(&output.stderr),
+                    String::from_utf8_lossy(stderr)
+                );
+            }
             panic!("Running command {self:?} fails.")
         } else {
             println!("Command run succeed.");
@@ -364,9 +375,7 @@ impl CheckCommand for Command {
         assert!(!output.status.success());
     }
     fn check(&mut self) {
-        println!("Running command {self:?}");
-        let status = self.status().expect("Running command should work.");
-        assert!(status.success());
+        self.check_output(None, None)
     }
 }
 
