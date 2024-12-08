@@ -56,8 +56,8 @@ This is equivalent to a (virtual) cd in the root directory before walking the tr
 #[command(after_long_help=AFTER_LONG_HELP)]
 pub struct Options {
     /// Archive to read
-    #[arg(value_hint=ValueHint::FilePath, required_unless_present("infile_old"))]
-    infile: Option<PathBuf>,
+    #[arg(value_hint=ValueHint::FilePath)]
+    infile: PathBuf,
 
     /// Directory in which extract the archive. (Default to current directory)
     #[arg(short = 'C', required = false, value_hint=ValueHint::DirPath)]
@@ -90,15 +90,6 @@ pub struct Options {
 
     #[arg(from_global)]
     verbose: u8,
-
-    #[arg(
-        short = 'f',
-        long = "file",
-        hide = true,
-        conflicts_with("infile"),
-        required_unless_present("infile")
-    )]
-    infile_old: Option<PathBuf>,
 
     #[arg(long, default_value = "warn")]
     overwrite: arx::Overwrite,
@@ -163,14 +154,9 @@ pub fn extract(options: Options) -> anyhow::Result<()> {
         Some(o) => o,
         None => current_dir()?,
     };
-    let infile = if let Some(ref infile) = options.infile_old {
-        infile
-    } else {
-        options.infile.as_ref().unwrap()
-    };
 
-    let arx = arx::Arx::new(infile)?;
-    info!("Extract archive {:?} in {:?}", &infile, outdir);
+    let arx = arx::Arx::new(&options.infile)?;
+    info!("Extract archive {:?} in {:?}", &options.infile, outdir);
 
     match options.root_dir {
         None => arx::extract_arx(&arx, &outdir, filter, options.progress, options.overwrite)?,
