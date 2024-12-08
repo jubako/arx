@@ -80,6 +80,20 @@ fn test_extract() -> Result {
 }
 
 #[test]
+fn test_extract_same_dir() -> Result {
+    // This test that everything go "fine" when extracting an archive in the source directory.
+    // But here we don't want to take the risk to polute our source directory shared with other tests.
+    // So we extract twice the same archive in the same place.
+
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
+    cmd!("arx", "extract", &arx_file, "-C", extract_dir.path()).check_output(Some(b""), Some(b""));
+    cmd!("arx", "extract", &arx_file, "-C", extract_dir.path()).check_output(Some(b""), None);
+    Ok(())
+}
+
+#[test]
 fn test_extract_filter() -> Result {
     let tmp_source_dir = SHARED_TEST_DIR.path();
     let arx_file = BASE_ARX_FILE.path();
