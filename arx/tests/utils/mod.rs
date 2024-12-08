@@ -5,7 +5,7 @@ use rand::prelude::*;
 pub type Result = anyhow::Result<()>;
 
 #[allow(unused_imports)]
-pub use tree_diff::tree_diff;
+pub use tree_diff::{tree_diff, ExistingExpected};
 
 #[cfg(unix)]
 pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
@@ -240,6 +240,7 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
         Ok(temp_tree!(1, {
             dir "sub_dir_a" {
                 text "existing_file" 50,
+                link "existing_link" -> "existing_file",
                 text "file_2.txt" (500..1000),
                 loop  (10..50) { text "file{ctx}.txt" (500..1000) }
             },

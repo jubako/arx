@@ -3,7 +3,7 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashMap},
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs::{read_dir, read_link, symlink_metadata, File, ReadDir},
     io::{self, BufReader, Read},
     ops::Deref,
@@ -145,12 +145,12 @@ impl Iterator for EntryIterator {
 
 struct ExceptionMatcher {
     current_path: PathBuf,
-    exceptions: HashMap<PathBuf, Option<Vec<u8>>>,
+    exceptions: HashMap<PathBuf, ExistingExpected>,
     equal: bool,
 }
 
 impl ExceptionMatcher {
-    fn new(exceptions: HashMap<PathBuf, Option<Vec<u8>>>) -> Self {
+    fn new(exceptions: HashMap<PathBuf, ExistingExpected>) -> Self {
         Self {
             current_path: PathBuf::new(),
             exceptions,
@@ -198,12 +198,22 @@ impl ExceptionMatcher {
                 );
                 self.equal = false;
             }
-            Some(None) => {
+            Some(ExistingExpected::Existing) => {
                 //Nothing to do
             }
-            Some(Some(expected)) => {
+            Some(ExistingExpected::Content(expected)) => {
                 let found_content = std::fs::read(entry_tested.path()).unwrap();
                 if found_content != *expected {
+                    println!(
+                        "Entry {} is different than expected content",
+                        entry_tested.path().display()
+                    );
+                    self.equal = false;
+                }
+            }
+            Some(ExistingExpected::Link(target)) => {
+                let found_target = std::fs::read_link(entry_tested.path()).unwrap();
+                if found_target != *target {
                     println!(
                         "Entry {} is different than expected content",
                         entry_tested.path().display()
@@ -244,6 +254,12 @@ fn diff(tested: &Entry, reference: &Entry, matcher: &mut ExceptionMatcher) {
     }
 }
 
+pub enum ExistingExpected {
+    Existing,
+    Content(Vec<u8>),
+    Link(OsString),
+}
+
 /// Compare two paths and return true if they are identical.
 /// Identical means:
 /// - Same kind
@@ -261,7 +277,7 @@ fn diff(tested: &Entry, reference: &Entry, matcher: &mut ExceptionMatcher) {
 pub fn tree_diff(
     tested: impl AsRef<Path>,
     reference: impl AsRef<Path>,
-    exceptions: HashMap<PathBuf, Option<Vec<u8>>>,
+    exceptions: HashMap<PathBuf, ExistingExpected>,
 ) -> std::io::Result<bool> {
     let mut matcher = ExceptionMatcher::new(exceptions);
     diff(

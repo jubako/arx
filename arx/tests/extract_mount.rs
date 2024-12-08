@@ -3,6 +3,7 @@ mod utils;
 use format_bytes::format_bytes;
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -154,7 +155,8 @@ fn test_extract_existing_content_skip() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
     let file_content = std::fs::read(join!(extract_dir / "sub_dir_a" / "existing_file"))?;
@@ -171,7 +173,16 @@ fn test_extract_existing_content_skip() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+        HashMap::from([
+            (
+                join!("sub_dir_a" / "existing_file"),
+                ExistingExpected::Content(file_content)
+            ),
+            (
+                join!("sub_dir_a" / "existing_link"),
+                ExistingExpected::Link(OsStr::new("other_file").to_os_string())
+            )
+        ])
     )?);
     Ok(())
 }
@@ -183,7 +194,8 @@ fn test_extract_existing_content_warn() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
     let file_content = std::fs::read(join!(extract_dir / "sub_dir_a" / "existing_file"))?;
@@ -199,8 +211,12 @@ fn test_extract_existing_content_warn() -> Result {
     .check_output(
         Some(b""),
         Some(&format_bytes!(
-            b"File {} already exists.\n",
+            b"File {} already exists.\nLink {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
+                .to_str()
+                .unwrap()
+                .as_bytes(),
+            join!(extract_dir / "sub_dir_a" / "existing_link")
                 .to_str()
                 .unwrap()
                 .as_bytes()
@@ -209,7 +225,16 @@ fn test_extract_existing_content_warn() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+        HashMap::from([
+            (
+                join!("sub_dir_a" / "existing_file"),
+                ExistingExpected::Content(file_content)
+            ),
+            (
+                join!("sub_dir_a" / "existing_link"),
+                ExistingExpected::Link(OsStr::new("other_file").to_os_string())
+            )
+        ])
     )?);
     Ok(())
 }
@@ -221,13 +246,19 @@ fn test_extract_existing_content_newer_true() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
 
     // File is modified far before arx created, so we should overwrite
     filetime::set_file_mtime(
         join!(extract_dir / "sub_dir_a" / "existing_file"),
+        filetime::FileTime::from_unix_time(0, 0),
+    )?;
+    filetime::set_symlink_file_times(
+        join!(extract_dir / "sub_dir_a" / "existing_link"),
+        filetime::FileTime::from_unix_time(0, 0),
         filetime::FileTime::from_unix_time(0, 0),
     )?;
 
@@ -252,7 +283,8 @@ fn test_extract_existing_content_newer_false() -> Result {
     // File is created after source, so we should not overwrite
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
 
@@ -270,7 +302,16 @@ fn test_extract_existing_content_newer_false() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([(join!("sub_dir_a" / "existing_file"), Some(file_content))])
+        HashMap::from([
+            (
+                join!("sub_dir_a" / "existing_file"),
+                ExistingExpected::Content(file_content)
+            ),
+            (
+                join!("sub_dir_a" / "existing_link"),
+                ExistingExpected::Link(OsStr::new("other_file").to_os_string())
+            )
+        ])
     )?);
     Ok(())
 }
@@ -282,7 +323,8 @@ fn test_extract_existing_content_overwrite() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
 
@@ -306,7 +348,8 @@ fn test_extract_existing_content_error() -> Result {
 
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
-            text "existing_file" 100
+            text "existing_file" 100,
+            link "existing_link" -> "other_file"
         }
     });
 

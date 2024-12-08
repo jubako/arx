@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::fs::{create_dir, create_dir_all, OpenOptions};
+use std::fs::{create_dir_all, OpenOptions};
 use std::io::{ErrorKind, Write};
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
@@ -24,6 +24,7 @@ struct FileEntry {
 struct Link {
     path: String,
     target: String,
+    mtime: u64,
 }
 
 struct FileBuilder {
@@ -60,6 +61,7 @@ impl Builder for FileBuilder {
 struct LinkBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
     link_property: jbk::reader::builder::ArrayProperty,
+    mtime_property: jbk::reader::builder::IntProperty,
 }
 
 impl Builder for LinkBuilder {
@@ -69,6 +71,7 @@ impl Builder for LinkBuilder {
         Self {
             path_property: properties.path_property.clone(),
             link_property: properties.link_target_property.clone(),
+            mtime_property: properties.mtime_property.clone(),
         }
     }
 
@@ -80,9 +83,11 @@ impl Builder for LinkBuilder {
         let target_prop = self.link_property.create(reader)?;
         let mut target = vec![];
         target_prop.resolve_to_vec(&mut target)?;
+        let mtime = self.mtime_property.create(reader)?;
         Ok(Link {
             path: String::from_utf8(path)?,
             target: String::from_utf8(target)?,
+            mtime,
         })
     }
 }
@@ -197,11 +202,9 @@ where
             return Ok(false);
         }
         let abs_path = self.abs_path(current_path);
-        if !abs_path.try_exists()? {
-            create_dir(&abs_path)?;
-            if self.print_progress {
-                println!("{}", abs_path.display());
-            }
+        create_dir_all(&abs_path)?;
+        if self.print_progress {
+            println!("{}", abs_path.display());
         }
         Ok(true)
     }
@@ -310,13 +313,43 @@ where
         Ok(())
     }
     fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> jbk::Result<()> {
+        let mut current_path = current_path.clone();
         current_path.push(&link.path);
-        if !self.should_extract(current_path, false) {
+        if !self.should_extract(&current_path, false) {
             current_path.pop();
             return Ok(());
         }
-        let abs_path = self.abs_path(current_path);
-        symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+        let abs_path = self.abs_path(&current_path);
+        if let Err(e) = symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path)) {
+            match e.kind() {
+                ErrorKind::AlreadyExists => match self.overwrite {
+                    Overwrite::Skip => return Ok(()),
+                    Overwrite::Warn => {
+                        eprintln!("Link {} already exists.", abs_path.display());
+                        return Ok(());
+                    }
+                    Overwrite::Newer => {
+                        let existing_metadata = std::fs::symlink_metadata(&abs_path)?;
+                        let existing_time = existing_metadata.modified()?;
+                        let new_time = SystemTime::UNIX_EPOCH + Duration::from_secs(link.mtime);
+                        if new_time >= existing_time {
+                            std::fs::remove_file(&abs_path)?;
+                            symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    Overwrite::Overwrite => {
+                        std::fs::remove_file(&abs_path)?;
+                        symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                    }
+                    Overwrite::Error => {
+                        return Err(format!("Link {} already exists.", abs_path.display()).into());
+                    }
+                },
+                _ => return Err(e.into()),
+            }
+        }
         if self.print_progress {
             println!("{}", abs_path.display());
         }
