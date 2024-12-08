@@ -1,29 +1,27 @@
-use std::{
-    fs::{create_dir, write},
-    io::Read,
-    path::Path,
-    process::Command,
-    sync::LazyLock,
-};
+mod tree_diff;
+use std::{io::Read, path::Path, process::Command, sync::LazyLock};
 
 use rand::prelude::*;
 pub type Result = anyhow::Result<()>;
 
+#[allow(unused_imports)]
+pub use tree_diff::{tree_diff, ExistingExpected};
+
 #[cfg(unix)]
-fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, path)
 }
 #[cfg(unix)]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, path)
 }
 
 #[cfg(windows)]
-fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::windows::fs::symlink_file(target, path)
 }
 #[cfg(windows)]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
+pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(target, path)
 }
 
@@ -77,9 +75,9 @@ macro_rules! temp_tree {
         {
             let temp_path =
             tempfile::TempDir::with_prefix_in("source_", env!("CARGO_TARGET_TMPDIR"))?;
-            let mut rng = SmallRng::seed_from_u64($seed);
+            let mut rng = <rand::rngs::SmallRng as rand::SeedableRng>::seed_from_u64($seed);
             temp_tree!(@instr, temp_path.path(), rng, [], $($what)*);
-            Ok(temp_path)
+            temp_path
         }
     };
 
@@ -160,13 +158,13 @@ macro_rules! temp_tree {
 
     // Empty dir
     (@dir, $path:expr, $rng:ident, $context:tt, $sub_path:tt, { }) => {
-        create_dir($path.join(&temp_tree!(@ctx, $sub_path, $context)))?;
+        std::fs::create_dir($path.join(&temp_tree!(@ctx, $sub_path, $context)))?;
     };
     // Dir with content
     (@dir, $path:expr, $rng:ident, $context:tt, $sub_path:tt, { $($what:tt)+ }) => {
         {
             let new_path = $path.join(&temp_tree!(@ctx, $sub_path, $context));
-            create_dir(&new_path)?;
+            std::fs::create_dir(&new_path)?;
             temp_tree!(@instr, new_path, $rng, $context, $($what)+) ;
         }
     };
@@ -175,7 +173,7 @@ macro_rules! temp_tree {
     (@text, $path:expr, $rng:ident, $context:tt, $sub_path:tt, $len:tt) => {
         let len = temp_tree!(@num, $rng, $len);
         let data = lipsum::lipsum_words_with_rng(&mut $rng, len);
-        write($path.join(&temp_tree!(@ctx, $sub_path, $context)), data.as_bytes())?;
+        std::fs::write($path.join(&temp_tree!(@ctx, $sub_path, $context)), data.as_bytes())?;
     };
 
 
@@ -192,7 +190,7 @@ macro_rules! temp_tree {
         {
             let sub_path = $path.join(temp_tree!(@ctx, $sub_path, $context));
             let target = temp_tree!(@ctx, $target, $context);
-            symlink(sub_path, target)?;
+            $crate::utils::symlink(sub_path, target)?;
         }
     };
 
@@ -201,7 +199,7 @@ macro_rules! temp_tree {
         {
             let sub_path = $path.join(temp_tree!(@ctx, $sub_path, $context));
             let target = temp_tree!(@ctx, $target, $context);
-            symlink_dir(sub_path, target)?;
+            $crate::utils::symlink_dir(sub_path, target)?;
         }
     };
 
@@ -239,8 +237,10 @@ macro_rules! temp_tree {
 
 pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
     (|| -> std::io::Result<tempfile::TempDir> {
-        temp_tree!(1, {
+        Ok(temp_tree!(1, {
             dir "sub_dir_a" {
+                text "existing_file" 50,
+                link "existing_link" -> "existing_file",
                 text "file_2.txt" (500..1000),
                 loop  (10..50) { text "file{ctx}.txt" (500..1000) }
             },
@@ -256,9 +256,9 @@ pub static SHARED_TEST_DIR: LazyLock<tempfile::TempDir> = LazyLock::new(|| {
                     loop (1..2) { dir "gen_sub_empty_dir_{ctx}{dir_ctx:0}" {} }
                 }
             }
-        })
+        }))
     })()
-    .unwrap()
+    .expect("Error creating the directory tree")
 });
 
 #[macro_export]
@@ -318,47 +318,43 @@ macro_rules! temp_arx {
 }
 
 #[allow(dead_code)]
-pub fn tree_equal<P: AsRef<Path>, Q: AsRef<Path>>(a: P, b: Q) -> anyhow::Result<bool> {
-    let a = a.as_ref();
-    let b = b.as_ref();
-    let output = run!(output, "diff", "-r", a, b);
-    if output.status.success() {
-        Ok(true)
-    } else {
-        println!(
-            "Diff failed between {a} and {b}:\n{err}",
-            a = a.display(),
-            b = b.display(),
-            err = String::from_utf8_lossy(&output.stderr)
-        );
-        Ok(false)
-    }
-}
-
-#[allow(dead_code)]
 pub trait CheckCommand {
     fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]);
-    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]);
+    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>);
     fn check(&mut self);
 }
 
 impl CheckCommand for Command {
-    fn check_output(&mut self, stdout: &[u8], stderr: &[u8]) {
+    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>) {
         println!("Running command {self:?}");
         let output = self.output().expect("Running command should work.");
-        assert_eq!(
-            output.stdout,
-            stdout,
-            "Output is {}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        assert_eq!(
-            output.stderr,
-            stderr,
-            "Err is {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(output.status.success());
+        let mut success = output.status.success();
+        if let Some(stdout) = stdout {
+            success &= output.stdout == stdout
+        }
+        if let Some(stderr) = stderr {
+            success &= output.stderr == stderr
+        }
+        if !success {
+            println!("Command failed. Status is {}", output.status);
+            if let Some(stdout) = stdout {
+                println!(
+                    "Output is {}\nExpected is {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(stdout)
+                );
+            }
+            if let Some(stderr) = stderr {
+                println!(
+                    "Err is {}\nExpected is {}",
+                    String::from_utf8_lossy(&output.stderr),
+                    String::from_utf8_lossy(stderr)
+                );
+            }
+            panic!("Running command {self:?} fails.")
+        } else {
+            println!("Command run succeed.");
+        }
     }
     fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
         println!("Running command {self:?}");
@@ -366,32 +362,36 @@ impl CheckCommand for Command {
         assert_eq!(
             output.stdout,
             stdout,
-            "Output is {}",
-            String::from_utf8_lossy(&output.stdout)
+            "Output is {}\nExpected is {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(stdout),
         );
         assert_eq!(
             output.stderr,
             stderr,
-            "Err is {}",
-            String::from_utf8_lossy(&output.stderr)
+            "Err is {}\nExpected is {}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(stderr)
         );
         assert!(!output.status.success());
     }
     fn check(&mut self) {
-        println!("Running command {self:?}");
-        let status = self.status().expect("Running command should work.");
-        assert!(status.success());
+        self.check_output(None, None)
     }
 }
 
 #[macro_export]
 macro_rules! join {
     ($first:tt / $($args:tt)/+) => {
+        join!(@init, $first, $($args),+)
+    };
+    (@init, $first:expr, $($args:tt),+) => {
         {
-            let mut path = $first.to_path_buf();
+            let mut path:PathBuf = AsRef::<Path>::as_ref(&$first).to_path_buf();
             join!(@append, path, $($args),+);
             path
         }
+
     };
     (@append, $path:ident, $args:expr) => {
         $path.push($args);

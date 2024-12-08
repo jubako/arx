@@ -9,7 +9,7 @@ fn test_crate_non_existant_input() -> Result {
     temp_arx!(arx_file);
     cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir").check_fail(
         b"",
-        b"[ERROR arx] Error : Input non_existant_dir path doesn't exist or cannot be accessed\n",
+        b"Error : Input non_existant_dir path doesn't exist or cannot be accessed\n",
     );
     assert!(!arx_file.exists());
     Ok(())
@@ -33,7 +33,7 @@ fn test_crate_non_existant_output_directory() -> Result {
     .check_fail(
         b"",
         &format_bytes!(
-            b"[ERROR arx] Error : Directory {} doesn't exist\n",
+            b"Error : Directory {} doesn't exist\n",
             arx_file.parent().unwrap().as_os_str().as_encoded_bytes()
         ),
     );
@@ -66,7 +66,7 @@ fn test_crate_existant_output() -> Result {
     .check_fail(
         b"",
         &format_bytes!(
-            b"[ERROR arx] Error : File {} already exists. Use option --force to overwrite it.\n",
+            b"Error : File {} already exists. Use option --force to overwrite it.\n",
             arx_file.as_os_str().as_encoded_bytes()
         ),
     );
@@ -85,7 +85,7 @@ fn test_crate_existant_output() -> Result {
         tmp_source_dir.file_name().unwrap(),
         "--force"
     )
-    .check_output(b"", b"");
+    .check_output(Some(b""), Some(b""));
     {
         let mut f = std::fs::File::open(&arx_file)?;
         let mut buf = [0; 10];

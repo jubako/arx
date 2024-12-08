@@ -1,11 +1,14 @@
 use std::collections::HashSet;
-use std::fs::{create_dir, create_dir_all, OpenOptions};
-use std::io::Write;
+use std::fs::{create_dir_all, OpenOptions};
+use std::io::{ErrorKind, Write};
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 #[cfg(windows)]
 use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use crate::{AllProperties, Arx, Builder, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
@@ -15,16 +18,19 @@ use jbk::reader::MayMissPack;
 struct FileEntry {
     path: String,
     content: jbk::ContentAddress,
+    mtime: u64,
 }
 
 struct Link {
     path: String,
     target: String,
+    mtime: u64,
 }
 
 struct FileBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
     content_address_property: jbk::reader::builder::ContentProperty,
+    mtime_property: jbk::reader::builder::IntProperty,
 }
 
 impl Builder for FileBuilder {
@@ -34,6 +40,7 @@ impl Builder for FileBuilder {
         Self {
             path_property: properties.path_property.clone(),
             content_address_property: properties.file_content_address_property,
+            mtime_property: properties.mtime_property.clone(),
         }
     }
 
@@ -42,9 +49,11 @@ impl Builder for FileBuilder {
         let mut path = vec![];
         path_prop.resolve_to_vec(&mut path)?;
         let content = self.content_address_property.create(reader)?;
+        let mtime = self.mtime_property.create(reader)?;
         Ok(FileEntry {
             path: String::from_utf8(path)?,
             content,
+            mtime,
         })
     }
 }
@@ -52,6 +61,7 @@ impl Builder for FileBuilder {
 struct LinkBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
     link_property: jbk::reader::builder::ArrayProperty,
+    mtime_property: jbk::reader::builder::IntProperty,
 }
 
 impl Builder for LinkBuilder {
@@ -61,6 +71,7 @@ impl Builder for LinkBuilder {
         Self {
             path_property: properties.path_property.clone(),
             link_property: properties.link_target_property.clone(),
+            mtime_property: properties.mtime_property.clone(),
         }
     }
 
@@ -72,9 +83,11 @@ impl Builder for LinkBuilder {
         let target_prop = self.link_property.create(reader)?;
         let mut target = vec![];
         target_prop.resolve_to_vec(&mut target)?;
+        let mtime = self.mtime_property.create(reader)?;
         Ok(Link {
             path: String::from_utf8(path)?,
             target: String::from_utf8(target)?,
+            mtime,
         })
     }
 }
@@ -102,6 +115,16 @@ impl Builder for DirBuilder {
 
 type FullBuilder = (FileBuilder, LinkBuilder, DirBuilder);
 
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "cmd_utils", derive(clap::ValueEnum))]
+pub enum Overwrite {
+    Skip,
+    Warn,
+    Newer,
+    Overwrite,
+    Error,
+}
+
 struct Extractor<'a, 'scope>
 where
     'a: 'scope,
@@ -112,6 +135,8 @@ where
     base_dir: PathBuf,
     print_progress: bool,
     recurse: bool,
+    extract_ok: Arc<AtomicBool>,
+    overwrite: Overwrite,
 }
 
 impl Extractor<'_, '_> {
@@ -177,11 +202,9 @@ where
             return Ok(false);
         }
         let abs_path = self.abs_path(current_path);
-        if !abs_path.try_exists()? {
-            create_dir(&abs_path)?;
-            if self.print_progress {
-                println!("{}", abs_path.display());
-            }
+        create_dir_all(&abs_path)?;
+        if self.print_progress {
+            println!("{}", abs_path.display());
         }
         Ok(true)
     }
@@ -205,55 +228,128 @@ where
             return Ok(());
         }
         let bytes = arx.container.get_bytes(entry_content).unwrap();
+        let extract_ok = Arc::clone(&self.extract_ok);
 
-        self.scope.spawn(move |_scope| {
-            match bytes {
-                MayMissPack::FOUND(bytes) => {
-                    let abs_path = abs_path.clone();
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(abs_path)
-                        .unwrap();
+        match bytes {
+            MayMissPack::FOUND(bytes) => {
+                let abs_path = abs_path.clone();
+                let mut file = match OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&abs_path)
+                {
+                    Ok(f) => f,
+                    Err(e) => match e.kind() {
+                        ErrorKind::AlreadyExists => match self.overwrite {
+                            Overwrite::Skip => return Ok(()),
+                            Overwrite::Warn => {
+                                eprintln!("File {} already exists.", abs_path.display());
+                                return Ok(());
+                            }
+                            Overwrite::Newer => {
+                                let existing_metadata = std::fs::metadata(&abs_path)?;
+                                let existing_time = existing_metadata.modified()?;
+                                let new_time =
+                                    SystemTime::UNIX_EPOCH + Duration::from_secs(entry.mtime);
+                                if new_time >= existing_time {
+                                    OpenOptions::new()
+                                        .write(true)
+                                        .truncate(true)
+                                        .open(&abs_path)?
+                                } else {
+                                    return Ok(());
+                                }
+                            }
+                            Overwrite::Overwrite => OpenOptions::new()
+                                .write(true)
+                                .truncate(true)
+                                .open(&abs_path)?,
+                            Overwrite::Error => {
+                                return Err(
+                                    format!("File {} already exists.", abs_path.display()).into()
+                                );
+                            }
+                        },
+                        _ => return Err(e.into()),
+                    },
+                };
 
+                self.scope.spawn(move |_scope| {
                     // Don't use std::io::copy as it use an internal buffer where it read data into before writing in file.
                     // If content is compressed, we already have a buffer. Same thing for uncompress as the cluster is probably mmapped.
                     let size = bytes.size().into_u64();
                     let mut offset = 0;
-                    loop {
-                        let sub_size = std::cmp::min(size - offset, 4 * 1024) as usize;
-                        let written = file
-                            .write(&bytes.get_slice(offset.into(), sub_size).unwrap())
-                            .unwrap();
-                        offset += written as u64;
-                        if offset == size {
-                            break;
+                    let mut write_function = move || -> jbk::Result<()> {
+                        loop {
+                            let sub_size = std::cmp::min(size - offset, 4 * 1024) as usize;
+                            let written = file.write(&bytes.get_slice(offset.into(), sub_size)?)?;
+                            offset += written as u64;
+                            if offset == size {
+                                break;
+                            }
                         }
+                        Ok(())
+                    };
+                    if let Err(e) = write_function() {
+                        log::error!("Error writing content to {} : {}", abs_path.display(), e);
+                        extract_ok.store(false, std::sync::atomic::Ordering::Relaxed);
                     }
-                }
-                MayMissPack::MISSING(pack_info) => {
-                    eprintln!(
-                        "Missing pack {} for {}. Declared location is {}",
-                        pack_info.uuid,
-                        abs_path.display(),
-                        String::from_utf8_lossy(&pack_info.pack_location)
-                    );
-                }
+                });
             }
-            if print_progress {
-                println!("{}", abs_path.display());
+            MayMissPack::MISSING(pack_info) => {
+                log::error!(
+                    "Missing pack {} for {}. Declared location is {}",
+                    pack_info.uuid,
+                    abs_path.display(),
+                    String::from_utf8_lossy(&pack_info.pack_location)
+                );
             }
-        });
+        }
+
+        if print_progress {
+            println!("{}", abs_path.display());
+        }
+
         Ok(())
     }
     fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> jbk::Result<()> {
+        let mut current_path = current_path.clone();
         current_path.push(&link.path);
-        if !self.should_extract(current_path, false) {
+        if !self.should_extract(&current_path, false) {
             current_path.pop();
             return Ok(());
         }
-        let abs_path = self.abs_path(current_path);
-        symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+        let abs_path = self.abs_path(&current_path);
+        if let Err(e) = symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path)) {
+            match e.kind() {
+                ErrorKind::AlreadyExists => match self.overwrite {
+                    Overwrite::Skip => return Ok(()),
+                    Overwrite::Warn => {
+                        eprintln!("Link {} already exists.", abs_path.display());
+                        return Ok(());
+                    }
+                    Overwrite::Newer => {
+                        let existing_metadata = std::fs::symlink_metadata(&abs_path)?;
+                        let existing_time = existing_metadata.modified()?;
+                        let new_time = SystemTime::UNIX_EPOCH + Duration::from_secs(link.mtime);
+                        if new_time >= existing_time {
+                            std::fs::remove_file(&abs_path)?;
+                            symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    Overwrite::Overwrite => {
+                        std::fs::remove_file(&abs_path)?;
+                        symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                    }
+                    Overwrite::Error => {
+                        return Err(format!("Link {} already exists.", abs_path.display()).into());
+                    }
+                },
+                _ => return Err(e.into()),
+            }
+        }
         if self.print_progress {
             println!("{}", abs_path.display());
         }
@@ -268,9 +364,10 @@ pub fn extract(
     files_to_extract: HashSet<crate::PathBuf>,
     recurse: bool,
     progress: bool,
+    overwrite: Overwrite,
 ) -> jbk::Result<()> {
     let arx = Arx::new(infile)?;
-    extract_arx(&arx, outdir, files_to_extract, recurse, progress)
+    extract_arx(&arx, outdir, files_to_extract, recurse, progress, overwrite)
 }
 
 pub fn extract_arx(
@@ -279,8 +376,10 @@ pub fn extract_arx(
     files_to_extract: HashSet<crate::PathBuf>,
     recurse: bool,
     progress: bool,
+    overwrite: Overwrite,
 ) -> jbk::Result<()> {
     let mut walker = Walker::new(arx, Default::default());
+    let extract_ok = Arc::new(AtomicBool::new(true));
     rayon::scope(|scope| {
         let extractor = Extractor {
             arx,
@@ -288,10 +387,17 @@ pub fn extract_arx(
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
+            extract_ok: Arc::clone(&extract_ok),
             recurse,
+            overwrite,
         };
         walker.run(&extractor)
-    })
+    })?;
+    if !extract_ok.load(std::sync::atomic::Ordering::Relaxed) {
+        Err("Some errors appends during extraction.".to_owned().into())
+    } else {
+        Ok(())
+    }
 }
 
 pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
@@ -301,8 +407,10 @@ pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
     files_to_extract: HashSet<crate::PathBuf>,
     recurse: bool,
     progress: bool,
+    overwrite: Overwrite,
 ) -> jbk::Result<()> {
     let mut walker = Walker::new(arx, Default::default());
+    let extract_ok = Arc::new(AtomicBool::new(true));
     rayon::scope(|scope| {
         let extractor = Extractor {
             arx,
@@ -310,8 +418,15 @@ pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
+            extract_ok: Arc::clone(&extract_ok),
             recurse,
+            overwrite,
         };
         walker.run_from_range(&extractor, range)
-    })
+    })?;
+    if !extract_ok.load(std::sync::atomic::Ordering::Relaxed) {
+        Err("Some errors appends during extraction.".to_owned().into())
+    } else {
+        Ok(())
+    }
 }
