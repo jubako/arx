@@ -2,7 +2,6 @@ mod utils;
 
 use format_bytes::format_bytes;
 use std::{
-    collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -57,7 +56,7 @@ fn test_mount() -> Result {
     let arx = arx::Arx::new(arx_file)?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    assert!(tree_diff(mount_point, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(mount_point, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -75,7 +74,7 @@ fn test_extract() -> Result {
         false,
         arx::Overwrite::Error,
     )?;
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -114,7 +113,7 @@ fn test_extract_filter() -> Result {
     assert!(tree_diff(
         extract_sub_dir,
         source_sub_dir,
-        Default::default()
+        SimpleDiffer::new()
     )?);
     Ok(())
 }
@@ -139,7 +138,7 @@ fn test_extract_subdir() -> Result {
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
-    assert!(tree_diff(extract_dir, source_sub_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, source_sub_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -187,7 +186,7 @@ fn test_extract_existing_content_skip() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -239,7 +238,7 @@ fn test_extract_existing_content_warn() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -285,7 +284,7 @@ fn test_extract_existing_content_newer_true() -> Result {
         "--overwrite=newer"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -316,7 +315,7 @@ fn test_extract_existing_content_newer_false() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -351,7 +350,7 @@ fn test_extract_existing_content_overwrite() -> Result {
         "--overwrite=overwrite"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -385,6 +384,10 @@ fn test_extract_existing_content_error() -> Result {
                 .as_bytes()
         ),
     );
-    assert!(!tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(!tree_diff(
+        extract_dir,
+        tmp_source_dir,
+        SimpleDiffer::new()
+    )?);
     Ok(())
 }

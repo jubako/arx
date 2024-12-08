@@ -5,7 +5,9 @@ use rand::prelude::*;
 pub type Result = anyhow::Result<()>;
 
 #[allow(unused_imports)]
-pub use tree_diff::{tree_diff, ExistingExpected};
+pub use tree_diff::{
+    tree_diff, Differ, ExceptionDiffer, ExistingExpected, SimpleDiffer, TreeEntry,
+};
 
 #[cfg(unix)]
 pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(path: P, target: Q) -> std::io::Result<()> {

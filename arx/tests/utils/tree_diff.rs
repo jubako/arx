@@ -31,13 +31,13 @@ impl<R: Read> From<R> for ReadAsIter<R> {
 }
 
 #[derive(Debug)]
-enum Entry {
+pub enum TreeEntry {
     Dir(PathBuf),
     File(PathBuf),
     Link(PathBuf),
 }
 
-impl Entry {
+impl TreeEntry {
     fn new(p: &Path) -> io::Result<Self> {
         let metadata = symlink_metadata(p)?;
         if metadata.is_dir() {
@@ -51,28 +51,28 @@ impl Entry {
         }
     }
 
-    fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         match self {
-            Entry::Dir(p) => p,
-            Entry::File(p) => p,
-            Entry::Link(p) => p,
+            TreeEntry::Dir(p) => p,
+            TreeEntry::File(p) => p,
+            TreeEntry::Link(p) => p,
         }
     }
 
-    fn file_name(&self) -> &OsStr {
+    pub fn file_name(&self) -> &OsStr {
         self.path().file_name().unwrap()
     }
 }
 
-impl PartialEq for Entry {
+impl PartialEq for TreeEntry {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Entry::File(a), Entry::File(b)) => {
+            (TreeEntry::File(a), TreeEntry::File(b)) => {
                 let file_a: ReadAsIter<_> = File::open(a).expect("Open should succeed").into();
                 let file_b: ReadAsIter<_> = File::open(b).expect("Open should succeed").into();
                 file_a.cmp(file_b) == Ordering::Equal
             }
-            (Entry::Link(a), Entry::Link(b)) => {
+            (TreeEntry::Link(a), TreeEntry::Link(b)) => {
                 let target_a = read_link(a).expect("Read_link should succeed");
                 let target_b = read_link(b).expect("Read_link should succeed");
                 target_a.cmp(&target_b) == Ordering::Equal
@@ -83,7 +83,7 @@ impl PartialEq for Entry {
 }
 
 #[derive(Debug)]
-struct OrderByPath(Entry);
+struct OrderByPath(TreeEntry);
 
 impl OrderByPath {
     fn key(&self) -> &OsStr {
@@ -112,7 +112,7 @@ impl PartialEq for OrderByPath {
 }
 
 impl Deref for OrderByPath {
-    type Target = Entry;
+    type Target = TreeEntry;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -132,25 +132,80 @@ impl Iterator for EntryIterator {
         let next = self.0.next()?.expect("Iter dir should succeed");
         let file_type = next.file_type().unwrap();
         Some(OrderByPath(if file_type.is_dir() {
-            Entry::Dir(next.path())
+            TreeEntry::Dir(next.path())
         } else if file_type.is_file() {
-            Entry::File(next.path())
+            TreeEntry::File(next.path())
         } else if file_type.is_symlink() {
-            Entry::Link(next.path())
+            TreeEntry::Link(next.path())
         } else {
             unreachable!()
         }))
     }
 }
 
-struct ExceptionMatcher {
+pub trait Differ {
+    type Result;
+    fn result(self) -> Self::Result;
+    fn push(&mut self, entry_name: &OsStr);
+
+    fn pop(&mut self);
+
+    fn equal(&mut self, entry_tested: &TreeEntry, entry_ref: &TreeEntry);
+
+    fn added(&mut self, entry: &TreeEntry);
+
+    fn removed(&mut self, entry: &TreeEntry);
+
+    fn diff(&mut self, entry_tested: &TreeEntry, entry_ref: &TreeEntry);
+}
+
+pub struct SimpleDiffer(bool);
+
+impl SimpleDiffer {
+    pub fn new() -> Self {
+        SimpleDiffer(true)
+    }
+}
+
+impl Differ for SimpleDiffer {
+    type Result = bool;
+
+    fn result(self) -> bool {
+        self.0
+    }
+    fn push(&mut self, _entry_name: &OsStr) {}
+
+    fn equal(&mut self, _entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {}
+
+    fn pop(&mut self) {}
+
+    fn added(&mut self, _entry: &TreeEntry) {
+        self.0 = false;
+    }
+
+    fn removed(&mut self, _entry: &TreeEntry) {
+        self.0 = false;
+    }
+
+    fn diff(&mut self, _entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {
+        self.0 = false;
+    }
+}
+
+pub struct ExceptionDiffer {
     current_path: PathBuf,
     exceptions: HashMap<PathBuf, ExistingExpected>,
     equal: bool,
 }
 
-impl ExceptionMatcher {
-    fn new(exceptions: HashMap<PathBuf, ExistingExpected>) -> Self {
+impl<const N: usize> From<[(PathBuf, ExistingExpected); N]> for ExceptionDiffer {
+    fn from(value: [(PathBuf, ExistingExpected); N]) -> Self {
+        ExceptionDiffer::new(value.into())
+    }
+}
+
+impl ExceptionDiffer {
+    pub fn new(exceptions: HashMap<PathBuf, ExistingExpected>) -> Self {
         Self {
             current_path: PathBuf::new(),
             exceptions,
@@ -158,10 +213,17 @@ impl ExceptionMatcher {
         }
     }
 
-    fn result(self) -> bool {
+    pub fn result(self) -> bool {
         self.equal
     }
+}
 
+impl Differ for ExceptionDiffer {
+    type Result = bool;
+
+    fn result(self) -> Self::Result {
+        self.equal
+    }
     fn push(&mut self, entry_name: &OsStr) {
         self.current_path.push(entry_name);
     }
@@ -170,7 +232,9 @@ impl ExceptionMatcher {
         self.current_path.pop();
     }
 
-    fn added(&mut self, entry: &Entry) {
+    fn equal(&mut self, _entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {}
+
+    fn added(&mut self, entry: &TreeEntry) {
         println!(
             "Added {} in {}",
             entry.path().display(),
@@ -179,7 +243,7 @@ impl ExceptionMatcher {
         self.equal = false;
     }
 
-    fn removed(&mut self, entry: &Entry) {
+    fn removed(&mut self, entry: &TreeEntry) {
         println!(
             "Removed {} in {}",
             entry.path().display(),
@@ -188,7 +252,7 @@ impl ExceptionMatcher {
         self.equal = false;
     }
 
-    fn diff(&mut self, entry_tested: &Entry, entry_ref: &Entry) {
+    fn diff(&mut self, entry_tested: &TreeEntry, entry_ref: &TreeEntry) {
         match self.exceptions.get(&self.current_path) {
             None => {
                 println!(
@@ -225,32 +289,36 @@ impl ExceptionMatcher {
     }
 }
 
-fn diff(tested: &Entry, reference: &Entry, matcher: &mut ExceptionMatcher) {
+fn diff(tested: &TreeEntry, reference: &TreeEntry, differ: &mut impl Differ) {
     match (tested, reference) {
         // two files or links, equal
-        (Entry::File(_), Entry::File(_)) if tested == reference => {}
-        (Entry::Link(_), Entry::Link(_)) if tested == reference => {}
+        (TreeEntry::File(_), TreeEntry::File(_)) if tested == reference => {
+            differ.equal(tested, reference)
+        }
+        (TreeEntry::Link(_), TreeEntry::Link(_)) if tested == reference => {
+            differ.equal(tested, reference)
+        }
 
         // Directories, we must compare
-        (Entry::Dir(path_tested), Entry::Dir(path_ref)) => {
+        (TreeEntry::Dir(path_tested), TreeEntry::Dir(path_ref)) => {
             let children_tested = EntryIterator::new(path_tested).collect::<BTreeSet<_>>();
             let children_ref = EntryIterator::new(path_ref).collect::<BTreeSet<_>>();
             for v_tested in children_tested.intersection(&children_ref) {
                 let v_ref = children_ref.get(v_tested).expect("intersection to work");
-                matcher.push(v_tested.file_name());
-                diff(v_tested, v_ref, matcher);
-                matcher.pop();
+                differ.push(v_tested.file_name());
+                diff(v_tested, v_ref, differ);
+                differ.pop();
             }
             for k in children_tested.difference(&children_ref) {
-                matcher.added(k);
+                differ.added(k);
             }
             for k in children_ref.difference(&children_tested) {
-                matcher.removed(k);
+                differ.removed(k);
             }
         }
 
         // Different
-        _ => matcher.diff(tested, reference),
+        _ => differ.diff(tested, reference),
     }
 }
 
@@ -274,16 +342,15 @@ pub enum ExistingExpected {
 /// Please note that tested (generated by thing being tested) content comes first and
 /// reference second. This is important when `exceptions` has values as we will load
 /// file content in first (tested) tree.
-pub fn tree_diff(
+pub fn tree_diff<D: Differ>(
     tested: impl AsRef<Path>,
     reference: impl AsRef<Path>,
-    exceptions: HashMap<PathBuf, ExistingExpected>,
-) -> std::io::Result<bool> {
-    let mut matcher = ExceptionMatcher::new(exceptions);
+    mut differ: D,
+) -> std::io::Result<D::Result> {
     diff(
-        &Entry::new(tested.as_ref())?,
-        &Entry::new(reference.as_ref())?,
-        &mut matcher,
+        &TreeEntry::new(tested.as_ref())?,
+        &TreeEntry::new(reference.as_ref())?,
+        &mut differ,
     );
-    Ok(matcher.result())
+    Ok(differ.result())
 }
