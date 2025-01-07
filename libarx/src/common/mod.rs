@@ -31,7 +31,7 @@ impl Comparator {
         }
     }
 
-    pub fn compare_with<'a>(&'a self, component: &'a [u8]) -> EntryCompare {
+    pub fn compare_with<'a>(&'a self, component: &'a [u8]) -> EntryCompare<'a> {
         EntryCompare {
             comparator: self,
             path_value: component,
