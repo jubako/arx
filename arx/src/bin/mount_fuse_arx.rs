@@ -50,6 +50,6 @@ fn main() -> Result<(), arx::MountError> {
 }
 
 #[cfg(windows)]
-fn main() -> jbk::Result<()> {
-    Err("Mount feature is not availble on Windows.".into())
+fn main() -> Result<(), &'static str> {
+    Err("Mount feature is not availble on Windows.")
 }
