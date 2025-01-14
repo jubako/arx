@@ -1,3 +1,4 @@
+use arx::{ArxError, ArxFormatError};
 use clap::{Parser, ValueHint};
 use jbk::reader::ByteSlice;
 use jbk::reader::{builder::PropertyBuilderTrait, MayMissPack};
@@ -28,11 +29,15 @@ fn dump_entry(
     container: &jbk::reader::Container,
     entry: arx::Entry<(jbk::ContentAddress, (), ())>,
     output: &mut dyn std::io::Write,
-) -> jbk::Result<()> {
+) -> Result<(), ArxError> {
     match entry {
-        arx::Entry::Dir(_, _) => Err("Found directory".to_string().into()),
+        arx::Entry::Dir(_, _) => Err(ArxError::IsADirectory),
         arx::Entry::File(content_address) => {
-            match container.get_bytes(content_address)? {
+            match container
+                .get_bytes(content_address)?
+                .and_then(|m| m.transpose())
+                .ok_or(ArxFormatError("Content address should be valid"))?
+            {
                 MayMissPack::FOUND(bytes) => {
                     std::io::copy(&mut bytes.stream(), output)?;
                 }
@@ -46,7 +51,7 @@ fn dump_entry(
             }
             Ok(())
         }
-        arx::Entry::Link(_) => Err("Found link".to_string().into()),
+        arx::Entry::Link(_) => Err(ArxError::IsALink),
     }
 }
 
@@ -69,7 +74,7 @@ pub struct Options {
     verbose: u8,
 }
 
-pub fn dump(options: Options) -> jbk::Result<()> {
+pub fn dump(options: Options) -> Result<(), ArxError> {
     info!(
         "Dump entry {} in archive {:?}",
         options.path, options.infile

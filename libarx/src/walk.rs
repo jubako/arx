@@ -1,30 +1,33 @@
+use crate::BaseError;
+
 use super::common::*;
 use super::Arx;
 use jbk::reader::Range;
 
 pub trait Operator<Context, Builder: FullBuilderTrait> {
-    fn on_start(&self, context: &mut Context) -> jbk::Result<()>;
-    fn on_stop(&self, context: &mut Context) -> jbk::Result<()>;
+    type Error;
+    fn on_start(&self, context: &mut Context) -> Result<(), Self::Error>;
+    fn on_stop(&self, context: &mut Context) -> Result<(), Self::Error>;
     fn on_directory_enter(
         &self,
         context: &mut Context,
         entry: &<Builder::Entry as EntryDef>::Dir,
-    ) -> jbk::Result<bool>;
+    ) -> Result<bool, Self::Error>;
     fn on_directory_exit(
         &self,
         context: &mut Context,
         entry: &<Builder::Entry as EntryDef>::Dir,
-    ) -> jbk::Result<()>;
+    ) -> Result<(), Self::Error>;
     fn on_file(
         &self,
         context: &mut Context,
         entry: &<Builder::Entry as EntryDef>::File,
-    ) -> jbk::Result<()>;
+    ) -> Result<(), Self::Error>;
     fn on_link(
         &self,
         context: &mut Context,
         entry: &<Builder::Entry as EntryDef>::Link,
-    ) -> jbk::Result<()>;
+    ) -> Result<(), Self::Error>;
 }
 
 pub struct Walker<'a, Context> {
@@ -37,9 +40,11 @@ impl<'a, Context> Walker<'a, Context> {
         Self { arx, context }
     }
 
-    pub fn run<B>(&mut self, op: &dyn Operator<Context, B>) -> jbk::Result<()>
+    pub fn run<B, O>(&mut self, op: &O) -> Result<(), O::Error>
     where
         B: FullBuilderTrait,
+        O: Operator<Context, B>,
+        O::Error: From<BaseError>,
     {
         let builder = RealBuilder::<B>::new(&self.arx.properties);
 
@@ -48,13 +53,11 @@ impl<'a, Context> Walker<'a, Context> {
         op.on_stop(&mut self.context)
     }
 
-    pub fn run_from_range<R: Range, B>(
-        &mut self,
-        op: &dyn Operator<Context, B>,
-        range: &R,
-    ) -> jbk::Result<()>
+    pub fn run_from_range<R: Range, B, O>(&mut self, op: &O, range: &R) -> Result<(), O::Error>
     where
         B: FullBuilderTrait,
+        O: Operator<Context, B>,
+        O::Error: From<BaseError>,
     {
         let builder = RealBuilder::<B>::new(&self.arx.properties);
 
@@ -63,14 +66,16 @@ impl<'a, Context> Walker<'a, Context> {
         op.on_stop(&mut self.context)
     }
 
-    fn _run<R: Range, B>(
+    fn _run<R: Range, B, O>(
         &mut self,
         range: &R,
         builder: &RealBuilder<B>,
-        op: &dyn Operator<Context, B>,
-    ) -> jbk::Result<()>
+        op: &O,
+    ) -> Result<(), O::Error>
     where
         B: FullBuilderTrait,
+        O: Operator<Context, B>,
+        O::Error: From<BaseError>,
     {
         let read_entry = ReadEntry::new(range, builder);
         for entry in read_entry {

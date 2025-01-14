@@ -6,14 +6,14 @@ use std::os::unix::fs::symlink;
 #[cfg(windows)]
 use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::{AllProperties, Arx, Builder, Walker};
+use crate::error::ExtractError;
+use crate::{AllProperties, Arx, ArxFormatError, Builder, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 use jbk::reader::MayMissPack;
+use std::sync::{Arc, OnceLock};
 
 struct FileEntry {
     path: String,
@@ -131,11 +131,11 @@ where
 {
     arx: &'a Arx,
     scope: &'scope rayon::Scope<'a>,
+    err: Arc<OnceLock<jbk::Error>>,
     files: HashSet<crate::PathBuf>,
     base_dir: PathBuf,
     print_progress: bool,
     recurse: bool,
-    extract_ok: Arc<AtomicBool>,
     overwrite: Overwrite,
 }
 
@@ -183,12 +183,13 @@ impl<'a, 'scope> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extracto
 where
     'a: 'scope,
 {
-    fn on_start(&self, _current_path: &mut crate::PathBuf) -> jbk::Result<()> {
+    type Error = ExtractError;
+    fn on_start(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
         create_dir_all(&self.base_dir)?;
         Ok(())
     }
 
-    fn on_stop(&self, _current_path: &mut crate::PathBuf) -> jbk::Result<()> {
+    fn on_stop(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
         Ok(())
     }
 
@@ -196,7 +197,7 @@ where
         &self,
         current_path: &mut crate::PathBuf,
         path: &String,
-    ) -> jbk::Result<bool> {
+    ) -> Result<bool, ExtractError> {
         current_path.push(path);
         if !self.should_extract(current_path, true) {
             return Ok(false);
@@ -212,12 +213,16 @@ where
         &self,
         current_path: &mut crate::PathBuf,
         _path: &String,
-    ) -> jbk::Result<()> {
+    ) -> Result<(), ExtractError> {
         current_path.pop();
         Ok(())
     }
 
-    fn on_file(&self, current_path: &mut crate::PathBuf, entry: &FileEntry) -> jbk::Result<()> {
+    fn on_file(
+        &self,
+        current_path: &mut crate::PathBuf,
+        entry: &FileEntry,
+    ) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
         current_path.push(&entry.path);
         let entry_content = entry.content;
@@ -227,8 +232,14 @@ where
         if !self.should_extract(&current_path, false) {
             return Ok(());
         }
-        let bytes = arx.container.get_bytes(entry_content).unwrap();
-        let extract_ok = Arc::clone(&self.extract_ok);
+        let bytes = arx
+            .container
+            .get_bytes(entry_content)?
+            .and_then(|m| m.transpose())
+            .ok_or(ArxFormatError(
+                "Entry Content should point to valid content",
+            ))?;
+        let error = Arc::clone(&self.err);
 
         match bytes {
             MayMissPack::FOUND(bytes) => {
@@ -265,9 +276,7 @@ where
                                 .truncate(true)
                                 .open(&abs_path)?,
                             Overwrite::Error => {
-                                return Err(
-                                    format!("File {} already exists.", abs_path.display()).into()
-                                );
+                                return Err(ExtractError::FileExists { path: abs_path })
                             }
                         },
                         _ => return Err(e.into()),
@@ -291,8 +300,7 @@ where
                         Ok(())
                     };
                     if let Err(e) = write_function() {
-                        log::error!("Error writing content to {} : {}", abs_path.display(), e);
-                        extract_ok.store(false, std::sync::atomic::Ordering::Relaxed);
+                        let _ = error.set(e);
                     }
                 });
             }
@@ -312,7 +320,8 @@ where
 
         Ok(())
     }
-    fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> jbk::Result<()> {
+
+    fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
         current_path.push(&link.path);
         if !self.should_extract(&current_path, false) {
@@ -343,9 +352,7 @@ where
                         std::fs::remove_file(&abs_path)?;
                         symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
                     }
-                    Overwrite::Error => {
-                        return Err(format!("Link {} already exists.", abs_path.display()).into());
-                    }
+                    Overwrite::Error => return Err(e.into()),
                 },
                 _ => return Err(e.into()),
             }
@@ -365,7 +372,7 @@ pub fn extract(
     recurse: bool,
     progress: bool,
     overwrite: Overwrite,
-) -> jbk::Result<()> {
+) -> Result<(), ExtractError> {
     let arx = Arx::new(infile)?;
     extract_arx(&arx, outdir, files_to_extract, recurse, progress, overwrite)
 }
@@ -377,26 +384,28 @@ pub fn extract_arx(
     recurse: bool,
     progress: bool,
     overwrite: Overwrite,
-) -> jbk::Result<()> {
+) -> Result<(), ExtractError> {
     let mut walker = Walker::new(arx, Default::default());
-    let extract_ok = Arc::new(AtomicBool::new(true));
+    let err = Default::default();
     rayon::scope(|scope| {
         let extractor = Extractor {
             arx,
             scope,
+            err: Arc::clone(&err),
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
-            extract_ok: Arc::clone(&extract_ok),
             recurse,
             overwrite,
         };
         walker.run(&extractor)
     })?;
-    if !extract_ok.load(std::sync::atomic::Ordering::Relaxed) {
-        Err("Some errors appends during extraction.".to_owned().into())
-    } else {
-        Ok(())
+    match Arc::into_inner(err)
+        .expect("No one should have a ref to err.")
+        .take()
+    {
+        None => Ok(()),
+        Some(e) => Err(e.into()),
     }
 }
 
@@ -408,25 +417,27 @@ pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
     recurse: bool,
     progress: bool,
     overwrite: Overwrite,
-) -> jbk::Result<()> {
+) -> Result<(), ExtractError> {
     let mut walker = Walker::new(arx, Default::default());
-    let extract_ok = Arc::new(AtomicBool::new(true));
+    let err = Default::default();
     rayon::scope(|scope| {
         let extractor = Extractor {
             arx,
             scope,
+            err: Arc::clone(&err),
             files: files_to_extract,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
-            extract_ok: Arc::clone(&extract_ok),
             recurse,
             overwrite,
         };
         walker.run_from_range(&extractor, range)
     })?;
-    if !extract_ok.load(std::sync::atomic::Ordering::Relaxed) {
-        Err("Some errors appends during extraction.".to_owned().into())
-    } else {
-        Ok(())
+    match Arc::into_inner(err)
+        .expect("No one should have a ref to err.")
+        .take()
+    {
+        None => Ok(()),
+        Some(e) => Err(e.into()),
     }
 }

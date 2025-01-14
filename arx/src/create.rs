@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use clap::{Parser, ValueHint};
 
-const AFTER_HELP: &'static str = cstr!(
+const AFTER_HELP: &str = cstr!(
     "
 <s,u>Specifying input files:</>
 
@@ -69,7 +69,7 @@ It is not possible to force compression of content (patch welcome).
 "
 );
 
-const USAGE: &'static str = cstr!("<s>arx create</s> -o archive.arx [OPTIONS] [INFILES]...");
+const USAGE: &str = cstr!("<s>arx create</s> -o archive.arx [OPTIONS] [INFILES]...");
 
 /// Create an archive.
 #[derive(Parser, Debug)]

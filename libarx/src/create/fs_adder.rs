@@ -1,4 +1,5 @@
 use crate::create::{EntryKind, EntryTrait, SimpleCreator, Void};
+use crate::{CreatorError, InputError};
 use bstr::{BString, ByteVec};
 use jbk::creator::InputReader;
 use std::fs::Metadata;
@@ -37,7 +38,7 @@ pub struct FsEntry {
 fn detect_kind(
     mut path: PathBuf,
     follow_symlink: bool,
-) -> jbk::Result<(DetectedEntryKind, Metadata)> {
+) -> Result<(DetectedEntryKind, Metadata), std::io::Error> {
     log::trace!("std::fs::symlink_metadata({path:?})");
     let mut attr = std::fs::symlink_metadata(&path)?;
     log::trace!("=> {attr:?}");
@@ -66,7 +67,7 @@ impl FsEntry {
         arx_path: crate::PathBuf,
         adder: &mut A,
         follow_symlink: bool,
-    ) -> jbk::Result<Box<Self>> {
+    ) -> Result<Box<Self>, CreatorError> {
         let (kind, attr) = detect_kind(fs_path.to_path_buf(), follow_symlink)?;
         let kind = match kind {
             DetectedEntryKind::Dir => FsEntryKind::Dir,
@@ -109,7 +110,7 @@ impl FsEntry {
 }
 
 impl EntryTrait for FsEntry {
-    fn kind(&self) -> jbk::Result<Option<EntryKind>> {
+    fn kind(&self) -> Result<Option<EntryKind>, CreatorError> {
         Ok(match &self.kind {
             FsEntryKind::Dir => Some(EntryKind::Dir),
             FsEntryKind::File(size, content_address) => {
@@ -214,27 +215,29 @@ impl<'a> FsAdder<'a> {
             Err(e) => {
                 return Err(match e.kind() {
                     relative_path::FromPathErrorKind::NonRelative => {
-                        format!("{} is not a relative path", path.display())
+                        InputError(format!("{} is not a relative path", path.display()))
                     }
                     relative_path::FromPathErrorKind::NonUtf8 => {
-                        format!("Non utf8 char in {}", path.display())
+                        InputError(format!("Non utf8 char in {}", path.display()))
                     }
                     relative_path::FromPathErrorKind::BadSeparator => {
-                        format!("Invalid path separator in {}", path.display(),)
+                        InputError(format!("Invalid path separator in {}", path.display()))
                     }
-                    _ => {
-                        format!(
-                            "Unknown error converting {} to relative utf-8 path.",
-                            path.display()
-                        )
-                    }
+                    _ => InputError(format!(
+                        "Unknown error converting {} to relative utf-8 path.",
+                        path.display()
+                    )),
                 }
                 .into())
             }
         };
         let arx_path: crate::PathBuf = match arx_path.strip_prefix(&self.strip_prefix) {
             Ok(p) => p,
-            Err(_e) => return Err(format!("{} is not in {arx_path}", self.strip_prefix).into()),
+            Err(_e) => {
+                return Err(
+                    InputError(format!("{} is not in {arx_path}", self.strip_prefix)).into(),
+                )
+            }
         }
         .into();
         if arx_path.as_str().is_empty() {

@@ -1,4 +1,5 @@
 use crate::common::{EntryType, Property};
+use crate::IncoherentStructure;
 use jbk::creator::schema;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -84,9 +85,10 @@ impl DirEntry {
                 let mut write_children = self.children.try_write().unwrap();
                 match write_children.get_mut(component.as_str()).unwrap() {
                     DirOrFile::Dir(e) => e.add(entry, components, entry_store),
-                    DirOrFile::File(_) => {
-                        Err("Cannot add a entry to something which is not a directory".into())
-                    }
+                    DirOrFile::File(_) => Err(IncoherentStructure(
+                        "Cannot add a entry to something which is not a directory".into(),
+                    )
+                    .into()),
                 }
             }
         }
@@ -170,7 +172,10 @@ impl DirEntry {
                 match self.children.try_read().unwrap().get(entry_name) {
                     Some(DirOrFile::Dir(_)) => return Ok(()),
                     Some(DirOrFile::File(_)) => {
-                        return Err("Cannot add a dir when file or link already exists".into())
+                        return Err(IncoherentStructure(
+                            "Cannot add a dir when file or link already exists".into(),
+                        )
+                        .into())
                     }
                     None => {}
                 };
@@ -203,7 +208,10 @@ impl DirEntry {
             }
             EntryKind::File(size, content_address) => {
                 if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err("Cannot add a file when one already exists".into());
+                    return Err(IncoherentStructure(
+                        "Cannot add a file when one already exists".into(),
+                    )
+                    .into());
                 }
                 values.insert(Property::Content, jbk::Value::Content(content_address));
                 values.insert(Property::Size, jbk::Value::Unsigned(size.into_u64()));
@@ -221,7 +229,10 @@ impl DirEntry {
             }
             EntryKind::Link(target) => {
                 if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err("Cannot add a link when one already exists".into());
+                    return Err(IncoherentStructure(
+                        "Cannot add a link when one already exists".into(),
+                    )
+                    .into());
                 }
                 values.insert(Property::Target, jbk::Value::Array(target.into()));
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
@@ -357,7 +368,7 @@ mod tests {
     use jbk::creator::EntryStoreTrait;
 
     #[test]
-    fn test_empty() -> jbk::Result<()> {
+    fn test_empty() -> Result<(), Box<dyn std::error::Error>> {
         let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
         let mut creator = jbk::creator::DirectoryPackCreator::new(
@@ -373,7 +384,9 @@ mod tests {
 
         let directory_pack =
             jbk::reader::DirectoryPack::new(jbk::creator::FileSource::open(arx_name)?.into())?;
-        let index = directory_pack.get_index_from_name("arx_entries")?;
+        let index = directory_pack
+            .get_index_from_name("arx_entries")?
+            .expect("arx_entries should exists.");
         assert!(index.is_empty());
         Ok(())
     }
@@ -385,7 +398,7 @@ mod tests {
             &self.0
         }
 
-        fn kind(&self) -> jbk::Result<Option<EntryKind>> {
+        fn kind(&self) -> Result<Option<EntryKind>, crate::error::CreatorError> {
             Ok(Some(EntryKind::File(
                 jbk::Size::new(10),
                 jbk::ContentAddress::new(1.into(), 0.into()),
@@ -410,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn test_one_content() -> jbk::Result<()> {
+    fn test_one_content() -> Result<(), Box<dyn std::error::Error>> {
         let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
 
@@ -429,7 +442,9 @@ mod tests {
 
         let directory_pack =
             jbk::reader::DirectoryPack::new(jbk::creator::FileSource::open(arx_name)?.into())?;
-        let index = directory_pack.get_index_from_name("arx_entries")?;
+        let index = directory_pack
+            .get_index_from_name("arx_entries")?
+            .expect("arx_entries should exists.");
         assert!(!index.is_empty());
         Ok(())
     }

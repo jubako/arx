@@ -46,12 +46,15 @@ pub struct EntryCompare<'a> {
 
 impl jbk::reader::CompareTrait for EntryCompare<'_> {
     fn compare_entry(&self, idx: jbk::EntryIdx) -> jbk::Result<std::cmp::Ordering> {
-        let reader = self.comparator.store.get_entry_reader(idx);
+        let reader = self
+            .comparator
+            .store
+            .get_entry_reader(idx)
+            .expect("idx should be valid");
         let entry_path = self.comparator.path_property.create(&reader)?;
-        match entry_path.partial_cmp(self.path_value)? {
-            Some(c) => Ok(c),
-            None => Err("Cannot compare".into()),
-        }
+        Ok(entry_path
+            .partial_cmp(self.path_value)?
+            .expect("Value in the entry should be comparable to [u8]"))
     }
     fn ordered(&self) -> bool {
         true
@@ -80,13 +83,17 @@ impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
 }
 
 impl<'builder, Builder: BuilderTrait> Iterator for ReadEntry<'builder, Builder> {
-    type Item = jbk::Result<Builder::Entry>;
+    type Item = Result<Builder::Entry, Builder::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
             None
         } else {
-            let entry = self.builder.create_entry(self.current);
+            let entry = self
+                .builder
+                .create_entry(self.current)
+                .transpose()
+                .expect("self.current is valid");
             self.current += 1;
             Some(entry)
         }

@@ -1,3 +1,5 @@
+use crate::{ArxFormatError, BaseError};
+
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub enum Property {
     Name,
@@ -50,11 +52,31 @@ pub struct AllProperties {
     pub link_target_property: jbk::reader::builder::ArrayProperty,
 }
 
+macro_rules! prop_as_builder {
+    ($container:expr, $key:literal, $value_storage:expr, $kind:literal) => {
+        $container
+            .get($key)
+            .ok_or(ArxFormatError(concat!(
+                "Property `",
+                $key,
+                "` is not present."
+            )))?
+            .as_builder($value_storage)?
+            .ok_or(ArxFormatError(concat!(
+                "Property `",
+                $key,
+                "` is not a ",
+                $kind,
+                " property."
+            )))?
+    };
+}
+
 impl AllProperties {
     pub fn new(
         store: jbk::reader::EntryStore,
         value_storage: &jbk::reader::ValueStorage,
-    ) -> jbk::Result<Self> {
+    ) -> Result<Self, BaseError> {
         let layout = store.layout();
         let jbk::reader::layout::VariantPart {
             variant_id_offset,
@@ -62,29 +84,43 @@ impl AllProperties {
             names,
         } = layout.variant_part.as_ref().unwrap();
         assert_eq!(variants.len(), 3);
-        let path_property = (&layout.common["name"], value_storage).try_into()?;
-        let parent_property = (&layout.common["parent"], value_storage).try_into()?;
-        let owner_property = (&layout.common["owner"], value_storage).try_into()?;
-        let group_property = (&layout.common["group"], value_storage).try_into()?;
-        let rigths_property = (&layout.common["rights"], value_storage).try_into()?;
-        let mtime_property = (&layout.common["mtime"], value_storage).try_into()?;
+        let path_property = prop_as_builder!(layout.common, "name", value_storage, "array");
+        let parent_property = prop_as_builder!(layout.common, "parent", value_storage, "int");
+        let owner_property = prop_as_builder!(layout.common, "owner", value_storage, "int");
+        let group_property = prop_as_builder!(layout.common, "group", value_storage, "int");
+        let rigths_property = prop_as_builder!(layout.common, "rights", value_storage, "int");
+        let mtime_property = prop_as_builder!(layout.common, "mtime", value_storage, "int");
         let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_id_offset);
-        let file_content_address_property =
-            (&variants[names["file"] as usize]["content"]).try_into()?;
-        let file_size_property =
-            (&variants[names["file"] as usize]["size"], value_storage).try_into()?;
-        let dir_first_child_property = (
-            &variants[names["dir"] as usize]["first_child"],
+        let file_content_address_property = prop_as_builder!(
+            variants[names["file"] as usize],
+            "content",
             value_storage,
-        )
-            .try_into()?;
-        let dir_nb_children_property = (
-            &variants[names["dir"] as usize]["nb_children"],
+            "content"
+        );
+        let file_size_property = prop_as_builder!(
+            variants[names["file"] as usize],
+            "size",
             value_storage,
-        )
-            .try_into()?;
-        let link_target_property =
-            (&variants[names["link"] as usize]["target"], value_storage).try_into()?;
+            "int"
+        );
+        let dir_first_child_property = prop_as_builder!(
+            variants[names["dir"] as usize],
+            "first_child",
+            value_storage,
+            "int"
+        );
+        let dir_nb_children_property = prop_as_builder!(
+            variants[names["dir"] as usize],
+            "nb_children",
+            value_storage,
+            "int"
+        );
+        let link_target_property = prop_as_builder!(
+            variants[names["link"] as usize],
+            "target",
+            value_storage,
+            "int"
+        );
         Ok(Self {
             store,
             path_property,

@@ -8,6 +8,7 @@ pub mod cmd_utils;
 mod common;
 pub mod create;
 mod entry;
+mod error;
 mod tools;
 pub mod walk;
 
@@ -19,5 +20,6 @@ pub use common::{
     PathBuf, VENDOR_ID,
 };
 pub use entry::*;
+pub use error::*;
 pub use tools::{extract, extract_arx, extract_arx_range, Overwrite};
 pub use walk::*;

@@ -45,7 +45,7 @@ impl Entry {
         } else if metadata.is_file() {
             Ok(Self::File(p.to_path_buf()))
         } else if metadata.is_symlink() {
-            Ok(Self::File(p.to_path_buf()))
+            Ok(Self::Link(p.to_path_buf()))
         } else {
             unreachable!()
         }
@@ -101,7 +101,7 @@ impl Ord for OrderByPath {
 
 impl PartialOrd for OrderByPath {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.key().partial_cmp(other.key())
+        Some(self.cmp(other))
     }
 }
 
@@ -233,12 +233,12 @@ fn diff(tested: &Entry, reference: &Entry, matcher: &mut ExceptionMatcher) {
 
         // Directories, we must compare
         (Entry::Dir(path_tested), Entry::Dir(path_ref)) => {
-            let children_tested = EntryIterator::new(&path_tested).collect::<BTreeSet<_>>();
-            let children_ref = EntryIterator::new(&path_ref).collect::<BTreeSet<_>>();
+            let children_tested = EntryIterator::new(path_tested).collect::<BTreeSet<_>>();
+            let children_ref = EntryIterator::new(path_ref).collect::<BTreeSet<_>>();
             for v_tested in children_tested.intersection(&children_ref) {
                 let v_ref = children_ref.get(v_tested).expect("intersection to work");
                 matcher.push(v_tested.file_name());
-                diff(&v_tested, &v_ref, matcher);
+                diff(v_tested, v_ref, matcher);
                 matcher.pop();
             }
             for k in children_tested.difference(&children_ref) {

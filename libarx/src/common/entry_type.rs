@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use crate::ArxFormatError;
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
 pub enum EntryType {
@@ -7,23 +11,23 @@ pub enum EntryType {
 }
 
 impl TryFrom<jbk::VariantIdx> for EntryType {
-    type Error = String;
+    type Error = ArxFormatError;
     fn try_from(id: jbk::VariantIdx) -> Result<Self, Self::Error> {
         match id.into_u8() {
             0 => Ok(Self::File),
             1 => Ok(Self::Dir),
             2 => Ok(Self::Link),
-            _ => Err("Invalid variant id".into()),
+            _ => Err(ArxFormatError("Invalid variant id")),
         }
     }
 }
 
-impl ToString for EntryType {
-    fn to_string(&self) -> String {
+impl Display for EntryType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntryType::File => String::from("file"),
-            EntryType::Dir => String::from("dir"),
-            EntryType::Link => String::from("link"),
+            EntryType::File => write!(f, "file"),
+            EntryType::Dir => write!(f, "dir"),
+            EntryType::Link => write!(f, "link"),
         }
     }
 }

@@ -18,7 +18,7 @@ impl SimpleCreator {
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
         compression: jbk::creator::Compression,
-    ) -> jbk::Result<Self> {
+    ) -> jbk::creator::Result<Self> {
         let basic_creator = BasicCreator::new(
             outfile,
             concat_mode,
@@ -38,9 +38,11 @@ impl SimpleCreator {
     }
 
     pub fn finalize(self, outfile: &Path) -> Void {
-        self.cached_content_creator
-            .into_inner()
-            .finalize(outfile, self.entry_store_creator, vec![])
+        Ok(self.cached_content_creator.into_inner().finalize(
+            outfile,
+            self.entry_store_creator,
+            vec![],
+        )?)
     }
 
     pub fn adder(&mut self) -> &mut impl ContentAdder {

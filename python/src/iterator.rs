@@ -37,16 +37,15 @@ impl EntryIter {
         slf
     }
     fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Entry>> {
-        if slf.start == slf.end {
+        if slf.start >= slf.end {
             return Ok(None);
         }
-        let ret = Entry::new(
-            Arc::clone(&slf.arx),
-            slf.arx
-                .get_entry_at_idx::<arx::FullBuilder>(slf.start)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
-        );
+        let ret = slf
+            .arx
+            .get_entry_at_idx::<arx::FullBuilder>(slf.start)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            .map(|e| Entry::new(Arc::clone(&slf.arx), e));
         slf.start += 1;
-        Ok(Some(ret))
+        Ok(ret)
     }
 }

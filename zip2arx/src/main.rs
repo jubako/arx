@@ -75,7 +75,7 @@ struct ProgressBar {
 }
 
 impl ProgressBar {
-    fn new<R: Read + Seek>(archive: &zip::ZipArchive<R>) -> jbk::Result<Self> {
+    fn new<R: Read + Seek>(archive: &zip::ZipArchive<R>) -> Self {
         let draw_target = indicatif::ProgressDrawTarget::stdout_with_hz(1);
         let style = indicatif::ProgressStyle::with_template(
             "{prefix} : [{wide_bar:.cyan/blue}] {pos:7} / {len:7}",
@@ -101,11 +101,11 @@ impl ProgressBar {
         multi.add(entries.clone());
         multi.add(comp_clusters.clone());
         multi.add(uncomp_clusters.clone());
-        Ok(Self {
+        Self {
             comp_clusters,
             uncomp_clusters,
             entries,
-        })
+        }
     }
 }
 
@@ -147,7 +147,7 @@ impl ZipEntry {
         mut entry: zip::read::ZipFile<'_>,
         adder: &mut impl ContentAdder,
         archive_path: &Path,
-    ) -> jbk::Result<Self> {
+    ) -> Result<Self, arx::CreatorError> {
         let mut mtime = None;
         for extra_field in entry.extra_data_fields() {
             match extra_field {
@@ -164,11 +164,9 @@ impl ZipEntry {
                 .unwrap_or(0),
         };
         let mode = entry.unix_mode().unwrap_or(0o644) as u64;
-        let path = entry.enclosed_name();
-        if path.is_none() {
-            return Err("Invalid path".into());
-        }
-        let path = path.unwrap();
+        let path = entry
+            .enclosed_name()
+            .ok_or(arx::InputError("Invalid path".into()))?;
         let path =
             arx::PathBuf::from_path(&path).unwrap_or_else(|_| panic!("{path:?} must be utf8"));
 
@@ -206,7 +204,7 @@ impl ZipEntry {
 }
 
 impl arx::create::EntryTrait for ZipEntry {
-    fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
+    fn kind(&self) -> Result<Option<arx::create::EntryKind>, arx::CreatorError> {
         Ok(Some(self.kind.clone()))
     }
     fn path(&self) -> &arx::Path {
@@ -233,8 +231,8 @@ impl<R: Read + Seek> Converter<R> {
         archive_path: PathBuf,
         outfile: P,
         concat_mode: jbk::creator::ConcatMode,
-    ) -> jbk::Result<Self> {
-        let progress = Arc::new(ProgressBar::new(&archive)?);
+    ) -> Result<Self, arx::CreatorError> {
+        let progress = Arc::new(ProgressBar::new(&archive));
         let arx_creator = arx::create::SimpleCreator::new(
             outfile,
             concat_mode,
@@ -251,11 +249,11 @@ impl<R: Read + Seek> Converter<R> {
         })
     }
 
-    fn finalize(self, outfile: &Path) -> jbk::Result<()> {
+    fn finalize(self, outfile: &Path) -> Result<(), arx::CreatorError> {
         self.arx_creator.finalize(outfile)
     }
 
-    pub fn run(mut self, outfile: &Path) -> jbk::Result<()> {
+    pub fn run(mut self, outfile: &Path) -> Result<(), arx::CreatorError> {
         for idx in 0..self.archive.len() {
             self.progress.entries.inc(1);
             let entry = self.archive.by_index(idx).unwrap();
@@ -266,7 +264,7 @@ impl<R: Read + Seek> Converter<R> {
     }
 }
 
-fn main() -> jbk::Result<()> {
+fn main() -> Result<(), arx::CreatorError> {
     human_panic::setup_panic!(human_panic::Metadata::new(
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION")

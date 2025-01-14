@@ -69,7 +69,7 @@ struct ProgressBar {
 }
 
 impl ProgressBar {
-    fn new(size_progress_bar: indicatif::ProgressBar) -> jbk::Result<Self> {
+    fn new(size_progress_bar: indicatif::ProgressBar) -> Self {
         let draw_target = indicatif::ProgressDrawTarget::stdout_with_hz(1);
         let style = indicatif::ProgressStyle::with_template(
             "{prefix} : [{wide_bar:.cyan/blue}] {pos:7} / {len:7}",
@@ -100,10 +100,10 @@ impl ProgressBar {
         multi.add(size.clone());
         multi.add(comp_clusters.clone());
         multi.add(uncomp_clusters.clone());
-        Ok(Self {
+        Self {
             comp_clusters,
             uncomp_clusters,
-        })
+        }
     }
 }
 
@@ -145,7 +145,7 @@ impl TarEntry {
     pub fn new<'a, R: 'a + Read>(
         mut entry: tar::Entry<'a, R>,
         adder: &mut impl ContentAdder,
-    ) -> jbk::Result<Option<Self>> {
+    ) -> Result<Option<Self>, arx::CreatorError> {
         let header = entry.header();
         let uid = header.uid()?;
         let gid = header.gid()?;
@@ -217,7 +217,7 @@ impl TarEntry {
 }
 
 impl arx::create::EntryTrait for TarEntry {
-    fn kind(&self) -> jbk::Result<Option<arx::create::EntryKind>> {
+    fn kind(&self) -> Result<Option<arx::create::EntryKind>, arx::CreatorError> {
         Ok(Some(self.kind.clone()))
     }
     fn path(&self) -> &arx::Path {
@@ -245,8 +245,8 @@ impl<R: Read> Converter<R> {
         concat_mode: jbk::creator::ConcatMode,
         compression: jbk::creator::Compression,
         progress_bar: indicatif::ProgressBar,
-    ) -> jbk::Result<Self> {
-        let progress = Arc::new(ProgressBar::new(progress_bar)?);
+    ) -> Result<Self, arx::CreatorError> {
+        let progress = Arc::new(ProgressBar::new(progress_bar));
         let arx_creator = arx::create::SimpleCreator::new(
             outfile,
             concat_mode,
@@ -261,11 +261,11 @@ impl<R: Read> Converter<R> {
         })
     }
 
-    fn finalize(self, outfile: &Path) -> jbk::Result<()> {
+    fn finalize(self, outfile: &Path) -> Result<(), arx::CreatorError> {
         self.arx_creator.finalize(outfile)
     }
 
-    pub fn run(mut self, outfile: &Path) -> jbk::Result<()> {
+    pub fn run(mut self, outfile: &Path) -> Result<(), arx::CreatorError> {
         let iter = self.archive.entries()?;
         for entry in iter {
             let entry = entry?;
