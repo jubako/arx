@@ -1,7 +1,7 @@
 use super::entry::*;
 use super::entry_type::EntryType;
 use super::AllProperties;
-use crate::BaseError;
+use crate::{ArxFormatError, BaseError};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 
@@ -83,7 +83,7 @@ where
 
 pub(crate) struct RealBuilder<B: FullBuilderTrait> {
     store: jbk::reader::EntryStore,
-    variant_id_property: jbk::reader::builder::VariantIdProperty,
+    variant_id_property: jbk::reader::builder::VariantIdBuilder<EntryType>,
     first_child_property: jbk::reader::builder::IntProperty,
     nb_children_property: jbk::reader::builder::IntProperty,
     builder: B,
@@ -97,7 +97,7 @@ where
         let builder = B::new(properties);
         Self {
             store: properties.store.clone(),
-            variant_id_property: properties.variant_id_property,
+            variant_id_property: properties.variant_id_property.clone(),
             first_child_property: properties.dir_first_child_property.clone(),
             nb_children_property: properties.dir_nb_children_property.clone(),
             builder,
@@ -116,17 +116,17 @@ where
         self.store
             .get_entry_reader(idx)
             .map(|reader| {
-                let file_type = self.variant_id_property.create(&reader)?.try_into()?;
+                let file_type = self.variant_id_property.create(&reader)?;
                 Ok(match file_type {
-                    EntryType::File => {
+                    Some(EntryType::File) => {
                         let entry = self.builder.create_file(idx, &reader)?;
                         Entry::File(entry)
                     }
-                    EntryType::Link => {
+                    Some(EntryType::Link) => {
                         let entry = self.builder.create_link(idx, &reader)?;
                         Entry::Link(entry)
                     }
-                    EntryType::Dir => {
+                    Some(EntryType::Dir) => {
                         let first_child: jbk::EntryIdx =
                             (self.first_child_property.create(&reader)? as u32).into();
                         let nb_children: jbk::EntryCount =
@@ -135,6 +135,7 @@ where
                         let entry = self.builder.create_dir(idx, &reader)?;
                         Entry::Dir(range, entry)
                     }
+                    None => return Err(ArxFormatError("Unknown variant").into()),
                 })
             })
             .transpose()

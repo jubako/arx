@@ -1,24 +1,10 @@
 use std::fmt::Display;
 
-use crate::ArxFormatError;
-
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-#[repr(u8)]
-pub enum EntryType {
-    File = 0,
-    Dir = 1,
-    Link = 2,
-}
-
-impl TryFrom<jbk::VariantIdx> for EntryType {
-    type Error = ArxFormatError;
-    fn try_from(id: jbk::VariantIdx) -> Result<Self, Self::Error> {
-        match id.into_u8() {
-            0 => Ok(Self::File),
-            1 => Ok(Self::Dir),
-            2 => Ok(Self::Link),
-            _ => Err(ArxFormatError("Invalid variant id")),
-        }
+jbk::variants! {
+    EntryType {
+        File => "file",
+        Dir => "dir",
+        Link => "link"
     }
 }
 
@@ -31,8 +17,6 @@ impl Display for EntryType {
         }
     }
 }
-
-impl jbk::creator::VariantName for EntryType {}
 
 #[cfg(all(not(windows), feature = "fuse"))]
 impl From<EntryType> for fuser::FileType {

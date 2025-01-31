@@ -1,40 +1,21 @@
+use super::EntryType;
 use crate::{ArxFormatError, BaseError};
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
-pub enum Property {
-    Name,
-    Parent,
-    Owner,
-    Group,
-    Rights,
-    Mtime,
-    Content,
-    Size,
-    FirstChild,
-    NbChildren,
-    Target,
-}
-
-impl ToString for Property {
-    fn to_string(&self) -> String {
-        use Property::*;
-        String::from(match self {
-            Name => "name",
-            Parent => "parent",
-            Owner => "owner",
-            Group => "group",
-            Rights => "rights",
-            Mtime => "mtime",
-            Content => "content",
-            Size => "size",
-            FirstChild => "first_child",
-            NbChildren => "nb_children",
-            Target => "target",
-        })
+jbk::properties! {
+    Property {
+        Name:"array" => "name",
+        Parent:"int" => "parent",
+        Owner:"int" => "owner",
+        Group:"int" => "group",
+        Rights:"int" => "rights",
+        Mtime:"int" => "mtime",
+        Content:"content" => "content",
+        Size:"int" => "size",
+        FirstChild:"int" => "first_child",
+        NbChildren:"int" => "nb_children",
+        Target:"array" => "target",
     }
 }
-
-impl jbk::creator::PropertyName for Property {}
 
 pub struct AllProperties {
     pub store: jbk::reader::EntryStore,
@@ -44,32 +25,12 @@ pub struct AllProperties {
     pub group_property: jbk::reader::builder::IntProperty,
     pub rigths_property: jbk::reader::builder::IntProperty,
     pub mtime_property: jbk::reader::builder::IntProperty,
-    pub variant_id_property: jbk::reader::builder::VariantIdProperty,
+    pub variant_id_property: jbk::reader::builder::VariantIdBuilder<EntryType>,
     pub file_content_address_property: jbk::reader::builder::ContentProperty,
     pub file_size_property: jbk::reader::builder::IntProperty,
     pub dir_first_child_property: jbk::reader::builder::IntProperty,
     pub dir_nb_children_property: jbk::reader::builder::IntProperty,
     pub link_target_property: jbk::reader::builder::ArrayProperty,
-}
-
-macro_rules! prop_as_builder {
-    ($container:expr, $key:literal, $value_storage:expr, $kind:literal) => {
-        $container
-            .get($key)
-            .ok_or(ArxFormatError(concat!(
-                "Property `",
-                $key,
-                "` is not present."
-            )))?
-            .as_builder($value_storage)?
-            .ok_or(ArxFormatError(concat!(
-                "Property `",
-                $key,
-                "` is not a ",
-                $kind,
-                " property."
-            )))?
-    };
 }
 
 impl AllProperties {
@@ -78,48 +39,64 @@ impl AllProperties {
         value_storage: &jbk::reader::ValueStorage,
     ) -> Result<Self, BaseError> {
         let layout = store.layout();
-        let jbk::reader::layout::VariantPart {
-            variant_id_offset,
-            variants,
-            names,
-        } = layout.variant_part.as_ref().unwrap();
-        assert_eq!(variants.len(), 3);
-        let path_property = prop_as_builder!(layout.common, "name", value_storage, "array");
-        let parent_property = prop_as_builder!(layout.common, "parent", value_storage, "int");
-        let owner_property = prop_as_builder!(layout.common, "owner", value_storage, "int");
-        let group_property = prop_as_builder!(layout.common, "group", value_storage, "int");
-        let rigths_property = prop_as_builder!(layout.common, "rights", value_storage, "int");
-        let mtime_property = prop_as_builder!(layout.common, "mtime", value_storage, "int");
-        let variant_id_property = jbk::reader::builder::VariantIdProperty::new(*variant_id_offset);
-        let file_content_address_property = prop_as_builder!(
-            variants[names["file"] as usize],
-            "content",
+        if layout.variant_len() != 3 {
+            return Err(ArxFormatError("Layout must contain 3 variants").into());
+        }
+        let path_property = jbk::layout_builder!(
+            layout[common][Property::Name],
             value_storage,
-            "content"
+            ArxFormatError
         );
-        let file_size_property = prop_as_builder!(
-            variants[names["file"] as usize],
-            "size",
+        let parent_property = jbk::layout_builder!(
+            layout[common][Property::Parent],
             value_storage,
-            "int"
+            ArxFormatError
         );
-        let dir_first_child_property = prop_as_builder!(
-            variants[names["dir"] as usize],
-            "first_child",
+        let owner_property = jbk::layout_builder!(
+            layout[common][Property::Owner],
             value_storage,
-            "int"
+            ArxFormatError
         );
-        let dir_nb_children_property = prop_as_builder!(
-            variants[names["dir"] as usize],
-            "nb_children",
+        let group_property = jbk::layout_builder!(
+            layout[common][Property::Group],
             value_storage,
-            "int"
+            ArxFormatError
         );
-        let link_target_property = prop_as_builder!(
-            variants[names["link"] as usize],
-            "target",
+        let rigths_property = jbk::layout_builder!(
+            layout[common][Property::Rights],
             value_storage,
-            "int"
+            ArxFormatError
+        );
+        let mtime_property = jbk::layout_builder!(
+            layout[common][Property::Mtime],
+            value_storage,
+            ArxFormatError
+        );
+        let variant_id_property = layout.variant_id_builder().expect("We have variants");
+        let file_content_address_property = jbk::layout_builder!(
+            layout[EntryType::File][Property::Content],
+            value_storage,
+            ArxFormatError
+        );
+        let file_size_property = jbk::layout_builder!(
+            layout[EntryType::File][Property::Size],
+            value_storage,
+            ArxFormatError
+        );
+        let dir_first_child_property = jbk::layout_builder!(
+            layout[EntryType::Dir][Property::FirstChild],
+            value_storage,
+            ArxFormatError
+        );
+        let dir_nb_children_property = jbk::layout_builder!(
+            layout[EntryType::Dir][Property::NbChildren],
+            value_storage,
+            ArxFormatError
+        );
+        let link_target_property = jbk::layout_builder!(
+            layout[EntryType::Link][Property::Target],
+            value_storage,
+            ArxFormatError
         );
         Ok(Self {
             store,
