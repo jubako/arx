@@ -1,6 +1,6 @@
-use thiserror::Error;
-
 use crate::common::EntryType;
+use std::fmt::Display;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 #[error("Path {0} not found in archive")]
@@ -11,10 +11,27 @@ pub struct PathNotFound(pub crate::PathBuf);
 pub struct ArxFormatError(pub &'static str);
 
 #[derive(Error, Debug)]
-#[error("Arx entry ({actual}) is not of the expected type ({expected}).")]
 pub struct WrongType {
     pub expected: EntryType,
-    pub actual: EntryType,
+    pub actual: Option<EntryType>,
+}
+
+impl Display for WrongType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(e) = self.actual {
+            write!(
+                f,
+                "Arx entry ({}) is not of the expected type ({})",
+                e, self.expected
+            )
+        } else {
+            write!(
+                f,
+                "Arx entry has unknown type (Expected is {})",
+                self.expected
+            )
+        }
+    }
 }
 
 #[derive(Error, Debug)]
