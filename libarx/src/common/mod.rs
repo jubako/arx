@@ -52,9 +52,7 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
             .get_entry_reader(idx)
             .expect("idx should be valid");
         let entry_path = self.comparator.path_property.create(&reader)?;
-        Ok(entry_path
-            .partial_cmp(self.path_value)?
-            .expect("Value in the entry should be comparable to [u8]"))
+        Ok(entry_path.cmp(self.path_value)?)
     }
     fn ordered(&self) -> bool {
         true
