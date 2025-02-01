@@ -28,13 +28,13 @@ impl Entry {
     fn __repr__(&self) -> String {
         match &self.entry {
             arx::Entry::File(e) => {
-                format!("File({})", String::from_utf8(e.path().clone()).unwrap())
+                format!("File({})", String::from_utf8(e.path().to_vec()).unwrap())
             }
             arx::Entry::Link(e) => {
-                format!("Link({})", String::from_utf8(e.path().clone()).unwrap())
+                format!("Link({})", String::from_utf8(e.path().to_vec()).unwrap())
             }
             arx::Entry::Dir(_, e) => {
-                format!("Dir({})", String::from_utf8(e.path().clone()).unwrap())
+                format!("Dir({})", String::from_utf8(e.path().to_vec()).unwrap())
             }
         }
     }
@@ -53,9 +53,9 @@ impl Entry {
     #[getter]
     fn path(&self) -> PyResult<String> {
         Ok(match &self.entry {
-            arx::Entry::File(e) => String::from_utf8(e.path().clone()).unwrap(),
-            arx::Entry::Link(e) => String::from_utf8(e.path().clone()).unwrap(),
-            arx::Entry::Dir(_, e) => String::from_utf8(e.path().clone()).unwrap(),
+            arx::Entry::File(e) => String::from_utf8(e.path().to_vec()).unwrap(),
+            arx::Entry::Link(e) => String::from_utf8(e.path().to_vec()).unwrap(),
+            arx::Entry::Dir(_, e) => String::from_utf8(e.path().to_vec()).unwrap(),
         })
     }
 

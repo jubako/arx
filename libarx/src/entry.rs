@@ -5,7 +5,7 @@ use jbk::reader::ByteSlice;
 #[derive(Clone)]
 pub struct CommonPart {
     idx: jbk::EntryIdx,
-    path: Vec<u8>,
+    path: jbk::SmallBytes,
     parent: Option<jbk::EntryIdx>,
     owner: u32,
     group: u32,
@@ -18,7 +18,7 @@ pub trait CommonEntry {
     fn idx(&self) -> jbk::EntryIdx {
         self.common().idx
     }
-    fn path(&self) -> &Vec<u8> {
+    fn path(&self) -> &[u8] {
         &self.common().path
     }
     fn parent(&self) -> Option<jbk::EntryIdx> {
@@ -63,7 +63,7 @@ impl FileEntry {
 #[derive(Clone)]
 pub struct Link {
     common: CommonPart,
-    target: Vec<u8>,
+    target: jbk::SmallBytes,
 }
 
 impl CommonEntry for Link {
@@ -73,7 +73,7 @@ impl CommonEntry for Link {
 }
 
 impl Link {
-    pub fn target(&self) -> &Vec<u8> {
+    pub fn target(&self) -> &[u8] {
         &self.target
     }
 }
@@ -121,7 +121,7 @@ mod private {
 
         fn create_entry(&self, idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<CommonPart> {
             let path_prop = self.path_property.create(reader)?;
-            let mut path = vec![];
+            let mut path = jbk::SmallBytes::new();
             path_prop.resolve_to_vec(&mut path)?;
             let parent = self.parent_prorperty.create(reader)?;
             let parent = if parent == 0 {
@@ -185,7 +185,7 @@ mod private {
         fn create_entry(&self, idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
             let common = self.common.create_entry(idx, reader)?;
             let target_prop = self.link_property.create(reader)?;
-            let mut target = vec![];
+            let mut target = jbk::SmallBytes::new();
             target_prop.resolve_to_vec(&mut target)?;
             Ok(Link { common, target })
         }

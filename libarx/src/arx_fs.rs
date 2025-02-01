@@ -93,7 +93,7 @@ impl LightLinkBuilder {
 }
 
 impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
-    type Entry = Vec<u8>;
+    type Entry = jbk::SmallBytes;
     type Error = FsError;
 
     fn create_entry(&self, idx: jbk::EntryIdx) -> Result<Option<Self::Entry>, Self::Error> {
@@ -102,7 +102,7 @@ impl jbk::reader::builder::BuilderTrait for LightLinkBuilder {
             .map(|reader| match self.variant_id_property.create(&reader)? {
                 Some(EntryType::Link) => {
                     let target = self.link_property.create(&reader)?;
-                    let mut vec = Vec::new();
+                    let mut vec = jbk::SmallBytes::new();
                     target.resolve_to_vec(&mut vec)?;
                     Ok(vec)
                 }
@@ -199,7 +199,7 @@ impl jbk::reader::builder::BuilderTrait for LightDirBuilder {
 
 struct LightCommonPath {
     file_type: Option<EntryType>,
-    path: Vec<u8>,
+    path: jbk::SmallBytes,
 }
 
 struct LightCommonPathBuilder {
@@ -227,7 +227,7 @@ impl jbk::reader::builder::BuilderTrait for LightCommonPathBuilder {
             .get_entry_reader(idx)
             .map(|reader| {
                 let path_prop = self.path_property.create(&reader)?;
-                let mut path = vec![];
+                let mut path = jbk::SmallBytes::new();
                 path_prop.resolve_to_vec(&mut path)?;
                 let file_type = self.variant_id_property.create(&reader)?;
                 Ok(LightCommonPath { file_type, path })
@@ -326,7 +326,7 @@ impl jbk::reader::builder::BuilderTrait for AttrBuilder {
                         match link.size() {
                             Some(s) => s as u64,
                             None => {
-                                let mut vec = Vec::new();
+                                let mut vec = jbk::SmallBytes::new();
                                 link.resolve_to_vec(&mut vec)?;
                                 vec.len() as u64
                             }
@@ -779,7 +779,7 @@ impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
                         // We remove "." and ".."
                         let entry_idx = range.offset() + jbk::EntryIdx::from(i as u32 - 2);
                         let entry_ino = Ino::from(entry_idx);
-                        let entry_path = OsString::from_vec(entry.path);
+                        let entry_path = OsString::from_vec(entry.path.to_vec());
                         let should_break = reply.add(
                             entry_ino.get(),
                             /* offset =*/ i,
