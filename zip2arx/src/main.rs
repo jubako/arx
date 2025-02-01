@@ -41,7 +41,7 @@ struct Cli {
         ),
         value_hint=ValueHint::FilePath
     )]
-    outfile: Option<PathBuf>,
+    outfile: Option<jbk::Utf8PathBuf>,
 
     #[command(flatten)]
     concat_mode: Option<jbk::cmd_utils::ConcatMode>,
@@ -226,10 +226,10 @@ impl arx::create::EntryTrait for ZipEntry {
 }
 
 impl<R: Read + Seek> Converter<R> {
-    pub fn new<P: AsRef<Path>>(
+    pub fn new(
         archive: zip::ZipArchive<R>,
         archive_path: PathBuf,
-        outfile: P,
+        outfile: impl AsRef<jbk::Utf8Path>,
         concat_mode: jbk::creator::ConcatMode,
     ) -> Result<Self, arx::CreatorError> {
         let progress = Arc::new(ProgressBar::new(&archive));
@@ -249,18 +249,18 @@ impl<R: Read + Seek> Converter<R> {
         })
     }
 
-    fn finalize(self, outfile: &Path) -> Result<(), arx::CreatorError> {
-        self.arx_creator.finalize(outfile)
+    fn finalize(self) -> Result<(), arx::CreatorError> {
+        self.arx_creator.finalize()
     }
 
-    pub fn run(mut self, outfile: &Path) -> Result<(), arx::CreatorError> {
+    pub fn run(mut self) -> Result<(), arx::CreatorError> {
         for idx in 0..self.archive.len() {
             self.progress.entries.inc(1);
             let entry = self.archive.by_index(idx).unwrap();
             let entry = ZipEntry::new(entry, self.arx_creator.adder(), &self.archive_path)?;
             self.arx_creator.add_entry(&entry)?;
         }
-        self.finalize(outfile)
+        self.finalize()
     }
 }
 
@@ -302,5 +302,5 @@ fn main() -> Result<(), arx::CreatorError> {
             Some(e) => e.into(),
         },
     )?;
-    converter.run(args.outfile.as_ref().unwrap())
+    converter.run()
 }

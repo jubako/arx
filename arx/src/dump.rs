@@ -44,8 +44,7 @@ fn dump_entry(
                 MayMissPack::MISSING(pack_info) => {
                     eprintln!(
                         "Missing pack {}. Declared location is {}",
-                        pack_info.uuid,
-                        String::from_utf8_lossy(&pack_info.pack_location)
+                        pack_info.uuid, pack_info.pack_location
                     );
                 }
             }

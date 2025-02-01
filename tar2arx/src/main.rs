@@ -4,7 +4,6 @@ use clap::{CommandFactory, Parser, ValueHint};
 use anyhow::{anyhow, Result};
 use jbk::creator::ContentAdder;
 use std::io::Read;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -36,7 +35,7 @@ struct Cli {
         value_parser,
         value_hint=ValueHint::FilePath
     )]
-    outfile: Option<PathBuf>,
+    outfile: Option<jbk::Utf8PathBuf>,
 
     #[command(flatten)]
     concat_mode: Option<jbk::cmd_utils::ConcatMode>,
@@ -239,9 +238,9 @@ impl arx::create::EntryTrait for TarEntry {
 }
 
 impl<R: Read> Converter<R> {
-    pub fn new<P: AsRef<Path>>(
+    pub fn new(
         archive: tar::Archive<R>,
-        outfile: P,
+        outfile: impl AsRef<jbk::Utf8Path>,
         concat_mode: jbk::creator::ConcatMode,
         compression: jbk::creator::Compression,
         progress_bar: indicatif::ProgressBar,
@@ -261,11 +260,11 @@ impl<R: Read> Converter<R> {
         })
     }
 
-    fn finalize(self, outfile: &Path) -> Result<(), arx::CreatorError> {
-        self.arx_creator.finalize(outfile)
+    fn finalize(self) -> Result<(), arx::CreatorError> {
+        self.arx_creator.finalize()
     }
 
-    pub fn run(mut self, outfile: &Path) -> Result<(), arx::CreatorError> {
+    pub fn run(mut self) -> Result<(), arx::CreatorError> {
         let iter = self.archive.entries()?;
         for entry in iter {
             let entry = entry?;
@@ -273,7 +272,7 @@ impl<R: Read> Converter<R> {
                 self.arx_creator.add_entry(&entry)?;
             }
         }
-        self.finalize(outfile)
+        self.finalize()
     }
 }
 
@@ -312,9 +311,9 @@ fn main() -> Result<()> {
     }
 
     let outfile = args.outfile.unwrap_or_else(|| {
-        let p = Path::new(args.tar_file.as_ref().unwrap());
+        let p = jbk::Utf8Path::new(args.tar_file.as_ref().unwrap());
         let p = if p.starts_with("https://") || p.starts_with("http://") {
-            Path::new(p.file_name().unwrap())
+            jbk::Utf8Path::new(p.file_name().unwrap())
                 .with_extension("")
                 .with_extension("arx")
         } else {
@@ -362,5 +361,5 @@ fn main() -> Result<()> {
         args.compression,
         progress_bar,
     )?;
-    Ok(converter.run(&outfile)?)
+    Ok(converter.run()?)
 }

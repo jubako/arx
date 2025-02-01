@@ -310,7 +310,7 @@ where
                     "Missing pack {} for {}. Declared location is {}",
                     pack_info.uuid,
                     abs_path.display(),
-                    String::from_utf8_lossy(&pack_info.pack_location)
+                    pack_info.pack_location
                 );
             }
         }
