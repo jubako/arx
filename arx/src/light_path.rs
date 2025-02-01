@@ -1,14 +1,14 @@
 use std::io::Write;
 
 #[derive(Clone, Debug)]
-pub struct LightPath(Vec<Vec<u8>>);
+pub struct LightPath(Vec<jbk::SmallBytes>);
 
 impl LightPath {
     pub fn new() -> Self {
         Self(Vec::with_capacity(10))
     }
 
-    pub fn push(&mut self, component: Vec<u8>) {
+    pub fn push(&mut self, component: jbk::SmallBytes) {
         self.0.push(component);
     }
 
@@ -44,8 +44,8 @@ impl Default for LightPath {
     }
 }
 
-impl From<Vec<u8>> for LightPath {
-    fn from(s: Vec<u8>) -> Self {
+impl From<jbk::SmallBytes> for LightPath {
+    fn from(s: jbk::SmallBytes) -> Self {
         let mut p = Self::new();
         p.push(s);
         p

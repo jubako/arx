@@ -234,7 +234,10 @@ impl DirEntry {
                     )
                     .into());
                 }
-                values.insert(Property::Target, jbk::Value::Array(target.into()));
+                values.insert(
+                    Property::Target,
+                    jbk::Value::Array(Vec::from(target).into()),
+                );
                 let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
                     &entry_store.schema,
                     Some(EntryType::Link),

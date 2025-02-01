@@ -1,3 +1,4 @@
+use core::convert::TryInto;
 use std::collections::HashSet;
 use std::fs::{create_dir_all, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -16,14 +17,14 @@ use jbk::reader::MayMissPack;
 use std::sync::{Arc, OnceLock};
 
 struct FileEntry {
-    path: String,
+    path: jbk::SmallString,
     content: jbk::ContentAddress,
     mtime: u64,
 }
 
 struct Link {
-    path: String,
-    target: String,
+    path: jbk::SmallString,
+    target: jbk::SmallString,
     mtime: u64,
 }
 
@@ -46,12 +47,12 @@ impl Builder for FileBuilder {
 
     fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
-        let mut path = vec![];
+        let mut path = jbk::SmallBytes::new();
         path_prop.resolve_to_vec(&mut path)?;
         let content = self.content_address_property.create(reader)?;
         let mtime = self.mtime_property.create(reader)?;
         Ok(FileEntry {
-            path: String::from_utf8(path)?,
+            path: path.try_into()?,
             content,
             mtime,
         })
@@ -77,16 +78,16 @@ impl Builder for LinkBuilder {
 
     fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
-        let mut path = vec![];
+        let mut path = jbk::SmallBytes::new();
         path_prop.resolve_to_vec(&mut path)?;
 
         let target_prop = self.link_property.create(reader)?;
-        let mut target = vec![];
+        let mut target = jbk::SmallBytes::new();
         target_prop.resolve_to_vec(&mut target)?;
         let mtime = self.mtime_property.create(reader)?;
         Ok(Link {
-            path: String::from_utf8(path)?,
-            target: String::from_utf8(target)?,
+            path: path.try_into()?,
+            target: target.try_into()?,
             mtime,
         })
     }
@@ -97,7 +98,7 @@ struct DirBuilder {
 }
 
 impl Builder for DirBuilder {
-    type Entry = String;
+    type Entry = jbk::SmallString;
 
     fn new(properties: &AllProperties) -> Self {
         Self {
@@ -107,9 +108,9 @@ impl Builder for DirBuilder {
 
     fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
-        let mut path = vec![];
+        let mut path = jbk::SmallBytes::new();
         path_prop.resolve_to_vec(&mut path)?;
-        Ok(String::from_utf8(path)?)
+        Ok(path.try_into()?)
     }
 }
 
@@ -196,9 +197,9 @@ where
     fn on_directory_enter(
         &self,
         current_path: &mut crate::PathBuf,
-        path: &String,
+        path: &jbk::SmallString,
     ) -> Result<bool, ExtractError> {
-        current_path.push(path);
+        current_path.push(path.as_str());
         if !self.should_extract(current_path, true) {
             return Ok(false);
         }
@@ -212,7 +213,7 @@ where
     fn on_directory_exit(
         &self,
         current_path: &mut crate::PathBuf,
-        _path: &String,
+        _path: &jbk::SmallString,
     ) -> Result<(), ExtractError> {
         current_path.pop();
         Ok(())
@@ -224,7 +225,7 @@ where
         entry: &FileEntry,
     ) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
-        current_path.push(&entry.path);
+        current_path.push(entry.path.as_str());
         let entry_content = entry.content;
         let abs_path = self.abs_path(&current_path);
         let print_progress = self.print_progress;
@@ -323,13 +324,16 @@ where
 
     fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
-        current_path.push(&link.path);
+        current_path.push(link.path.as_str());
         if !self.should_extract(&current_path, false) {
             current_path.pop();
             return Ok(());
         }
         let abs_path = self.abs_path(&current_path);
-        if let Err(e) = symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path)) {
+        if let Err(e) = symlink(
+            PathBuf::from(link.target.as_str()),
+            PathBuf::from(&abs_path),
+        ) {
             match e.kind() {
                 ErrorKind::AlreadyExists => match self.overwrite {
                     Overwrite::Skip => return Ok(()),
@@ -343,14 +347,20 @@ where
                         let new_time = SystemTime::UNIX_EPOCH + Duration::from_secs(link.mtime);
                         if new_time >= existing_time {
                             std::fs::remove_file(&abs_path)?;
-                            symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                            symlink(
+                                PathBuf::from(link.target.as_str()),
+                                PathBuf::from(&abs_path),
+                            )?;
                         } else {
                             return Ok(());
                         }
                     }
                     Overwrite::Overwrite => {
                         std::fs::remove_file(&abs_path)?;
-                        symlink(PathBuf::from(&link.target), PathBuf::from(&abs_path))?;
+                        symlink(
+                            PathBuf::from(link.target.as_str()),
+                            PathBuf::from(&abs_path),
+                        )?;
                     }
                     Overwrite::Error => return Err(e.into()),
                 },

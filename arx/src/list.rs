@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, ValueHint};
 
-type Path = Vec<u8>;
+type Path = jbk::SmallBytes;
 
 struct PathBuilder {
     path_property: jbk::reader::builder::ArrayProperty,
@@ -28,7 +28,7 @@ impl arx::Builder for PathBuilder {
 
     fn create_entry(&self, _idx: jbk::EntryIdx, reader: &ByteSlice) -> jbk::Result<Self::Entry> {
         let path_prop = self.path_property.create(reader)?;
-        let mut path = vec![];
+        let mut path = jbk::SmallBytes::new();
         path_prop.resolve_to_vec(&mut path)?;
         Ok(path)
     }
