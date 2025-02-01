@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -12,8 +11,8 @@ pub struct SimpleCreator {
 }
 
 impl SimpleCreator {
-    pub fn new<P: AsRef<Path>>(
-        outfile: P,
+    pub fn new(
+        outfile: impl AsRef<jbk::Utf8Path>,
         concat_mode: ConcatMode,
         progress: Arc<dyn jbk::creator::Progress>,
         cache_progress: Rc<dyn jbk::creator::CacheProgress>,
@@ -37,12 +36,11 @@ impl SimpleCreator {
         })
     }
 
-    pub fn finalize(self, outfile: &Path) -> Void {
-        Ok(self.cached_content_creator.into_inner().finalize(
-            outfile,
-            self.entry_store_creator,
-            vec![],
-        )?)
+    pub fn finalize(self) -> Void {
+        Ok(self
+            .cached_content_creator
+            .into_inner()
+            .finalize(self.entry_store_creator, vec![])?)
     }
 
     pub fn adder(&mut self) -> &mut impl ContentAdder {

@@ -16,13 +16,12 @@ use pyo3::prelude::*;
 pub struct Creator {
     started: bool,
     creator: Option<SimpleCreator>,
-    outfile: PathBuf,
 }
 
 #[pymethods]
 impl Creator {
     #[new]
-    fn new(outfile: PathBuf) -> PyResult<Self> {
+    fn new(outfile: String) -> PyResult<Self> {
         Ok(Self {
             started: false,
             creator: Some(
@@ -35,7 +34,6 @@ impl Creator {
                 )
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
             ),
-            outfile,
         })
     }
 
@@ -63,7 +61,7 @@ impl Creator {
         match slf.creator.take() {
             None => Err(PyRuntimeError::new_err("Creator already finalized")),
             Some(creator) => creator
-                .finalize(&slf.outfile)
+                .finalize()
                 .map_err(|e| PyRuntimeError::new_err(e.to_string())),
         }
     }

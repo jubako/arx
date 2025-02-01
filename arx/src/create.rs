@@ -4,7 +4,7 @@ use log::{debug, info};
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::{absolute, Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -86,7 +86,7 @@ pub struct Options {
         required_unless_present("list_compressions"),
         value_hint=ValueHint::FilePath,
     )]
-    outfile: Option<PathBuf>,
+    outfile: Option<jbk::Utf8PathBuf>,
 
     /// Remove STRIP_PREFIX from the entries' name added to the archive.
     #[arg(long, required = false, value_hint=ValueHint::DirPath, help_heading="Input options")]
@@ -192,6 +192,7 @@ fn check_input_paths_exist(file_list: &[PathBuf]) -> Result<()> {
 }
 
 fn check_output_path_writable(out_file: &Path, force: bool) -> Result<()> {
+    let out_file = absolute(out_file)?;
     if !out_file.parent().unwrap().is_dir() {
         Err(anyhow!(
             "Directory {} doesn't exist",
@@ -282,8 +283,7 @@ pub fn create(options: Options) -> Result<()> {
     let out_file = options.outfile.as_ref().expect(
         "Clap unsure it is Some, except if we have list_compressions, and so we return early",
     );
-    let out_file = std::env::current_dir()?.join(out_file);
-    check_output_path_writable(&out_file, options.force)?;
+    check_output_path_writable(out_file.as_std_path(), options.force)?;
 
     info!("Creating archive {:?}", out_file);
     let file_list = options
@@ -302,7 +302,7 @@ pub fn create(options: Options) -> Result<()> {
     };
     let cache_progress = Rc::new(CachedSize::new());
     let mut creator = arx::create::SimpleCreator::new(
-        &out_file,
+        out_file,
         match options.concat_mode {
             None => jbk::creator::ConcatMode::OneFile,
             Some(e) => e.into(),
@@ -341,7 +341,7 @@ pub fn create(options: Options) -> Result<()> {
         }
     };
 
-    let ret = creator.finalize(&out_file);
+    let ret = creator.finalize();
     debug!("Saved place is {}", cache_progress.0.get());
     Ok(ret?)
 }
