@@ -60,6 +60,61 @@ fn test_mount() -> Result {
     Ok(())
 }
 
+#[cfg(test)]
+macro_rules! tear_down {
+    ($name:ident, $function:expr) => {
+        struct $name<F>(Option<F>)
+        where
+            F: FnOnce();
+        impl<F> Drop for $name<F>
+        where
+            F: FnOnce(),
+        {
+            fn drop(&mut self) {
+                self.0.take().unwrap()()
+            }
+        }
+        let _tear_down = $name(Some($function));
+    };
+}
+
+#[cfg(all(unix, not(feature = "in_ci")))]
+#[test]
+fn test_mount_subdir() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let mount_point = tempfile::TempDir::with_prefix_in("mount_", env!("CARGO_TARGET_TMPDIR"))?;
+
+    let mut command = cmd!(
+        "arx",
+        "mount",
+        &arx_file,
+        "--root-dir",
+        "sub_dir_a",
+        mount_point.path()
+    );
+    let status = command.status()?;
+    assert!(status.success());
+    tear_down!(Unmount, || {
+        cmd!("umount", mount_point.path()).status().unwrap();
+    });
+
+    // Wait a bit that mount point has been actually setup.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let mut source_sub_dir = tmp_source_dir.to_path_buf();
+    source_sub_dir.push("sub_dir_a");
+
+    assert!(tree_diff(
+        &mount_point,
+        source_sub_dir,
+        SimpleDiffer::new()
+    )?);
+    Ok(())
+}
+
+#[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
 fn test_extract() -> Result {
     let tmp_source_dir = SHARED_TEST_DIR.path();
