@@ -2,7 +2,6 @@ mod utils;
 
 use format_bytes::format_bytes;
 use std::{
-    collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -57,7 +56,7 @@ fn test_mount() -> Result {
     let arx = arx::Arx::new(arx_file)?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    assert!(tree_diff(mount_point, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(mount_point, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -67,15 +66,8 @@ fn test_extract() -> Result {
     let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
-    arx::extract(
-        arx_file,
-        extract_dir.path(),
-        Default::default(),
-        true,
-        false,
-        arx::Overwrite::Error,
-    )?;
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    arx::extract_all(arx_file, extract_dir.path(), false, arx::Overwrite::Error)?;
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -99,14 +91,16 @@ fn test_extract_filter() -> Result {
     let arx_file = BASE_ARX_FILE.path();
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
-    arx::extract(
-        arx_file,
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "-C",
         extract_dir.path(),
-        ["sub_dir_a".into()].into(),
-        true,
-        true,
-        arx::Overwrite::Error,
-    )?;
+        "--glob",
+        "sub_dir_a/**"
+    )
+    .check_output(Some(b""), Some(b""));
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
     let extract_sub_dir = join!(extract_dir / "sub_dir_a");
@@ -114,7 +108,7 @@ fn test_extract_filter() -> Result {
     assert!(tree_diff(
         extract_sub_dir,
         source_sub_dir,
-        Default::default()
+        SimpleDiffer::new()
     )?);
     Ok(())
 }
@@ -139,7 +133,7 @@ fn test_extract_subdir() -> Result {
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
-    assert!(tree_diff(extract_dir, source_sub_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, source_sub_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -187,7 +181,7 @@ fn test_extract_existing_content_skip() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -239,7 +233,7 @@ fn test_extract_existing_content_warn() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -285,7 +279,7 @@ fn test_extract_existing_content_newer_true() -> Result {
         "--overwrite=newer"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -316,7 +310,7 @@ fn test_extract_existing_content_newer_false() -> Result {
     assert!(tree_diff(
         extract_dir,
         tmp_source_dir,
-        HashMap::from([
+        ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
                 ExistingExpected::Content(file_content)
@@ -351,7 +345,7 @@ fn test_extract_existing_content_overwrite() -> Result {
         "--overwrite=overwrite"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
@@ -385,6 +379,80 @@ fn test_extract_existing_content_error() -> Result {
                 .as_bytes()
         ),
     );
-    assert!(!tree_diff(extract_dir, tmp_source_dir, Default::default())?);
+    assert!(!tree_diff(
+        extract_dir,
+        tmp_source_dir,
+        SimpleDiffer::new()
+    )?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_subdir_filter() -> Result {
+    let tmp_source_dir = SHARED_TEST_DIR.path();
+    let arx_file = BASE_ARX_FILE.path();
+
+    let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
+
+    cmd!(
+        "arx",
+        "extract",
+        &arx_file,
+        "--root-dir",
+        "sub_dir_a",
+        "-C",
+        extract_dir.path(),
+        "--glob",
+        "*.txt"
+    )
+    .check_output(Some(b""), Some(b""));
+
+    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+
+    println!(
+        "Diff {} and {}",
+        source_sub_dir.display(),
+        extract_dir.path().display()
+    );
+
+    struct DiffOnlyTxt(bool);
+
+    impl Differ for DiffOnlyTxt {
+        type Result = bool;
+
+        fn result(self) -> Self::Result {
+            self.0
+        }
+
+        fn push(&mut self, _entry_name: &OsStr) {}
+
+        fn pop(&mut self) {}
+
+        fn equal(&mut self, entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {
+            // Only txt should be equal
+            if !entry_tested.file_name().to_string_lossy().ends_with(".txt") {
+                self.0 = false
+            }
+        }
+
+        fn added(&mut self, _entry: &TreeEntry) {
+            // We don't want any extra file
+            self.0 = false
+        }
+
+        fn removed(&mut self, entry: &TreeEntry) {
+            // We care only about txt file
+            if entry.file_name().to_string_lossy().ends_with(".txt") {
+                self.0 = false
+            }
+        }
+
+        fn diff(&mut self, _entry_tested: &TreeEntry, _entry_ref: &TreeEntry) {
+            // Existing file must match
+            self.0 = false
+        }
+    }
+
+    assert!(tree_diff(extract_dir, source_sub_dir, DiffOnlyTxt(true))?);
     Ok(())
 }

@@ -116,6 +116,40 @@ impl Builder for DirBuilder {
 
 type FullBuilder = (FileBuilder, LinkBuilder, DirBuilder);
 
+pub trait FileFilter: Send {
+    ///  Should we accept (to extract) path
+    fn accept(&self, path: &crate::Path) -> bool;
+
+    /// Weither we early exit (don't enter the directory) if the directory is not accepted.
+    /// true if we don't want to extract any file/directory under a refused directory
+    /// false if we may still extract a file under a refused directory
+    fn early_exit(&self) -> bool {
+        true
+    }
+}
+
+impl FileFilter for HashSet<crate::PathBuf> {
+    fn accept(&self, path: &crate::Path) -> bool {
+        self.contains(path)
+    }
+}
+
+impl FileFilter for () {
+    fn accept(&self, _path: &crate::Path) -> bool {
+        true
+    }
+}
+
+impl FileFilter for Box<dyn FileFilter> {
+    fn accept(&self, path: &crate::Path) -> bool {
+        self.as_ref().accept(path)
+    }
+
+    fn early_exit(&self) -> bool {
+        self.as_ref().early_exit()
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "cmd_utils", derive(clap::ValueEnum))]
 pub enum Overwrite {
@@ -126,63 +160,41 @@ pub enum Overwrite {
     Error,
 }
 
-struct Extractor<'a, 'scope>
+struct Extractor<'a, 'scope, F>
 where
     'a: 'scope,
+    F: FileFilter,
 {
     arx: &'a Arx,
     scope: &'scope rayon::Scope<'a>,
     err: Arc<OnceLock<jbk::Error>>,
-    files: HashSet<crate::PathBuf>,
+    filter: F,
     base_dir: PathBuf,
     print_progress: bool,
-    recurse: bool,
     overwrite: Overwrite,
 }
 
-impl Extractor<'_, '_> {
-    fn should_extract(&self, current_file: &crate::Path, is_dir: bool) -> bool {
-        if self.files.is_empty() {
-            return true;
+impl<F> Extractor<'_, '_, F>
+where
+    F: FileFilter,
+{
+    fn create_parents(&self, current_file: &crate::Path) -> jbk::Result<()> {
+        if let Some(parent_path) = current_file.parent() {
+            let absolute_path = self.abs_path(parent_path);
+            create_dir_all(absolute_path)?;
         }
-
-        if self.files.contains(current_file) {
-            return true;
-        }
-
-        if self.recurse {
-            // We must extract any file/dir child of a directory to extract.
-            let mut parent = current_file.parent();
-            while let Some(p) = parent {
-                if self.files.contains(p) {
-                    return true;
-                }
-                parent = p.parent();
-            }
-        }
-
-        if is_dir {
-            // We must create any dirs parent of files/dirs to extract.
-            for file in &self.files {
-                let mut parent = file.parent();
-                while let Some(p) = parent {
-                    if current_file == p {
-                        return true;
-                    }
-                    parent = p.parent();
-                }
-            }
-        }
-        false
+        Ok(())
     }
+
     fn abs_path(&self, current_file: &crate::Path) -> PathBuf {
         current_file.to_path(&self.base_dir)
     }
 }
 
-impl<'a, 'scope> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'a, 'scope>
+impl<'a, 'scope, F> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'a, 'scope, F>
 where
     'a: 'scope,
+    F: FileFilter,
 {
     type Error = ExtractError;
     fn on_start(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
@@ -200,9 +212,10 @@ where
         path: &jbk::SmallString,
     ) -> Result<bool, ExtractError> {
         current_path.push(path.as_str());
-        if !self.should_extract(current_path, true) {
-            return Ok(false);
+        if !self.filter.accept(current_path) {
+            return Ok(!self.filter.early_exit());
         }
+        self.create_parents(current_path)?;
         let abs_path = self.abs_path(current_path);
         create_dir_all(&abs_path)?;
         if self.print_progress {
@@ -226,13 +239,15 @@ where
     ) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
         current_path.push(entry.path.as_str());
+        if !self.filter.accept(&current_path) {
+            return Ok(());
+        }
+        self.create_parents(&current_path)?;
+
         let entry_content = entry.content;
         let abs_path = self.abs_path(&current_path);
         let print_progress = self.print_progress;
         let arx = self.arx;
-        if !self.should_extract(&current_path, false) {
-            return Ok(());
-        }
         let bytes = arx
             .container
             .get_bytes(entry_content)?
@@ -325,10 +340,11 @@ where
     fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> Result<(), ExtractError> {
         let mut current_path = current_path.clone();
         current_path.push(link.path.as_str());
-        if !self.should_extract(&current_path, false) {
+        if !self.filter.accept(&current_path) {
             current_path.pop();
             return Ok(());
         }
+        self.create_parents(&current_path)?;
         let abs_path = self.abs_path(&current_path);
         if let Err(e) = symlink(
             PathBuf::from(link.target.as_str()),
@@ -375,26 +391,26 @@ where
     }
 }
 
-pub fn extract(
+pub fn extract_all(
     infile: &Path,
     outdir: &Path,
-    files_to_extract: HashSet<crate::PathBuf>,
-    recurse: bool,
     progress: bool,
     overwrite: Overwrite,
 ) -> Result<(), ExtractError> {
     let arx = Arx::new(infile)?;
-    extract_arx(&arx, outdir, files_to_extract, recurse, progress, overwrite)
+    extract_arx(&arx, outdir, (), progress, overwrite)
 }
 
-pub fn extract_arx(
+pub fn extract_arx<F>(
     arx: &Arx,
     outdir: &Path,
-    files_to_extract: HashSet<crate::PathBuf>,
-    recurse: bool,
+    filter: F,
     progress: bool,
     overwrite: Overwrite,
-) -> Result<(), ExtractError> {
+) -> Result<(), ExtractError>
+where
+    F: FileFilter,
+{
     let mut walker = Walker::new(arx, Default::default());
     let err = Default::default();
     rayon::scope(|scope| {
@@ -402,10 +418,9 @@ pub fn extract_arx(
             arx,
             scope,
             err: Arc::clone(&err),
-            files: files_to_extract,
+            filter,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
-            recurse,
             overwrite,
         };
         walker.run(&extractor)
@@ -419,15 +434,18 @@ pub fn extract_arx(
     }
 }
 
-pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
+pub fn extract_arx_range<F, R>(
     arx: &Arx,
     outdir: &Path,
     range: &R,
-    files_to_extract: HashSet<crate::PathBuf>,
-    recurse: bool,
+    filter: F,
     progress: bool,
     overwrite: Overwrite,
-) -> Result<(), ExtractError> {
+) -> Result<(), ExtractError>
+where
+    F: FileFilter,
+    R: jbk::reader::Range + Sync,
+{
     let mut walker = Walker::new(arx, Default::default());
     let err = Default::default();
     rayon::scope(|scope| {
@@ -435,10 +453,9 @@ pub fn extract_arx_range<R: jbk::reader::Range + Sync>(
             arx,
             scope,
             err: Arc::clone(&err),
-            files: files_to_extract,
+            filter,
             base_dir: outdir.to_path_buf(),
             print_progress: progress,
-            recurse,
             overwrite,
         };
         walker.run_from_range(&extractor, range)
