@@ -52,7 +52,7 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
             .get_entry_reader(idx)
             .expect("idx should be valid");
         let entry_path = self.comparator.path_property.create(&reader)?;
-        Ok(entry_path.cmp(self.path_value)?)
+        entry_path.cmp(self.path_value)
     }
     fn ordered(&self) -> bool {
         true
@@ -80,7 +80,7 @@ impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
     }
 }
 
-impl<'builder, Builder: BuilderTrait> Iterator for ReadEntry<'builder, Builder> {
+impl<Builder: BuilderTrait> Iterator for ReadEntry<'_, Builder> {
     type Item = Result<Builder::Entry, Builder::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

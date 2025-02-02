@@ -494,7 +494,7 @@ const ROOT_ATTR: fuser::FileAttr = fuser::FileAttr {
     flags: 0,
 };
 
-impl<'a, S: Stats> fuser::Filesystem for ArxFs<'a, S> {
+impl<S: Stats> fuser::Filesystem for ArxFs<'_, S> {
     fn lookup(
         &mut self,
         _req: &fuser::Request,
