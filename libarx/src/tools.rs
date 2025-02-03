@@ -1,4 +1,5 @@
 use core::convert::TryInto;
+use core::ops::{Deref, DerefMut};
 use std::collections::HashSet;
 use std::fs::{create_dir_all, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -14,7 +15,51 @@ use crate::{AllProperties, Arx, ArxFormatError, Builder, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 use jbk::reader::MayMissPack;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, OnceLock};
+
+static FD_LIMIT: LazyLock<Arc<(Mutex<usize>, Condvar)>> =
+    std::sync::LazyLock::new(|| Arc::new((Mutex::new(1000), Condvar::new())));
+
+struct LimitedFile(std::fs::File);
+
+impl Deref for LimitedFile {
+    type Target = std::fs::File;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for LimitedFile {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Drop for LimitedFile {
+    fn drop(&mut self) {
+        let (lock, cvar) = &**FD_LIMIT;
+        let mut fd_left = lock.lock().unwrap();
+        *fd_left += 1;
+        cvar.notify_one();
+    }
+}
+
+trait OpenLimited {
+    fn open_limited<P: AsRef<Path>>(&self, path: P) -> std::io::Result<LimitedFile>;
+}
+
+impl OpenLimited for std::fs::OpenOptions {
+    fn open_limited<P: AsRef<Path>>(&self, path: P) -> std::io::Result<LimitedFile> {
+        {
+            let (lock, cvar) = &**FD_LIMIT;
+            let mut fd_left = cvar
+                .wait_while(lock.lock().unwrap(), |fd_left| *fd_left == 0)
+                .unwrap();
+            *fd_left -= 1;
+        }
+        Ok(LimitedFile(self.open(path)?))
+    }
+}
 
 struct FileEntry {
     path: jbk::SmallString,
@@ -263,7 +308,7 @@ where
                 let mut file = match OpenOptions::new()
                     .write(true)
                     .create_new(true)
-                    .open(&abs_path)
+                    .open_limited(&abs_path)
                 {
                     Ok(f) => f,
                     Err(e) => match e.kind() {
@@ -282,7 +327,7 @@ where
                                     OpenOptions::new()
                                         .write(true)
                                         .truncate(true)
-                                        .open(&abs_path)?
+                                        .open_limited(&abs_path)?
                                 } else {
                                     return Ok(());
                                 }
@@ -290,7 +335,7 @@ where
                             Overwrite::Overwrite => OpenOptions::new()
                                 .write(true)
                                 .truncate(true)
-                                .open(&abs_path)?,
+                                .open_limited(&abs_path)?,
                             Overwrite::Error => {
                                 return Err(ExtractError::FileExists { path: abs_path })
                             }
