@@ -23,7 +23,6 @@ human-panic.workspace = true
 git-version.workspace = true
 const_format.workspace = true
 zip = "2.2.0"
-flate2 = "1.0.26"
 time = "0.3.36"
 
 [features]
