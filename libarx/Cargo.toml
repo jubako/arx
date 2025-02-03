@@ -17,7 +17,6 @@ clap = { workspace=true, optional = true }
 libc = "0.2.148"
 lru = "0.12.4"
 fxhash = "0.2.1"
-blake3 = "1.5.0"
 tempfile = "3.8.0"
 walkdir = "2.4.0"
 relative-path = "1.9.2"
