@@ -22,7 +22,7 @@ clap_complete.workspace = true
 human-panic.workspace = true
 git-version.workspace = true
 const_format.workspace = true
-zip = "2.2.0"
+zip = "2.3.0"
 time = "0.3.36"
 
 [features]
