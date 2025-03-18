@@ -154,6 +154,7 @@ impl ZipEntry {
                 zip::ExtraField::ExtendedTimestamp(ex_timestamp) => {
                     mtime = ex_timestamp.mod_time().map(|ts| ts as u64)
                 }
+                zip::ExtraField::Ntfs(ntfs) => mtime = Some(ntfs.mtime()),
             }
         }
         let mtime = match mtime {
