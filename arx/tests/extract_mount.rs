@@ -1,5 +1,7 @@
 mod utils;
 
+use rustest::{test, *};
+
 use format_bytes::format_bytes;
 use std::{
     ffi::OsStr,
@@ -464,12 +466,6 @@ fn test_extract_subdir_filter() -> Result {
 
     let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
 
-    println!(
-        "Diff {} and {}",
-        source_sub_dir.display(),
-        extract_dir.path().display()
-    );
-
     struct DiffOnlyTxt(bool);
 
     impl Differ for DiffOnlyTxt {
@@ -511,3 +507,6 @@ fn test_extract_subdir_filter() -> Result {
     assert!(tree_diff(extract_dir, source_sub_dir, DiffOnlyTxt(true))?);
     Ok(())
 }
+
+#[rustest::main]
+fn main() {}

@@ -369,9 +369,10 @@ mod tests {
     use super::super::*;
     use super::*;
     use jbk::creator::EntryStoreTrait;
+    use rustest::{test, *};
 
     #[test]
-    fn test_empty() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_empty() -> Result {
         let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
         let mut creator = jbk::creator::DirectoryPackCreator::new(
@@ -401,7 +402,7 @@ mod tests {
             &self.0
         }
 
-        fn kind(&self) -> Result<Option<EntryKind>, crate::error::CreatorError> {
+        fn kind(&self) -> std::result::Result<Option<EntryKind>, crate::error::CreatorError> {
             Ok(Some(EntryKind::File(
                 jbk::Size::new(10),
                 jbk::ContentAddress::new(1.into(), 0.into()),
@@ -426,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn test_one_content() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_one_content() -> Result {
         let arx_file = tempfile::NamedTempFile::new_in(std::env::temp_dir())?;
         let (mut arx_file, arx_name) = arx_file.into_parts();
 

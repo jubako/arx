@@ -19,7 +19,7 @@ const VERSION: &str = const_format::formatcp!(
 
 /// Convert a zip archive into an Arx archive.
 #[derive(Parser)]
-#[command(name = "tar2arx", author, version, long_version=VERSION, about, long_about=None)]
+#[command(name = "zip2arx", author, version, long_version=VERSION, about, long_about=None)]
 struct Cli {
     /// Zip file to convert
     #[arg(
