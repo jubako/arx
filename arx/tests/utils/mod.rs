@@ -2,7 +2,6 @@ mod tree_diff;
 use std::{io::Read, path::Path, process::Command, sync::LazyLock};
 
 use rand::prelude::*;
-pub type Result = anyhow::Result<()>;
 
 #[allow(unused_imports)]
 pub use tree_diff::{
@@ -329,7 +328,6 @@ pub trait CheckCommand {
 
 impl CheckCommand for Command {
     fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>) {
-        println!("Running command {self:?}");
         let output = self.output().expect("Running command should work.");
         let mut success = output.status.success();
         if let Some(stdout) = stdout {
@@ -355,12 +353,9 @@ impl CheckCommand for Command {
                 );
             }
             panic!("Running command {self:?} fails.")
-        } else {
-            println!("Command run succeed.");
         }
     }
     fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
-        println!("Running command {self:?}");
         let output = self.output().expect("Running command should work.");
         assert_eq!(
             output.stdout,
