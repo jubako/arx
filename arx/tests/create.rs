@@ -1,5 +1,7 @@
 mod utils;
 
+use rustest::{test, *};
+
 use format_bytes::format_bytes;
 use std::{io::Read, path::Path};
 use utils::*;
@@ -94,3 +96,6 @@ fn test_crate_existant_output() -> Result {
     }
     Ok(())
 }
+
+#[rustest::main]
+fn main() {}
