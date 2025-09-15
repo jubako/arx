@@ -759,16 +759,15 @@ dependencies = [
 
 [[package]]
 name = "fuser"
-version = "0.15.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53274f494609e77794b627b1a3cddfe45d675a6b2e9ba9c0fdc8d8eee2184369"
+checksum = "0bb29a3ae32279fe3e79a958fe01899f5fb23eadccee919cf88e145b54ed9367"
 dependencies = [
  "libc",
  "log",
  "memchr",
  "nix",
  "page_size",
- "pkg-config",
  "smallvec",
  "zerocopy 0.8.14",
 ]
@@ -1125,6 +1124,7 @@ dependencies = [
 [[package]]
 name = "jubako"
 version = "0.4.0-dev"
+source = "git+https://github.com/jubako/jubako.git#48d59accb90b67d95d65e6ef2d997ec6dfcb3bac"
 dependencies = [
  "blake3",
  "camino",
