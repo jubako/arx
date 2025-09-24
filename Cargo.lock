@@ -768,6 +768,7 @@ dependencies = [
  "memchr",
  "nix",
  "page_size",
+ "pkg-config",
  "smallvec",
  "zerocopy 0.8.14",
 ]
@@ -1124,7 +1125,6 @@ dependencies = [
 [[package]]
 name = "jubako"
 version = "0.4.0-dev"
-source = "git+https://github.com/jubako/jubako.git#48d59accb90b67d95d65e6ef2d997ec6dfcb3bac"
 dependencies = [
  "blake3",
  "camino",
