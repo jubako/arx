@@ -60,7 +60,7 @@ jobs:
     - name: Install dependencies
       if: ${{ matrix.os == 'macos-latest'}}
       run: |
-        brew install macfuse
+        brew install macfuse pkgconf
 
     - name: Checkout code
       uses: actions/checkout@v4
@@ -176,7 +176,7 @@ jobs:
     - name: Install dependencies
       if: ${{ matrix.os == 'macos-latest'}}
       run: |
-        brew install macfuse
+        brew install macfuse pkgconf
 
     - name: Install Rust 
       uses: dtolnay/rust-toolchain@stable

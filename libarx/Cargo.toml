@@ -30,7 +30,7 @@ log = "0.4.22"
 thiserror = "1.0.64"
 
 [target.'cfg(not(windows))'.dependencies]
-fuser = { version = "0.15.0", optional = true }
+fuser = { version = "0.16.0", features = ["libfuse"], optional = true }
 
 [features]
 cmd_utils = [ "dep:clap"]
