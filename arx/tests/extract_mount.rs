@@ -6,7 +6,6 @@ use format_bytes::format_bytes;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
-    sync::LazyLock,
 };
 use utils::*;
 
@@ -28,8 +27,9 @@ impl TmpArx {
     }
 }
 
-pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
-    let source_dir = SHARED_TEST_DIR.path();
+#[fixture(scope=global)]
+fn BaseArxFile(source_dir: SharedTestDir) -> TmpArx {
+    let source_dir = source_dir.path();
     let tmp_arx_dir = tempfile::tempdir_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
         .expect("Creating tmpdir should work");
     let tmp_arx = tmp_arx_dir.path().join("test.arx");
@@ -46,19 +46,20 @@ pub static BASE_ARX_FILE: LazyLock<TmpArx> = LazyLock::new(|| {
     )
     .check_output(Some(b""), Some(b""));
     TmpArx::new(tmp_arx_dir, tmp_arx)
-});
+}
 
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
-fn test_mount() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_mount(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let mount_point = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
-    let arx = arx::Arx::new(arx_file)?;
+    let arx = arx::Arx::new(arx_file.path())?;
     let arxfs = arx::ArxFs::new(arx)?;
     let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
-    assert!(tree_diff(mount_point, tmp_source_dir, SimpleDiffer::new())?);
+    assert!(tree_diff(
+        mount_point,
+        source_dir.path(),
+        SimpleDiffer::new()
+    )?);
     Ok(())
 }
 
@@ -82,16 +83,13 @@ macro_rules! tear_down {
 
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
-fn test_mount_subdir() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_mount_subdir(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let mount_point = tempfile::TempDir::with_prefix_in("mount_", env!("CARGO_TARGET_TMPDIR"))?;
 
     let mut command = cmd!(
         "arx",
         "mount",
-        &arx_file,
+        arx_file.path(),
         "--root-dir",
         "sub_dir_a",
         mount_point.path()
@@ -105,7 +103,7 @@ fn test_mount_subdir() -> Result {
     // Wait a bit that mount point has been actually setup.
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let mut source_sub_dir = tmp_source_dir.to_path_buf();
+    let mut source_sub_dir = source_dir.path().to_path_buf();
     source_sub_dir.push("sub_dir_a");
 
     assert!(tree_diff(
@@ -118,40 +116,43 @@ fn test_mount_subdir() -> Result {
 
 #[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
-fn test_extract() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
-    arx::extract_all(arx_file, extract_dir.path(), false, arx::Overwrite::Error)?;
-    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
+    arx::extract_all(
+        arx_file.path(),
+        extract_dir.path(),
+        false,
+        arx::Overwrite::Error,
+    )?;
+    assert!(tree_diff(
+        extract_dir,
+        source_dir.path(),
+        SimpleDiffer::new()
+    )?);
     Ok(())
 }
 
 #[test]
-fn test_extract_same_dir() -> Result {
+fn test_extract_same_dir(arx_file: BaseArxFile) -> Result {
     // This test that everything go "fine" when extracting an archive in the source directory.
     // But here we don't want to take the risk to polute our source directory shared with other tests.
     // So we extract twice the same archive in the same place.
 
-    let arx_file = BASE_ARX_FILE.path();
+    let arx_file = arx_file.path();
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
-    cmd!("arx", "extract", &arx_file, "-C", extract_dir.path()).check_output(Some(b""), Some(b""));
-    cmd!("arx", "extract", &arx_file, "-C", extract_dir.path()).check_output(Some(b""), None);
+    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(b""), Some(b""));
+    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(b""), None);
     Ok(())
 }
 
 #[test]
-fn test_extract_filter() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_filter(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--glob",
@@ -159,7 +160,7 @@ fn test_extract_filter() -> Result {
     )
     .check_output(Some(b""), Some(b""));
 
-    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+    let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
     let extract_sub_dir = join!(extract_dir / "sub_dir_a");
 
     assert!(tree_diff(
@@ -171,16 +172,13 @@ fn test_extract_filter() -> Result {
 }
 
 #[test]
-fn test_extract_subdir() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_subdir(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "--root-dir",
         "sub_dir_a",
         "-C",
@@ -188,22 +186,20 @@ fn test_extract_subdir() -> Result {
     )
     .check_output(Some(b""), Some(b""));
 
-    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+    let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
 
     assert!(tree_diff(extract_dir, source_sub_dir, SimpleDiffer::new())?);
     Ok(())
 }
 
 #[test]
-fn test_extract_subfile() -> Result {
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_subfile(arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "--root-dir",
         "sub_dir_a/file1.txt",
         "-C",
@@ -214,10 +210,7 @@ fn test_extract_subfile() -> Result {
 }
 
 #[test]
-fn test_extract_existing_content_skip() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_skip(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
             text "existing_file" 100,
@@ -229,7 +222,7 @@ fn test_extract_existing_content_skip() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=skip"
@@ -237,7 +230,7 @@ fn test_extract_existing_content_skip() -> Result {
     .check_output(Some(b""), Some(b""));
     assert!(tree_diff(
         extract_dir,
-        tmp_source_dir,
+        source_dir.path(),
         ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
@@ -253,10 +246,7 @@ fn test_extract_existing_content_skip() -> Result {
 }
 
 #[test]
-fn test_extract_existing_content_warn() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_warn(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
             text "existing_file" 100,
@@ -268,7 +258,7 @@ fn test_extract_existing_content_warn() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=warn"
@@ -289,7 +279,7 @@ fn test_extract_existing_content_warn() -> Result {
     );
     assert!(tree_diff(
         extract_dir,
-        tmp_source_dir,
+        source_dir.path(),
         ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
@@ -305,10 +295,10 @@ fn test_extract_existing_content_warn() -> Result {
 }
 
 #[test]
-fn test_extract_existing_content_newer_true() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_newer_true(
+    source_dir: SharedTestDir,
+    arx_file: BaseArxFile,
+) -> Result {
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
             text "existing_file" 100,
@@ -330,21 +320,25 @@ fn test_extract_existing_content_newer_true() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=newer"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
+    assert!(tree_diff(
+        extract_dir,
+        source_dir.path(),
+        SimpleDiffer::new()
+    )?);
     Ok(())
 }
 
 #[test]
-fn test_extract_existing_content_newer_false() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_newer_false(
+    source_dir: SharedTestDir,
+    arx_file: BaseArxFile,
+) -> Result {
     // File is created after source, so we should not overwrite
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
@@ -358,7 +352,7 @@ fn test_extract_existing_content_newer_false() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=newer"
@@ -366,7 +360,7 @@ fn test_extract_existing_content_newer_false() -> Result {
     .check_output(Some(b""), Some(b""));
     assert!(tree_diff(
         extract_dir,
-        tmp_source_dir,
+        source_dir.path(),
         ExceptionDiffer::from([
             (
                 join!("sub_dir_a" / "existing_file"),
@@ -382,10 +376,10 @@ fn test_extract_existing_content_newer_false() -> Result {
 }
 
 #[test]
-fn test_extract_existing_content_overwrite() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_overwrite(
+    source_dir: SharedTestDir,
+    arx_file: BaseArxFile,
+) -> Result {
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
             text "existing_file" 100,
@@ -396,21 +390,22 @@ fn test_extract_existing_content_overwrite() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=overwrite"
     )
     .check_output(Some(b""), Some(b""));
-    assert!(tree_diff(extract_dir, tmp_source_dir, SimpleDiffer::new())?);
+    assert!(tree_diff(
+        extract_dir,
+        source_dir.path(),
+        SimpleDiffer::new()
+    )?);
     Ok(())
 }
 
 #[test]
-fn test_extract_existing_content_error() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_existing_content_error(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = temp_tree!(0, {
         dir "sub_dir_a" {
             text "existing_file" 100,
@@ -421,7 +416,7 @@ fn test_extract_existing_content_error() -> Result {
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "-C",
         extract_dir.path(),
         "--overwrite=error"
@@ -438,23 +433,20 @@ fn test_extract_existing_content_error() -> Result {
     );
     assert!(!tree_diff(
         extract_dir,
-        tmp_source_dir,
+        source_dir.path(),
         SimpleDiffer::new()
     )?);
     Ok(())
 }
 
 #[test]
-fn test_extract_subdir_filter() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
-    let arx_file = BASE_ARX_FILE.path();
-
+fn test_extract_subdir_filter(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
 
     cmd!(
         "arx",
         "extract",
-        &arx_file,
+        arx_file.path(),
         "--root-dir",
         "sub_dir_a",
         "-C",
@@ -464,7 +456,7 @@ fn test_extract_subdir_filter() -> Result {
     )
     .check_output(Some(b""), Some(b""));
 
-    let source_sub_dir = join!(tmp_source_dir / "sub_dir_a");
+    let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
 
     struct DiffOnlyTxt(bool);
 
