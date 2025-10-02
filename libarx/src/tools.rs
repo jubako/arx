@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use crate::error::ExtractError;
-use crate::{AllProperties, Arx, ArxFormatError, Builder, Walker};
+use crate::{AllProperties, Arx, ArxFormatError, Builder, Entry, Walker};
 use jbk::reader::builder::PropertyBuilderTrait;
 use jbk::reader::ByteSlice;
 use jbk::reader::MayMissPack;
@@ -205,12 +205,13 @@ pub enum Overwrite {
     Error,
 }
 
-struct Extractor<'a, 'scope, F>
+pub struct Extractor<'a, 'scope, F>
 where
     'a: 'scope,
     F: FileFilter,
 {
     arx: &'a Arx,
+    root: jbk::EntryRange,
     scope: &'scope rayon::Scope<'a>,
     err: Arc<OnceLock<jbk::Error>>,
     filter: F,
@@ -219,8 +220,9 @@ where
     overwrite: Overwrite,
 }
 
-impl<F> Extractor<'_, '_, F>
+impl<'a, 'scope, F> Extractor<'a, 'scope, F>
 where
+    'a: 'scope,
     F: FileFilter,
 {
     fn create_parents(&self, current_file: &crate::Path) -> jbk::Result<()> {
@@ -234,63 +236,36 @@ where
     fn abs_path(&self, current_file: &crate::Path) -> PathBuf {
         current_file.to_path(&self.base_dir)
     }
-}
 
-impl<'a, 'scope, F> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'a, 'scope, F>
-where
-    'a: 'scope,
-    F: FileFilter,
-{
-    type Error = ExtractError;
-    fn on_start(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
-        create_dir_all(&self.base_dir)?;
-        Ok(())
-    }
-
-    fn on_stop(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
-        Ok(())
-    }
-
-    fn on_directory_enter(
-        &self,
-        current_path: &mut crate::PathBuf,
-        path: &jbk::SmallString,
-    ) -> Result<bool, ExtractError> {
-        current_path.push(path.as_str());
-        if !self.filter.accept(current_path) {
-            return Ok(!self.filter.early_exit());
+    pub fn extract(&self, path: &crate::Path, recursive: bool) -> Result<(), ExtractError> {
+        let entry = self
+            .arx
+            .get_entry_in_range::<FullBuilder, _>(path, &self.root)?;
+        match &entry {
+            Entry::File(e) => self.write_file(e, path),
+            Entry::Link(e) => self.write_link(e, path),
+            Entry::Dir(range, _e) => {
+                self.write_dir(path)?;
+                if recursive {
+                    let mut walker = Walker::new(self.arx, path.to_relative_path_buf());
+                    walker.run_from_range(self, range)
+                } else {
+                    Ok(())
+                }
+            }
         }
-        self.create_parents(current_path)?;
-        let abs_path = self.abs_path(current_path);
-        create_dir_all(&abs_path)?;
-        if self.print_progress {
-            println!("{}", abs_path.display());
-        }
-        Ok(true)
-    }
-    fn on_directory_exit(
-        &self,
-        current_path: &mut crate::PathBuf,
-        _path: &jbk::SmallString,
-    ) -> Result<(), ExtractError> {
-        current_path.pop();
-        Ok(())
     }
 
-    fn on_file(
-        &self,
-        current_path: &mut crate::PathBuf,
-        entry: &FileEntry,
-    ) -> Result<(), ExtractError> {
-        let mut current_path = current_path.clone();
-        current_path.push(entry.path.as_str());
-        if !self.filter.accept(&current_path) {
-            return Ok(());
-        }
-        self.create_parents(&current_path)?;
+    pub fn extract_all(&self) -> Result<(), ExtractError> {
+        let mut walker = Walker::new(self.arx, Default::default());
+        walker.run_from_range(self, &self.root)
+    }
+
+    fn write_file(&self, entry: &FileEntry, path: &crate::Path) -> Result<(), ExtractError> {
+        self.create_parents(path)?;
+        let path = self.abs_path(path);
 
         let entry_content = entry.content;
-        let abs_path = self.abs_path(&current_path);
         let print_progress = self.print_progress;
         let arx = self.arx;
         let bytes = arx
@@ -304,22 +279,21 @@ where
 
         match bytes {
             MayMissPack::FOUND(bytes) => {
-                let abs_path = abs_path.clone();
                 let mut file = match OpenOptions::new()
                     .write(true)
                     .create_new(true)
-                    .open_limited(&abs_path)
+                    .open_limited(&path)
                 {
                     Ok(f) => f,
                     Err(e) => match e.kind() {
                         ErrorKind::AlreadyExists => match self.overwrite {
                             Overwrite::Skip => return Ok(()),
                             Overwrite::Warn => {
-                                eprintln!("File {} already exists.", abs_path.display());
+                                eprintln!("File {} already exists.", path.display());
                                 return Ok(());
                             }
                             Overwrite::Newer => {
-                                let existing_metadata = std::fs::metadata(&abs_path)?;
+                                let existing_metadata = std::fs::metadata(&path)?;
                                 let existing_time = existing_metadata.modified()?;
                                 let new_time =
                                     SystemTime::UNIX_EPOCH + Duration::from_secs(entry.mtime);
@@ -327,7 +301,7 @@ where
                                     OpenOptions::new()
                                         .write(true)
                                         .truncate(true)
-                                        .open_limited(&abs_path)?
+                                        .open_limited(&path)?
                                 } else {
                                     return Ok(());
                                 }
@@ -335,10 +309,8 @@ where
                             Overwrite::Overwrite => OpenOptions::new()
                                 .write(true)
                                 .truncate(true)
-                                .open_limited(&abs_path)?,
-                            Overwrite::Error => {
-                                return Err(ExtractError::FileExists { path: abs_path })
-                            }
+                                .open_limited(&path)?,
+                            Overwrite::Error => return Err(ExtractError::FileExists { path }),
                         },
                         _ => return Err(e.into()),
                     },
@@ -369,28 +341,22 @@ where
                 log::error!(
                     "Missing pack {} for {}. Declared location is {}",
                     pack_info.uuid,
-                    abs_path.display(),
+                    path.display(),
                     pack_info.pack_location
                 );
             }
         }
 
         if print_progress {
-            println!("{}", abs_path.display());
+            println!("{}", path.display());
         }
 
         Ok(())
     }
 
-    fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> Result<(), ExtractError> {
-        let mut current_path = current_path.clone();
-        current_path.push(link.path.as_str());
-        if !self.filter.accept(&current_path) {
-            current_path.pop();
-            return Ok(());
-        }
-        self.create_parents(&current_path)?;
-        let abs_path = self.abs_path(&current_path);
+    fn write_link(&self, link: &Link, path: &crate::Path) -> Result<(), ExtractError> {
+        self.create_parents(path)?;
+        let abs_path = self.abs_path(path);
         if let Err(e) = symlink(
             PathBuf::from(link.target.as_str()),
             PathBuf::from(&abs_path),
@@ -431,8 +397,80 @@ where
         if self.print_progress {
             println!("{}", abs_path.display());
         }
+        Ok(())
+    }
+
+    fn write_dir(&self, path: &crate::Path) -> Result<(), ExtractError> {
+        self.create_parents(path)?;
+        let abs_path = self.abs_path(path);
+        create_dir_all(&abs_path)?;
+        if self.print_progress {
+            println!("{}", abs_path.display());
+        }
+        Ok(())
+    }
+
+    pub fn finish(self) -> Arc<OnceLock<jbk::Error>> {
+        self.err
+    }
+}
+
+impl<'a, 'scope, F> crate::walk::Operator<crate::PathBuf, FullBuilder> for Extractor<'a, 'scope, F>
+where
+    'a: 'scope,
+    F: FileFilter,
+{
+    type Error = ExtractError;
+    fn on_start(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
+        create_dir_all(&self.base_dir)?;
+        Ok(())
+    }
+
+    fn on_stop(&self, _current_path: &mut crate::PathBuf) -> Result<(), ExtractError> {
+        Ok(())
+    }
+
+    fn on_directory_enter(
+        &self,
+        current_path: &mut crate::PathBuf,
+        path: &jbk::SmallString,
+    ) -> Result<bool, ExtractError> {
+        current_path.push(path.as_str());
+        if !self.filter.accept(current_path) {
+            return Ok(!self.filter.early_exit());
+        }
+        self.write_dir(current_path)?;
+        Ok(true)
+    }
+    fn on_directory_exit(
+        &self,
+        current_path: &mut crate::PathBuf,
+        _path: &jbk::SmallString,
+    ) -> Result<(), ExtractError> {
         current_path.pop();
         Ok(())
+    }
+
+    fn on_file(
+        &self,
+        current_path: &mut crate::PathBuf,
+        entry: &FileEntry,
+    ) -> Result<(), ExtractError> {
+        let mut current_path = current_path.clone();
+        current_path.push(entry.path.as_str());
+        if !self.filter.accept(&current_path) {
+            return Ok(());
+        }
+        self.write_file(entry, &current_path)
+    }
+
+    fn on_link(&self, current_path: &mut crate::PathBuf, link: &Link) -> Result<(), ExtractError> {
+        let mut current_path = current_path.clone();
+        current_path.push(link.path.as_str());
+        if !self.filter.accept(&current_path) {
+            return Ok(());
+        }
+        self.write_link(link, &current_path)
     }
 }
 
@@ -443,73 +481,149 @@ pub fn extract_all(
     overwrite: Overwrite,
 ) -> Result<(), ExtractError> {
     let arx = Arx::new(infile)?;
-    extract_arx(&arx, outdir, (), progress, overwrite)
+    ExtractBuilder::new(outdir)
+        .overwrite(overwrite)
+        .progress(progress)
+        .extract(&arx, None)
 }
 
-pub fn extract_arx<F>(
-    arx: &Arx,
-    outdir: &Path,
+pub struct ExtractBuilder<'a, F, P> {
+    outdir: &'a Path,
+    items: P,
     filter: F,
+    recursive: bool,
     progress: bool,
     overwrite: Overwrite,
-) -> Result<(), ExtractError>
-where
-    F: FileFilter,
-{
-    let mut walker = Walker::new(arx, Default::default());
-    let err = Default::default();
-    rayon::scope(|scope| {
-        let extractor = Extractor {
-            arx,
-            scope,
-            err: Arc::clone(&err),
-            filter,
-            base_dir: outdir.to_path_buf(),
-            print_progress: progress,
-            overwrite,
-        };
-        walker.run(&extractor)
-    })?;
-    match Arc::into_inner(err)
-        .expect("No one should have a ref to err.")
-        .take()
-    {
-        None => Ok(()),
-        Some(e) => Err(e.into()),
+}
+
+impl<'a> ExtractBuilder<'a, (), ()> {
+    pub fn new(outdir: &'a Path) -> Self {
+        Self {
+            outdir,
+            items: (),
+            filter: (),
+            recursive: true,
+            progress: false,
+            overwrite: Overwrite::Warn,
+        }
     }
 }
 
-pub fn extract_arx_range<F, R>(
-    arx: &Arx,
-    outdir: &Path,
-    range: &R,
-    filter: F,
-    progress: bool,
-    overwrite: Overwrite,
-) -> Result<(), ExtractError>
+impl<'a, P> ExtractBuilder<'a, (), P> {
+    pub fn filter<F: FileFilter>(self, filter: F) -> ExtractBuilder<'a, F, P> {
+        ExtractBuilder {
+            outdir: self.outdir,
+            items: self.items,
+            filter,
+            recursive: self.recursive,
+            progress: self.progress,
+            overwrite: self.overwrite,
+        }
+    }
+}
+
+impl<'a, F> ExtractBuilder<'a, F, ()> {
+    pub fn items<P: AsRef<crate::Path> + Sync>(
+        self,
+        items: &'a [P],
+        recursive: bool,
+    ) -> ExtractBuilder<'a, F, &'a [P]> {
+        ExtractBuilder {
+            outdir: self.outdir,
+            items,
+            filter: self.filter,
+            recursive,
+            progress: self.progress,
+            overwrite: self.overwrite,
+        }
+    }
+}
+
+impl<'a, F, P> ExtractBuilder<'a, F, P> {
+    pub fn overwrite(self, overwrite: Overwrite) -> ExtractBuilder<'a, F, P> {
+        ExtractBuilder {
+            outdir: self.outdir,
+            items: self.items,
+            filter: self.filter,
+            recursive: self.recursive,
+            progress: self.progress,
+            overwrite,
+        }
+    }
+}
+
+impl<'a, F, P> ExtractBuilder<'a, F, P> {
+    pub fn progress(self, progress: bool) -> ExtractBuilder<'a, F, P> {
+        ExtractBuilder {
+            outdir: self.outdir,
+            items: self.items,
+            filter: self.filter,
+            recursive: self.recursive,
+            progress,
+            overwrite: self.overwrite,
+        }
+    }
+}
+
+impl<'a, F> ExtractBuilder<'a, F, ()>
 where
     F: FileFilter,
-    R: jbk::reader::Range + Sync,
 {
-    let mut walker = Walker::new(arx, Default::default());
-    let err = Default::default();
-    rayon::scope(|scope| {
-        let extractor = Extractor {
-            arx,
-            scope,
-            err: Arc::clone(&err),
-            filter,
-            base_dir: outdir.to_path_buf(),
-            print_progress: progress,
-            overwrite,
+    pub fn extract(self, arx: &Arx, root: Option<&crate::Path>) -> Result<(), ExtractError> {
+        self.items(&[] as &[&crate::Path], true).extract(arx, root)
+    }
+}
+
+impl<'a, F, P> ExtractBuilder<'a, F, &[P]>
+where
+    F: FileFilter,
+    P: AsRef<crate::Path> + Sync,
+{
+    pub fn extract(self, arx: &Arx, root: Option<&crate::Path>) -> Result<(), ExtractError> {
+        let root = match root {
+            None => jbk::EntryRange::from_range(&arx.root_index),
+            Some(p) => {
+                let root = arx.get_entry::<((), (), ())>(p)?;
+                match root {
+                    crate::Entry::Dir(range, _) => jbk::EntryRange::from_range(&range),
+                    _ => {
+                        return Err(ExtractError::RootNotDir {
+                            path: p.to_relative_path_buf(),
+                        })
+                    }
+                }
+            }
         };
-        walker.run_from_range(&extractor, range)
-    })?;
-    match Arc::into_inner(err)
-        .expect("No one should have a ref to err.")
-        .take()
-    {
-        None => Ok(()),
-        Some(e) => Err(e.into()),
+        self.extract_root(arx, root)
+    }
+
+    fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
+        let error = rayon::scope(|scope| -> Result<Arc<OnceLock<jbk::Error>>, ExtractError> {
+            let extractor = Extractor {
+                arx,
+                root,
+                scope,
+                err: Default::default(),
+                filter: self.filter,
+                base_dir: self.outdir.to_path_buf(),
+                print_progress: self.progress,
+                overwrite: self.overwrite,
+            };
+            if self.items.is_empty() {
+                extractor.extract_all()?
+            } else {
+                for item in self.items.iter() {
+                    extractor.extract(item.as_ref(), self.recursive)?;
+                }
+            }
+            Ok(extractor.finish())
+        })?;
+        match Arc::into_inner(error)
+            .expect("No one should have a ref to err.")
+            .take()
+        {
+            None => Ok(()),
+            Some(e) => Err(e.into()),
+        }
     }
 }

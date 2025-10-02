@@ -21,7 +21,7 @@ pub use common::{
 };
 pub use entry::*;
 pub use error::*;
-pub use tools::{extract_all, extract_arx, extract_arx_range, FileFilter, Overwrite};
+pub use tools::{extract_all, ExtractBuilder, FileFilter, Overwrite};
 pub use walk::*;
 
 #[cfg(test)]

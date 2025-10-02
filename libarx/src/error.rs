@@ -147,6 +147,9 @@ pub enum ExtractError {
 
     #[error("File {path} already exists.", path = path.display())]
     FileExists { path: std::path::PathBuf },
+
+    #[error("{path} must be a directory", path = path.display())]
+    RootNotDir { path: crate::PathBuf },
 }
 
 impl From<jbk::Error> for ExtractError {
@@ -166,6 +169,11 @@ impl From<BaseError> for ExtractError {
 }
 impl From<std::io::Error> for ExtractError {
     fn from(value: std::io::Error) -> Self {
+        Self::ArxError(value.into())
+    }
+}
+impl From<QueryError> for ExtractError {
+    fn from(value: QueryError) -> Self {
         Self::ArxError(value.into())
     }
 }
