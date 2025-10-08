@@ -449,17 +449,35 @@ impl<'a, S: Stats> ArxFs<'a, S> {
         }
     }
 
-    fn mount_options(&self, name: String) -> Vec<fuser::MountOption> {
-        vec![
+    fn mount_options(
+        &self,
+        name: String,
+        allow_other: bool,
+        allow_root: bool,
+    ) -> Vec<fuser::MountOption> {
+        let mut options = vec![
             fuser::MountOption::RO,
             fuser::MountOption::FSName(name),
             fuser::MountOption::Subtype("arx".into()),
             fuser::MountOption::DefaultPermissions,
-        ]
+        ];
+        if allow_other {
+            options.push(fuser::MountOption::AllowOther);
+        }
+        if allow_root {
+            options.push(fuser::MountOption::AllowRoot);
+        }
+        options
     }
 
-    pub fn mount<P: AsRef<Path>>(self, name: String, mount_point: P) -> Result<(), ArxError> {
-        let options = self.mount_options(name);
+    pub fn mount<P: AsRef<Path>>(
+        self,
+        name: String,
+        mount_point: P,
+        allow_other: bool,
+        allow_root: bool,
+    ) -> Result<(), ArxError> {
+        let options = self.mount_options(name, allow_other, allow_root);
         fuser::mount2(self, &mount_point, &options)?;
         Ok(())
     }
@@ -470,8 +488,10 @@ impl<S: Stats + Send> ArxFs<'static, S> {
         self,
         name: String,
         mount_point: P,
+        allow_other: bool,
+        allow_root: bool,
     ) -> Result<fuser::BackgroundSession, ArxError> {
-        let options = self.mount_options(name);
+        let options = self.mount_options(name, allow_other, allow_root);
         Ok(fuser::spawn_mount2(self, &mount_point, &options)?)
     }
 }

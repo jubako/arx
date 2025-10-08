@@ -26,7 +26,12 @@ mod inner {
         let mut abs_path = std::env::current_dir().unwrap();
         abs_path = abs_path.join(infile.as_ref());
 
-        arxfs.mount(abs_path.to_str().unwrap().to_string(), &outdir)
+        arxfs.mount(
+            abs_path.to_str().unwrap().to_string(),
+            &outdir,
+            false,
+            false,
+        )
     }
 }
 
