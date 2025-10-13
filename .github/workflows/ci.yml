@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          sudo apt-get install -y libfuse-dev
+          sudo apt-get install -y libfuse3-dev
 
       - name: Install dependencies
         if: ${{ matrix.os == 'macos-latest'}}
