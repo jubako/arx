@@ -131,6 +131,13 @@ Remote tar archives can also be converted using `tar2arx`:
 tar2arx -o my_archive.arx https://example.com/my_archive.tar.gz
 ```
 
+## Registering Arx's mimetype
+
+Arx mimetype can be registered by:
+
+- Copying misc/mime_type.xml as `~/.local/share/mime/packages/arx.xml`.
+- Run `update-mime-database ~/.local/share/mime`
+
 ## Performance
 
 The following tables compare the performance of Arx to different archive formats.
