@@ -50,9 +50,21 @@ impl Arx {
     where
         B: FullBuilderTrait,
     {
+        self.get_entry_in_range::<B, _>(path, &self.root_index)
+    }
+
+    pub fn get_entry_in_range<B, R>(
+        &self,
+        path: &crate::Path,
+        range: &R,
+    ) -> Result<Entry<B::Entry>, QueryError>
+    where
+        B: FullBuilderTrait,
+        R: jbk::reader::Range,
+    {
         let comparator = Comparator::new(&self.properties);
         let builder = RealBuilder::<B>::new(&self.properties);
-        let mut current_range: jbk::EntryRange = (&self.root_index).into();
+        let mut current_range = jbk::EntryRange::from_range(range);
         let mut components = path.iter().peekable();
         while let Some(component) = components.next() {
             // Search for the current component.

@@ -109,7 +109,9 @@ impl Arx {
     /// Extract the whole archive in
     #[pyo3(signature=(extract_path=std::path::PathBuf::from(".")))]
     fn extract(&self, extract_path: std::path::PathBuf) -> PyResult<()> {
-        arx::extract_arx(&self.0, &extract_path, (), false, arx::Overwrite::Warn)
+        arx::ExtractBuilder::new(&extract_path)
+            .overwrite(arx::Overwrite::Warn)
+            .extract(&self.0, None)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
