@@ -210,8 +210,8 @@ jobs:
           ~/.cargo/git/db/
         key: ${{ runner.os }}-maturin-stable-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.9
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
 
     - name: Install Rust 
       uses: dtolnay/rust-toolchain@stable
