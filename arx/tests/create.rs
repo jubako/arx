@@ -18,8 +18,8 @@ fn test_crate_non_existant_input() -> Result {
 }
 
 #[test]
-fn test_crate_non_existant_output_directory() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
+fn test_crate_non_existant_output_directory(source_dir: SharedTestDir) -> Result {
+    let source_dir = source_dir.path();
     temp_arx!(arx_file, "non_existant_directory/test.arx");
     cmd!(
         "arx",
@@ -27,10 +27,10 @@ fn test_crate_non_existant_output_directory() -> Result {
         "--outfile",
         &arx_file,
         "-C",
-        tmp_source_dir.parent().unwrap(),
+        source_dir.parent().unwrap(),
         "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
+        source_dir.file_name().unwrap(),
+        source_dir.file_name().unwrap()
     )
     .check_fail(
         b"",
@@ -44,8 +44,8 @@ fn test_crate_non_existant_output_directory() -> Result {
 }
 
 #[test]
-fn test_crate_existant_output() -> Result {
-    let tmp_source_dir = SHARED_TEST_DIR.path();
+fn test_crate_existant_output(source_dir: SharedTestDir) -> Result {
+    let source_dir = source_dir.path();
     temp_arx!(arx_file);
     {
         use std::io::Write;
@@ -60,10 +60,10 @@ fn test_crate_existant_output() -> Result {
         "--outfile",
         &arx_file,
         "-C",
-        tmp_source_dir.parent().unwrap(),
+        source_dir.parent().unwrap(),
         "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap()
+        source_dir.file_name().unwrap(),
+        source_dir.file_name().unwrap()
     )
     .check_fail(
         b"",
@@ -81,10 +81,10 @@ fn test_crate_existant_output() -> Result {
         "--outfile",
         &arx_file,
         "-C",
-        tmp_source_dir.parent().unwrap(),
+        source_dir.parent().unwrap(),
         "--strip-prefix",
-        tmp_source_dir.file_name().unwrap(),
-        tmp_source_dir.file_name().unwrap(),
+        source_dir.file_name().unwrap(),
+        source_dir.file_name().unwrap(),
         "--force"
     )
     .check_output(Some(b""), Some(b""));
