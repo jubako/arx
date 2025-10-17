@@ -18,13 +18,11 @@ const AFTER_HELP: &str = cstr!(
 
 The command format is :
 <i>$ arx -o my_archive.arx input_file1 input_file2 input_dir1 ...</i>
-In this mode, <i>--recurse</i> is true by default.
 
 <s>From list file ([FILE_LIST])</s>
 
 The command format is :
 <i>$ arx -o my_archive.arx -L file_list.txt</i>
-In this mode, <i>--recurse</i> is false by default.
 
 File list can be generated this way :
 <i>$ find input_dir > file_list.txt</i>
@@ -154,13 +152,11 @@ pub struct Options {
         short,
         long,
         required = false,
-        default_value_t = false,
-        default_value_ifs([
-            ("no_recurse", clap::builder::ArgPredicate::IsPresent, "false"),
-            ("infiles", clap::builder::ArgPredicate::IsPresent, "true")
-        ]),
+        default_value_t = true,
+        default_value_if("no_recurse", clap::builder::ArgPredicate::IsPresent, "false"),
         conflicts_with = "no_recurse",
-        action, help_heading="Input options"
+        action,
+        help_heading = "Input options"
     )]
     recurse: bool,
 
