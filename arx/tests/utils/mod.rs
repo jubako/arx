@@ -6,7 +6,7 @@ use rand::prelude::*;
 
 #[allow(unused_imports)]
 pub use tree_diff::{
-    tree_diff, Differ, ExceptionDiffer, ExistingExpected, SimpleDiffer, TreeEntry,
+    list_diff, tree_diff, Differ, ExceptionDiffer, ExistingExpected, SimpleDiffer, TreeEntry,
 };
 
 #[cfg(unix)]
@@ -256,9 +256,16 @@ pub fn SharedTestDir() -> std::io::Result<TempDir> {
             loop  (10..50) { text "file{ctx}.txt" (500..1000) },
             loop  (10..50) { bin "file{ctx}.bin" (500..1000) }
         },
+        dir "sub_dir_a_bis" {
+            text "existing_file2" 50,
+            link "existing_link2" -> "existing_file2",
+        },
         dir "sub_dir_b" {
             loop 10 { bin "file{ctx}.bin" (5000..10000) },
             loop 10 { link "link_to_file{ctx}" -> "file{ctx}.bin" },
+        },
+        dir "sub_dir_c" {
+            text "existing_file" 50,
         },
         link_dir "sub_dir_link" -> "sub_dir_b",
         dir "empty_sub_dir" {},

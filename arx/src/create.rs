@@ -57,6 +57,17 @@ Listing in file list and <i>--follow-symlink</i> passed to arx, you must be cohe
 Follow symlink all the time or never.
 If you don't, you may have incoherent state when symlink are pointing to directories.
 
+<s>Triming path</s>
+
+By default, arx trim input path and remove any parent parts. This can be changed with the <i>--keep-parents</i>
+option, in this case the path given as input is fully add to the archive.
+
+Absolute path are always trimmed of its first part to become a relative path.
+
+The option <i>--dir_as_root</i> makes arx trim the directory itself. So (if recursion is activated) all entries
+in the given directory as place at root of the created archive.
+This option has no effect if the input path is a file.
+
 <s,u>Compression detection/selection:</>
 
 Arx automatically detect if a content should be compressed or not based on a heuristic using
@@ -88,10 +99,6 @@ pub struct Options {
     )]
     outfile: Option<jbk::Utf8PathBuf>,
 
-    /// Remove STRIP_PREFIX from the entries' name added to the archive.
-    #[arg(long, required = false, value_hint=ValueHint::DirPath, help_heading="Input options")]
-    strip_prefix: Option<arx::PathBuf>,
-
     /// Move to BASE_DIR before starting adding content to arx archive.
     ///
     /// Argument `INFILES` or `STRIP_PREFIX` must be relative to `BASE_DIR`.
@@ -99,6 +106,22 @@ pub struct Options {
     /// Paths listed in `FILE_LIST` are related to `BASED_DIR`
     #[arg(short = 'C', required = false, value_hint=ValueHint::DirPath, verbatim_doc_comment, help_heading="Input options")]
     base_dir: Option<PathBuf>,
+
+    /// Keep N parents from given path.
+    ///
+    /// If N > number of parent in the path, keep the path full.
+    #[arg(short = 'k', long, required = false, default_value_t = Default::default())]
+    keep_parents: bool,
+
+    /// Input dir are considered as root directory.
+    ///
+    /// Directories given in input are considered as root directory.
+    /// This means we add file/directory in the given directory directly in the root of arx archive.
+    /// If input is a file, this options has no effect.
+    /// If several directories are given, they are all considered as root. However, as it is not possible to have
+    /// duplicated entries in an arx achive, the directories must be disjoint.
+    #[arg(long, required = false, default_value_t = false)]
+    dir_as_root: bool,
 
     /// Input files/directories
     ///
@@ -275,11 +298,6 @@ pub fn create(options: Options) -> Result<()> {
         return Ok(());
     }
 
-    let strip_prefix = match &options.strip_prefix {
-        Some(s) => s.clone(),
-        None => arx::PathBuf::new(),
-    };
-
     let out_file = options.outfile.as_ref().expect(
         "Clap unsure it is Some, except if we have list_compressions, and so we return early",
     );
@@ -312,6 +330,13 @@ pub fn create(options: Options) -> Result<()> {
         options.compression,
     )?;
 
+    let mut adder = arx::create::FsAdder::new(
+        &mut creator,
+        options.keep_parents,
+        options.follow_symlink,
+        options.dir_as_root,
+    );
+
     if let Some(file_list) = file_list {
         let file = File::open(&file_list)
             .with_context(|| format!("Cannot open {}", file_list.display()))?;
@@ -319,25 +344,12 @@ pub fn create(options: Options) -> Result<()> {
             .lines()
             .map(|l| -> Result<PathBuf> { Ok(l?.into()) })
             .collect::<Result<Vec<_>>>()?;
-        let mut list_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
-        list_adder.add_from_list(files_list.into_iter(), options.follow_symlink)?;
+        adder.add_from_list(files_list.into_iter())?;
     } else {
-        let files_list = options
-            .infiles
-            .iter()
-            .map(|f| -> Result<PathBuf> {
-                if f.is_absolute() {
-                    Err(anyhow!("Input file ({}) must be relative.", f.display()))
-                } else {
-                    Ok(f.clone())
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-        check_input_paths_exist(&files_list)?;
-        let mut fs_adder = arx::create::FsAdder::new(&mut creator, strip_prefix);
-        for infile in files_list {
+        check_input_paths_exist(&options.infiles)?;
+        for infile in options.infiles {
             debug!("Adding file {infile:?}");
-            fs_adder.add_from_path(&infile, options.recurse)?;
+            adder.add_from_path(&infile, options.recurse)?;
         }
     };
 

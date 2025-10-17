@@ -354,3 +354,26 @@ pub fn tree_diff<D: Differ>(
     );
     Ok(differ.result())
 }
+
+pub fn list_diff(
+    tested_content: &[&str],
+    reference: impl AsRef<Path>,
+    root: impl AsRef<Path>,
+) -> std::io::Result<bool> {
+    let walker = walkdir::WalkDir::new(reference.as_ref());
+    let walker = walker.into_iter();
+    for entry in walker {
+        let entry = entry?;
+        if entry.path() == root.as_ref() {
+            continue;
+        }
+        let entry_path = entry.path().strip_prefix(root.as_ref()).unwrap();
+        let entry_path = relative_path::RelativePathBuf::from_path(&entry_path).unwrap();
+        if !tested_content.contains(&entry_path.as_str()) {
+            println!("{entry_path:?} is not in archive");
+            println!("{tested_content:?}");
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}

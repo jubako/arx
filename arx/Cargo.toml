@@ -41,6 +41,8 @@ tempfile = "3.8.0"
 format-bytes = "0.3.0"
 filetime = "0.2.25"
 rustest = "0.3.1"
+walkdir = "2.4.0"
+relative-path = "2.0.1"
 
 [features]
 default = ["zstd", "fuse"]

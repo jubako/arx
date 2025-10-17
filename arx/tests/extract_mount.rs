@@ -38,11 +38,8 @@ fn BaseArxFile(source_dir: SharedTestDir) -> TmpArx {
         "create",
         "--outfile",
         &tmp_arx,
-        "-C",
-        source_dir.parent().unwrap(),
-        "--strip-prefix",
-        source_dir.file_name().unwrap(),
-        source_dir.file_name().unwrap()
+        source_dir,
+        "--dir-as-root"
     )
     .check_output(Some(b""), Some(b""));
     TmpArx::new(tmp_arx_dir, tmp_arx)
