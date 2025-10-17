@@ -2,7 +2,6 @@ mod utils;
 
 use rustest::{test, *};
 
-use format_bytes::format_bytes;
 use std::{io::Read, path::Path};
 use utils::*;
 
@@ -10,8 +9,8 @@ use utils::*;
 fn test_crate_non_existant_input() -> Result {
     temp_arx!(arx_file);
     cmd!("arx", "create", "--outfile", &arx_file, "non_existant_dir").check_fail(
-        b"",
-        b"Error : Input non_existant_dir path doesn't exist or cannot be accessed\n",
+        "",
+        "Error : Input non_existant_dir path doesn't exist or cannot be accessed\n",
     );
     assert!(!arx_file.exists());
     Ok(())
@@ -22,10 +21,10 @@ fn test_crate_non_existant_output_directory(source_dir: SharedTestDir) -> Result
     let source_dir = source_dir.path();
     temp_arx!(arx_file, "non_existant_directory/test.arx");
     cmd!("arx", "create", "--outfile", &arx_file, source_dir).check_fail(
-        b"",
-        &format_bytes!(
-            b"Error : Directory {} doesn't exist\n",
-            arx_file.parent().unwrap().as_os_str().as_encoded_bytes()
+        "",
+        &format!(
+            "Error : Directory {} doesn't exist\n",
+            arx_file.parent().unwrap().to_str().unwrap()
         ),
     );
     assert!(!arx_file.exists());
@@ -189,8 +188,8 @@ fn test_crate_several_input_root_as_dir_duplicate(source_dir: SharedTestDir) -> 
         "--dir-as-root"
     )
     .check_fail(
-        b"",
-        b"Error : Incoherent structure : Adding file0.bin, cannot add a file when one already exists\n",
+        "",
+        "Error : Incoherent structure : Adding file0.bin, cannot add a file when one already exists\n",
     );
     Ok(())
 }
@@ -207,10 +206,10 @@ fn test_crate_existant_output(source_dir: SharedTestDir) -> Result {
 
     // Try to write without --force
     cmd!("arx", "create", "--outfile", &arx_file, source_dir).check_fail(
-        b"",
-        &format_bytes!(
-            b"Error : File {} already exists. Use option --force to overwrite it.\n",
-            arx_file.as_os_str().as_encoded_bytes()
+        "",
+        &format!(
+            "Error : File {} already exists. Use option --force to overwrite it.\n",
+            arx_file.to_str().unwrap()
         ),
     );
     assert_eq!(std::fs::read(&arx_file)?, b"Some dummy content");
@@ -224,7 +223,7 @@ fn test_crate_existant_output(source_dir: SharedTestDir) -> Result {
         source_dir,
         "--force"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     {
         let mut f = std::fs::File::open(&arx_file)?;
         let mut buf = [0; 10];
