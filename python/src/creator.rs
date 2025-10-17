@@ -68,8 +68,8 @@ impl Creator {
 
     /// Add the file `name` to the archive. `name` may be any type of file (directory, symlink, regular file).
     /// Directory are added recursively by default. This cane be avoided by setting `recursive` to `False`
-    #[pyo3(signature=(path, recursive=true))]
-    fn add(&mut self, path: PathBuf, recursive: bool) -> PyResult<()> {
+    #[pyo3(signature=(path, recursive=true, keep_parents=false))]
+    fn add(&mut self, path: PathBuf, recursive: bool, keep_parents: bool) -> PyResult<()> {
         match self.creator.as_mut() {
             None => Err(PyRuntimeError::new_err("Creator already finalized")),
             Some(creator) => {
@@ -78,7 +78,7 @@ impl Creator {
                         "add method must be used inside a context manager",
                     ));
                 }
-                let mut adder = FsAdder::new(creator, "".into());
+                let mut adder = FsAdder::new(creator, keep_parents, false, false);
                 adder
                     .add_from_path(path, recursive)
                     .map_err(|e| PyRuntimeError::new_err(e.to_string()))
