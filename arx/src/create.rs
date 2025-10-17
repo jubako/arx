@@ -49,11 +49,15 @@ foo/bar.txt
 ```
 (If you've used <i>find</i> to generate the list : don't use <i>-type f</i> option)
 
-<s>About file list and <i>--follow-symlink</i> option</s>
+<s>About <i>--follow-symlink</i> option</s>
 
-Listing in file list and <i>--follow-symlink</i> passed to arx, you must be coherent.
-Follow symlink all the time or never.
-If you don't, you may have incoherent state when symlink are pointing to directories.
+When passing entries to arx, you must be consistent with <i>--follow-symlink</i>.
+One way to be inconsistent is:
+1. You have a link (L), pointing to a directory (D) containing a file (D/F).
+2. You create a arx passing as input both L and L/F.
+3. You don't give <i>--follow-symlink</i>
+4. Arx create a symlink L and then try to add the file F to directory L, which is not possible
+   because L is a symlink.
 
 <s>Triming path</s>
 
