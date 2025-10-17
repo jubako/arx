@@ -160,7 +160,7 @@ impl Entry {
     /// Get the link target of the link entry.
     ///
     /// Raise an exception if entry is not a link.
-    fn get_target(&self) -> PyResult<Cow<[u8]>> {
+    fn get_target(&self) -> PyResult<Cow<'_, [u8]>> {
         match &self.entry {
             arx::Entry::Link(l) => Ok(l.target().into()),
             _ => Err(PyTypeError::new_err("Not a link")),

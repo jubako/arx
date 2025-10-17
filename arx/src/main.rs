@@ -85,6 +85,15 @@ fn configure_log(verbose: u8) {
                 _ => log::LevelFilter::Trace,
             },
         )
+        .filter_module(
+            "libarx",
+            match verbose {
+                0 => log::LevelFilter::Warn,
+                1 => log::LevelFilter::Info,
+                2 => log::LevelFilter::Debug,
+                _ => log::LevelFilter::Trace,
+            },
+        )
         .format_module_path(false)
         .format_timestamp(None)
         .init();

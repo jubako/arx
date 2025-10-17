@@ -85,9 +85,10 @@ impl DirEntry {
                 let mut write_children = self.children.try_write().unwrap();
                 match write_children.get_mut(component.as_str()).unwrap() {
                     DirOrFile::Dir(e) => e.add(entry, components, entry_store),
-                    DirOrFile::File(_) => Err(IncoherentStructure(
-                        "Cannot add a entry to something which is not a directory".into(),
-                    )
+                    DirOrFile::File(_) => Err(IncoherentStructure(format!(
+                        "Adding {}, cannot add a entry to something which is not a directory",
+                        entry.path()
+                    ))
                     .into()),
                 }
             }
@@ -172,9 +173,10 @@ impl DirEntry {
                 match self.children.try_read().unwrap().get(entry_name) {
                     Some(DirOrFile::Dir(_)) => return Ok(()),
                     Some(DirOrFile::File(_)) => {
-                        return Err(IncoherentStructure(
-                            "Cannot add a dir when file or link already exists".into(),
-                        )
+                        return Err(IncoherentStructure(format!(
+                            "Adding {}, cannot add a dir when file or link already exists",
+                            entry.path()
+                        ))
                         .into())
                     }
                     None => {}
@@ -208,9 +210,10 @@ impl DirEntry {
             }
             EntryKind::File(size, content_address) => {
                 if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err(IncoherentStructure(
-                        "Cannot add a file when one already exists".into(),
-                    )
+                    return Err(IncoherentStructure(format!(
+                        "Adding {}, cannot add a file when one already exists",
+                        entry.path()
+                    ))
                     .into());
                 }
                 values.insert(Property::Content, jbk::Value::Content(content_address));
@@ -229,9 +232,10 @@ impl DirEntry {
             }
             EntryKind::Link(target) => {
                 if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err(IncoherentStructure(
-                        "Cannot add a link when one already exists".into(),
-                    )
+                    return Err(IncoherentStructure(format!(
+                        "Adding {}, cannot add a link when one already exists",
+                        entry.path()
+                    ))
                     .into());
                 }
                 values.insert(

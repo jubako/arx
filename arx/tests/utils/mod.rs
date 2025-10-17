@@ -393,7 +393,7 @@ macro_rules! join {
     };
     (@init, $first:expr, $($args:tt),+) => {
         {
-            let mut path:PathBuf = AsRef::<Path>::as_ref(&$first).to_path_buf();
+            let mut path:std::path::PathBuf = std::convert::AsRef::<std::path::Path>::as_ref(&$first).to_path_buf();
             join!(@append, path, $($args),+);
             path
         }
