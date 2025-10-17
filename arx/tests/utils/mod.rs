@@ -1,4 +1,5 @@
 mod tree_diff;
+use regex::Regex;
 use rustest::fixture;
 use std::{io::Read, path::Path, process::Command};
 
@@ -6,7 +7,7 @@ use rand::prelude::*;
 
 #[allow(unused_imports)]
 pub use tree_diff::{
-    tree_diff, Differ, ExceptionDiffer, ExistingExpected, SimpleDiffer, TreeEntry,
+    list_diff, tree_diff, Differ, ExceptionDiffer, ExistingExpected, SimpleDiffer, TreeEntry,
 };
 
 #[cfg(unix)]
@@ -256,9 +257,16 @@ pub fn SharedTestDir() -> std::io::Result<TempDir> {
             loop  (10..50) { text "file{ctx}.txt" (500..1000) },
             loop  (10..50) { bin "file{ctx}.bin" (500..1000) }
         },
+        dir "sub_dir_a_bis" {
+            text "existing_file2" 50,
+            link "existing_link2" -> "existing_file2",
+        },
         dir "sub_dir_b" {
             loop 10 { bin "file{ctx}.bin" (5000..10000) },
             loop 10 { link "link_to_file{ctx}" -> "file{ctx}.bin" },
+        },
+        dir "sub_dir_c" {
+            text "existing_file" 50,
         },
         link_dir "sub_dir_link" -> "sub_dir_b",
         dir "empty_sub_dir" {},
@@ -329,55 +337,53 @@ macro_rules! temp_arx {
 
 #[allow(dead_code)]
 pub trait CheckCommand {
-    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]);
-    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>);
+    fn check_fail(&mut self, stdout: &str, stderr: &str);
+    fn check_output(&mut self, stdout: Option<&str>, stderr: Option<&str>);
     fn check(&mut self);
 }
 
 impl CheckCommand for Command {
-    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>) {
+    fn check_output(&mut self, stdout: Option<&str>, stderr: Option<&str>) {
         let output = self.output().expect("Running command should work.");
         let mut success = output.status.success();
+        let output_stdout = String::from_utf8_lossy(&output.stdout);
+        let output_stderr = String::from_utf8_lossy(&output.stderr);
         if let Some(stdout) = stdout {
-            success &= output.stdout == stdout
+            let regex = Regex::new(stdout).unwrap();
+            success &= regex.is_match(&output_stdout)
         }
         if let Some(stderr) = stderr {
-            success &= output.stderr == stderr
+            let regex = Regex::new(stderr).unwrap();
+            success &= regex.is_match(&output_stderr)
         }
         if !success {
             println!("Command failed. Status is {}", output.status);
             if let Some(stdout) = stdout {
-                println!(
-                    "Output is {}\nExpected is {}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(stdout)
-                );
+                println!("Output is {}\nExpected is {}", output_stdout, stdout);
             }
             if let Some(stderr) = stderr {
-                println!(
-                    "Err is {}\nExpected is {}",
-                    String::from_utf8_lossy(&output.stderr),
-                    String::from_utf8_lossy(stderr)
-                );
+                println!("Err is {}\nExpected is {}", output_stderr, stderr);
             }
             panic!("Running command {self:?} fails.")
         }
     }
-    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
+    fn check_fail(&mut self, stdout: &str, stderr: &str) {
         let output = self.output().expect("Running command should work.");
-        assert_eq!(
-            output.stdout,
-            stdout,
+        let output_stdout = String::from_utf8_lossy(&output.stdout);
+        let output_stderr = String::from_utf8_lossy(&output.stderr);
+        let regex_stdout = Regex::new(stdout).unwrap();
+        let regex_stderr = Regex::new(stderr).unwrap();
+        assert!(
+            regex_stdout.is_match(&output_stdout),
             "Output is {}\nExpected is {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(stdout),
+            output_stdout,
+            stdout,
         );
-        assert_eq!(
-            output.stderr,
-            stderr,
+        assert!(
+            regex_stderr.is_match(&output_stderr),
             "Err is {}\nExpected is {}",
-            String::from_utf8_lossy(&output.stderr),
-            String::from_utf8_lossy(stderr)
+            output_stderr,
+            stderr
         );
         assert!(!output.status.success());
     }
