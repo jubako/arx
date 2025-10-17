@@ -42,6 +42,7 @@ filetime = "0.2.25"
 rustest = "0.3.1"
 walkdir = "2.4.0"
 relative-path = "2.0.1"
+regex = "1.12.2"
 
 [features]
 default = ["zstd", "fuse"]

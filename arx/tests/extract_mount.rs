@@ -261,7 +261,7 @@ fn test_extract_existing_content_warn(source_dir: SharedTestDir, arx_file: BaseA
     )
     .check_output(
         Some(""),
-        Some(&format!(
+        Some(&regex::escape(&format!(
             "File {} already exists.\nLink {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
@@ -269,7 +269,7 @@ fn test_extract_existing_content_warn(source_dir: SharedTestDir, arx_file: BaseA
             join!(extract_dir / "sub_dir_a" / "existing_link")
                 .to_str()
                 .unwrap()
-        )),
+        ))),
     );
     assert!(tree_diff(
         extract_dir,
@@ -417,12 +417,12 @@ fn test_extract_existing_content_error(source_dir: SharedTestDir, arx_file: Base
     )
     .check_fail(
         "",
-        &format!(
+        &regex::escape(&format!(
             "Error : File {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()
-        ),
+        )),
     );
     assert!(!tree_diff(
         extract_dir,

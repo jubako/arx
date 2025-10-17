@@ -22,10 +22,10 @@ fn test_crate_non_existant_output_directory(source_dir: SharedTestDir) -> Result
     temp_arx!(arx_file, "non_existant_directory/test.arx");
     cmd!("arx", "create", "--outfile", &arx_file, source_dir).check_fail(
         "",
-        &format!(
+        &regex::escape(&format!(
             "Error : Directory {} doesn't exist\n",
             arx_file.parent().unwrap().to_str().unwrap()
-        ),
+        )),
     );
     assert!(!arx_file.exists());
     Ok(())
@@ -207,10 +207,10 @@ fn test_crate_existant_output(source_dir: SharedTestDir) -> Result {
     // Try to write without --force
     cmd!("arx", "create", "--outfile", &arx_file, source_dir).check_fail(
         "",
-        &format!(
+        &regex::escape(&format!(
             "Error : File {} already exists. Use option --force to overwrite it.\n",
             arx_file.to_str().unwrap()
-        ),
+        )),
     );
     assert_eq!(std::fs::read(&arx_file)?, b"Some dummy content");
 
