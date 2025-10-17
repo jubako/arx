@@ -106,6 +106,14 @@ pub struct Options {
     #[arg(long)]
     root_dir: Option<PathBuf>,
 
+    /// Share mount point with other users
+    #[arg(long)]
+    allow_other: bool,
+
+    /// Share mount point with root user
+    #[arg(long)]
+    allow_root: bool,
+
     /// Forground operation
     #[arg(short, long)]
     foreground: bool,
@@ -173,7 +181,12 @@ pub fn mount(options: Options) -> anyhow::Result<()> {
         abs_path.display(),
         abs_mount_point.display()
     );
-    arxfs.mount(abs_path.to_str().unwrap().to_string(), abs_mount_point)?;
+    arxfs.mount(
+        abs_path.to_str().unwrap().to_string(),
+        abs_mount_point,
+        options.allow_other,
+        options.allow_root,
+    )?;
 
     info!("Stats:\n {stats}");
     Ok(())
