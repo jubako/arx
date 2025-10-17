@@ -336,55 +336,47 @@ macro_rules! temp_arx {
 
 #[allow(dead_code)]
 pub trait CheckCommand {
-    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]);
-    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>);
+    fn check_fail(&mut self, stdout: &str, stderr: &str);
+    fn check_output(&mut self, stdout: Option<&str>, stderr: Option<&str>);
     fn check(&mut self);
 }
 
 impl CheckCommand for Command {
-    fn check_output(&mut self, stdout: Option<&[u8]>, stderr: Option<&[u8]>) {
+    fn check_output(&mut self, stdout: Option<&str>, stderr: Option<&str>) {
         let output = self.output().expect("Running command should work.");
         let mut success = output.status.success();
+        let output_stdout = String::from_utf8_lossy(&output.stdout);
+        let output_stderr = String::from_utf8_lossy(&output.stderr);
         if let Some(stdout) = stdout {
-            success &= output.stdout == stdout
+            success &= output_stdout == stdout
         }
         if let Some(stderr) = stderr {
-            success &= output.stderr == stderr
+            success &= output_stderr == stderr
         }
         if !success {
             println!("Command failed. Status is {}", output.status);
             if let Some(stdout) = stdout {
-                println!(
-                    "Output is {}\nExpected is {}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(stdout)
-                );
+                println!("Output is {}\nExpected is {}", output_stdout, stdout);
             }
             if let Some(stderr) = stderr {
-                println!(
-                    "Err is {}\nExpected is {}",
-                    String::from_utf8_lossy(&output.stderr),
-                    String::from_utf8_lossy(stderr)
-                );
+                println!("Err is {}\nExpected is {}", output_stderr, stderr);
             }
             panic!("Running command {self:?} fails.")
         }
     }
-    fn check_fail(&mut self, stdout: &[u8], stderr: &[u8]) {
+    fn check_fail(&mut self, stdout: &str, stderr: &str) {
         let output = self.output().expect("Running command should work.");
+        let output_stdout = String::from_utf8_lossy(&output.stdout);
+        let output_stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(
-            output.stdout,
-            stdout,
+            output_stdout, stdout,
             "Output is {}\nExpected is {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(stdout),
+            output_stdout, stdout,
         );
         assert_eq!(
-            output.stderr,
-            stderr,
+            output_stderr, stderr,
             "Err is {}\nExpected is {}",
-            String::from_utf8_lossy(&output.stderr),
-            String::from_utf8_lossy(stderr)
+            output_stderr, stderr
         );
         assert!(!output.status.success());
     }
