@@ -189,7 +189,7 @@ fn test_crate_several_input_root_as_dir_duplicate(source_dir: SharedTestDir) -> 
     )
     .check_fail(
         "",
-        "Error : Incoherent structure : Adding file0.bin, cannot add a file when one already exists\n",
+        "Error : Incoherent structure : Adding file[0-9].bin, cannot add a file when one already exists\n",
     );
     Ok(())
 }
