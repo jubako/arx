@@ -1,4 +1,5 @@
 mod tree_diff;
+use regex::Regex;
 use rustest::fixture;
 use std::{io::Read, path::Path, process::Command};
 
@@ -348,10 +349,12 @@ impl CheckCommand for Command {
         let output_stdout = String::from_utf8_lossy(&output.stdout);
         let output_stderr = String::from_utf8_lossy(&output.stderr);
         if let Some(stdout) = stdout {
-            success &= output_stdout == stdout
+            let regex = Regex::new(stdout).unwrap();
+            success &= regex.is_match(&output_stdout)
         }
         if let Some(stderr) = stderr {
-            success &= output_stderr == stderr
+            let regex = Regex::new(stderr).unwrap();
+            success &= regex.is_match(&output_stderr)
         }
         if !success {
             println!("Command failed. Status is {}", output.status);
@@ -368,15 +371,19 @@ impl CheckCommand for Command {
         let output = self.output().expect("Running command should work.");
         let output_stdout = String::from_utf8_lossy(&output.stdout);
         let output_stderr = String::from_utf8_lossy(&output.stderr);
-        assert_eq!(
-            output_stdout, stdout,
+        let regex_stdout = Regex::new(stdout).unwrap();
+        let regex_stderr = Regex::new(stderr).unwrap();
+        assert!(
+            regex_stdout.is_match(&output_stdout),
             "Output is {}\nExpected is {}",
-            output_stdout, stdout,
+            output_stdout,
+            stdout,
         );
-        assert_eq!(
-            output_stderr, stderr,
+        assert!(
+            regex_stderr.is_match(&output_stderr),
             "Err is {}\nExpected is {}",
-            output_stderr, stderr
+            output_stderr,
+            stderr
         );
         assert!(!output.status.success());
     }
