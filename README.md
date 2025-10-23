@@ -18,12 +18,25 @@ especially for large archives and random access operations. Arx archives can eve
 
 ### Using Cargo
 
-Fist, make sure you have the following dependencies installed:
+On linux and macos, arx use fuse to be able to mount arx archive.
+You need to install it.
 
-* fuse3: you need the `fuse3.pc` pkgconfig file, depending on your OS it should
-come with the development package of the `fuse3` library
+- On Fedora:
+```
+$ sudo dnf install fuse3-devel
+```
 
-The easiest way to install `arx` is via Cargo, Rust's package manager:
+- On ubuntu:
+```
+$ sudo apt install libfuse3-dev
+```
+
+- On MacOs (using brew):
+```
+$ brew install macfuse pkgconf
+```
+
+Then, you can install arx using cargo:
 
 ```bash
 cargo install arx
@@ -117,6 +130,27 @@ Remote tar archives can also be converted using `tar2arx`:
 ```bash
 tar2arx -o my_archive.arx https://example.com/my_archive.tar.gz
 ```
+
+## Registering Arx's mimetype
+
+Arx mimetype can be registered by:
+
+- Copying misc/mime_type.xml as `~/.local/share/mime/packages/arx.xml`.
+- Run `update-mime-database ~/.local/share/mime`
+
+## Completion scripts
+
+The option `--generate-complete` allows to generate completion scripts for known shells. You will have to put generated
+script in the right directory according to your shell. Most of the time the directories are:
+- Bash: `/usr/share/bash-completion/completions/arx.sh` or `~/.bash_completion` (do not overwrite it !)
+~/.config/fish/completions/your_program.fish
+- Fish: `/usr/share/fish/completions/arx.fish` or `~/.config/fish/completions/arx.fish`
+- Zsh: `/usr/share/zsh/vendor-completions/arx` or `~/.zsh/_arx`
+
+For example:
+- `arx --generate-complete fish | sudo tee /usr/share/fish/completions/arx.fish > /dev/null`
+- `arx --generate-complete bash >> ~/.bash_completion`
+
 
 ## Performance
 
