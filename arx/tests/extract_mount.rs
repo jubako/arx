@@ -2,7 +2,6 @@ mod utils;
 
 use rustest::{test, *};
 
-use format_bytes::format_bytes;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -38,13 +37,10 @@ fn BaseArxFile(source_dir: SharedTestDir) -> TmpArx {
         "create",
         "--outfile",
         &tmp_arx,
-        "-C",
-        source_dir.parent().unwrap(),
-        "--strip-prefix",
-        source_dir.file_name().unwrap(),
-        source_dir.file_name().unwrap()
+        source_dir,
+        "--dir-as-root"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     TmpArx::new(tmp_arx_dir, tmp_arx)
 }
 
@@ -141,8 +137,8 @@ fn test_extract_same_dir(arx_file: BaseArxFile) -> Result {
     let arx_file = arx_file.path();
 
     let extract_dir = tempfile::TempDir::with_prefix_in("extract_", env!("CARGO_TARGET_TMPDIR"))?;
-    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(b""), Some(b""));
-    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(b""), None);
+    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(""), Some(""));
+    cmd!("arx", "extract", arx_file, "-C", extract_dir.path()).check_output(Some(""), None);
     Ok(())
 }
 
@@ -158,7 +154,7 @@ fn test_extract_filter(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Resu
         "--glob",
         "sub_dir_a/**"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
 
     let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
     let extract_sub_dir = join!(extract_dir / "sub_dir_a");
@@ -184,7 +180,7 @@ fn test_extract_subdir(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Resu
         "-C",
         extract_dir.path()
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
 
     let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
 
@@ -205,7 +201,7 @@ fn test_extract_subfile(arx_file: BaseArxFile) -> Result {
         "-C",
         extract_dir.path()
     )
-    .check_fail(b"", b"Error : sub_dir_a/file1.txt must be a directory\n");
+    .check_fail("", "Error : sub_dir_a/file1.txt must be a directory\n");
     Ok(())
 }
 
@@ -227,7 +223,7 @@ fn test_extract_existing_content_skip(source_dir: SharedTestDir, arx_file: BaseA
         extract_dir.path(),
         "--overwrite=skip"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     assert!(tree_diff(
         extract_dir,
         source_dir.path(),
@@ -264,18 +260,16 @@ fn test_extract_existing_content_warn(source_dir: SharedTestDir, arx_file: BaseA
         "--overwrite=warn"
     )
     .check_output(
-        Some(b""),
-        Some(&format_bytes!(
-            b"File {} already exists.\nLink {} already exists.\n",
+        Some(""),
+        Some(&regex::escape(&format!(
+            "File {} already exists.\nLink {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
-                .unwrap()
-                .as_bytes(),
+                .unwrap(),
             join!(extract_dir / "sub_dir_a" / "existing_link")
                 .to_str()
                 .unwrap()
-                .as_bytes()
-        )),
+        ))),
     );
     assert!(tree_diff(
         extract_dir,
@@ -325,7 +319,7 @@ fn test_extract_existing_content_newer_true(
         extract_dir.path(),
         "--overwrite=newer"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     assert!(tree_diff(
         extract_dir,
         source_dir.path(),
@@ -357,7 +351,7 @@ fn test_extract_existing_content_newer_false(
         extract_dir.path(),
         "--overwrite=newer"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     assert!(tree_diff(
         extract_dir,
         source_dir.path(),
@@ -395,7 +389,7 @@ fn test_extract_existing_content_overwrite(
         extract_dir.path(),
         "--overwrite=overwrite"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
     assert!(tree_diff(
         extract_dir,
         source_dir.path(),
@@ -422,14 +416,13 @@ fn test_extract_existing_content_error(source_dir: SharedTestDir, arx_file: Base
         "--overwrite=error"
     )
     .check_fail(
-        b"",
-        &format_bytes!(
-            b"Error : File {} already exists.\n",
+        "",
+        &regex::escape(&format!(
+            "Error : File {} already exists.\n",
             join!(extract_dir / "sub_dir_a" / "existing_file")
                 .to_str()
                 .unwrap()
-                .as_bytes()
-        ),
+        )),
     );
     assert!(!tree_diff(
         extract_dir,
@@ -454,7 +447,7 @@ fn test_extract_subdir_filter(source_dir: SharedTestDir, arx_file: BaseArxFile) 
         "--glob",
         "*.txt"
     )
-    .check_output(Some(b""), Some(b""));
+    .check_output(Some(""), Some(""));
 
     let source_sub_dir = join!((source_dir.path()) / "sub_dir_a");
 

@@ -38,9 +38,11 @@ daemonize = "0.5.0"
 rand = { version = "0.8.5", features = ["small_rng"]}
 lipsum = "0.9.0"
 tempfile = "3.8.0"
-format-bytes = "0.3.0"
 filetime = "0.2.25"
 rustest = "0.3.1"
+walkdir = "2.4.0"
+relative-path = "2.0.1"
+regex = "1.12.2"
 
 [features]
 default = ["zstd", "fuse"]

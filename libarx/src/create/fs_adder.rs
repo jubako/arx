@@ -8,7 +8,7 @@ use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
-use std::{io::Cursor, sync::mpsc, thread::spawn};
+use std::{borrow::Cow, io::Cursor, sync::mpsc, thread::spawn};
 
 #[derive(Debug)]
 pub enum FsEntryKind {
@@ -142,16 +142,84 @@ impl EntryTrait for FsEntry {
     }
 }
 
+struct Trimer<'a>(Option<&'a std::path::Path>);
+
+impl<'a> Trimer<'a> {
+    fn new(keep_parent: bool, p: &'a std::path::Path) -> Self {
+        if keep_parent {
+            if p.is_absolute() {
+                let mut components = p.components();
+                let root_prefix = components
+                    .next()
+                    .expect("Absolute path should have at least a component.");
+                Trimer(Some(std::path::Path::new(root_prefix.as_os_str())))
+            } else {
+                Trimer(None)
+            }
+        } else {
+            let mut ancestors = p.ancestors();
+            ancestors.next();
+            let parent_to_strip = ancestors.next();
+            Trimer(parent_to_strip)
+        }
+    }
+    fn trim<'s, 'p>(&'s self, path: &'p std::path::Path) -> &'p std::path::Path {
+        if let Some(prefix) = self.0 {
+            path.strip_prefix(prefix)
+                .expect("Prefix should be a prefix of entry.path()")
+        } else {
+            path
+        }
+    }
+}
+
+fn to_arx_path(path: &std::path::Path) -> Result<Cow<'_, crate::Path>, InputError> {
+    let ret = match crate::Path::from_path(path) {
+        Ok(p) => Ok(p.into()),
+        Err(e) => {
+            if let relative_path::FromPathErrorKind::BadSeparator = e.kind() {
+                crate::PathBuf::from_path(path).map(|p| p.into())
+            } else {
+                Err(e)
+            }
+        }
+    };
+    ret.map_err(|e| match e.kind() {
+        relative_path::FromPathErrorKind::NonRelative => {
+            InputError(format!("{} is not a relative path", path.display()))
+        }
+        relative_path::FromPathErrorKind::NonUtf8 => {
+            InputError(format!("Non utf8 char in {}", path.display()))
+        }
+        relative_path::FromPathErrorKind::BadSeparator => {
+            InputError(format!("Invalid path separator in {}", path.display()))
+        }
+        _ => InputError(format!(
+            "Unknown error converting {} to relative utf-8 path.",
+            path.display()
+        )),
+    })
+}
+
 pub struct FsAdder<'a> {
     creator: &'a mut SimpleCreator,
-    strip_prefix: crate::PathBuf,
+    keep_parents: bool,
+    follow_symlink: bool,
+    dir_as_root: bool,
 }
 
 impl<'a> FsAdder<'a> {
-    pub fn new(creator: &'a mut SimpleCreator, strip_prefix: crate::PathBuf) -> Self {
+    pub fn new(
+        creator: &'a mut SimpleCreator,
+        keep_parents: bool,
+        follow_symlink: bool,
+        dir_as_root: bool,
+    ) -> Self {
         Self {
             creator,
-            strip_prefix,
+            keep_parents,
+            follow_symlink,
+            dir_as_root,
         }
     }
 
@@ -172,9 +240,11 @@ impl<'a> FsAdder<'a> {
         log::trace!("add_from_path_with_filter(path:{path:?}, recurse:{recurse})");
         let (tx, rx) = mpsc::channel();
         let path_copy = path.to_path_buf();
+        let follow_symlink = self.follow_symlink;
+        let trimmer = Trimer::new(self.keep_parents, path);
 
         spawn(move || {
-            let mut walker = walkdir::WalkDir::new(path_copy);
+            let mut walker = walkdir::WalkDir::new(path_copy).follow_links(follow_symlink);
 
             if !recurse {
                 walker = walker.max_depth(0);
@@ -191,59 +261,52 @@ impl<'a> FsAdder<'a> {
             // This allow user to create a link to a file/dir to add the entry under a different name.
             // Walkdir will do the same anyway if it is a directory.
             let is_root_entry = entry.path() == path;
-
-            self.add_entry_from_path(entry.path(), is_root_entry)?;
+            let entry_path = if self.dir_as_root {
+                if is_root_entry {
+                    continue;
+                }
+                entry
+                    .path()
+                    .strip_prefix(path)
+                    .expect("Entry path is a chird of path")
+            } else {
+                trimmer.trim(entry.path())
+            };
+            let arx_path = to_arx_path(entry_path)?;
+            self.add_entry_from_path(entry.path(), &arx_path, is_root_entry)?;
         }
         Ok(())
     }
 
-    pub fn add_from_list<Iter>(&mut self, paths: Iter, follow_symlink: bool) -> Void
+    pub fn add_from_list<Iter>(&mut self, paths: Iter) -> Void
     where
         Iter: Iterator<Item = std::path::PathBuf>,
     {
         for path in paths {
-            self.add_entry_from_path(&path, follow_symlink)?;
+            let trimer = Trimer::new(self.keep_parents, &path);
+            let arx_path = trimer.trim(&path);
+            let arx_path = to_arx_path(arx_path)?;
+            self.add_entry_from_path(&path, &arx_path, false)?;
         }
         Ok(())
     }
 
-    pub fn add_entry_from_path(&mut self, path: &std::path::Path, follow_symlink: bool) -> Void {
-        log::debug!("add_path(path:{path:?}, follow_symlink:{follow_symlink})");
-
-        let arx_path = match crate::PathBuf::from_path(path) {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(match e.kind() {
-                    relative_path::FromPathErrorKind::NonRelative => {
-                        InputError(format!("{} is not a relative path", path.display()))
-                    }
-                    relative_path::FromPathErrorKind::NonUtf8 => {
-                        InputError(format!("Non utf8 char in {}", path.display()))
-                    }
-                    relative_path::FromPathErrorKind::BadSeparator => {
-                        InputError(format!("Invalid path separator in {}", path.display()))
-                    }
-                    _ => InputError(format!(
-                        "Unknown error converting {} to relative utf-8 path.",
-                        path.display()
-                    )),
-                }
-                .into())
-            }
-        };
-        let arx_path: crate::PathBuf = match arx_path.strip_prefix(&self.strip_prefix) {
-            Ok(p) => p,
-            Err(_e) => {
-                return Err(
-                    InputError(format!("{} is not in {arx_path}", self.strip_prefix)).into(),
-                )
-            }
-        }
-        .into();
+    pub fn add_entry_from_path(
+        &mut self,
+        path: &std::path::Path,
+        arx_path: &crate::Path,
+        is_root_dir: bool,
+    ) -> Void {
+        log::debug!("add_path(path:{path:?}, arx_path: {arx_path:?}, is_root_dir:{is_root_dir})");
         if arx_path.as_str().is_empty() {
             return Ok(());
         }
-        let entry = FsEntry::new_from_path(path, arx_path, self.creator.adder(), follow_symlink)?;
+        let entry = FsEntry::new_from_path(
+            path,
+            arx_path.into(),
+            self.creator.adder(),
+            self.follow_symlink || is_root_dir,
+        )?;
 
         self.creator.add_entry(entry.as_ref())
     }
