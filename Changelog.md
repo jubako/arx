@@ -1,3 +1,28 @@
+# Arx 0.4.0
+
+- Add an option `--overwrite` to specify how `arx extract` overwrite existing files.
+- Better extract api to select which files to extract.
+- Add `--allow-other` and `--allow-root` to `arx mount` to allow sharing the mount point
+  with other or root users.
+- Better create api: Simple trimming of added path instead of `--strip-prefix`
+- Automatically detect the current shell when using option `--generate-complete`
+- Remove deprecied (and hidden) options.
+- Limit number of open fd to 1000 in the same time.
+- Add licences file to Cargo.toml
+- Test improvements:
+ . Use `rustest` to run our test.
+ . Don't use `arx_test_dir` to generate testing content
+- Adapt to new Jubako api (error types, variant and property names, SmallVec, utf8 locator, array cmp)
+- Update README
+
+## Zip2Arx
+
+- Handle Ntfs extra field stored in zip file.
+
+## Tar2Arx
+
+- Handle gnu header in tar file.
+
 # Arx 0.3.2
 
 - `--version` option now includes the git commit.
