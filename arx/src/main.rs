@@ -21,6 +21,30 @@ const VERSION: &str = const_format::formatcp!(
     )
 );
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum Shell {
+    Bash,
+    Elvish,
+    Fish,
+    #[allow(clippy::enum_variant_names)]
+    PowerShell,
+    Zsf,
+    Auto,
+}
+
+impl From<Shell> for Option<clap_complete::Shell> {
+    fn from(v: Shell) -> Self {
+        match v {
+            Shell::Bash => Some(clap_complete::Shell::Bash),
+            Shell::Elvish => Some(clap_complete::Shell::Elvish),
+            Shell::Fish => Some(clap_complete::Shell::Fish),
+            Shell::PowerShell => Some(clap_complete::Shell::PowerShell),
+            Shell::Zsf => Some(clap_complete::Shell::Zsh),
+            Shell::Auto => clap_complete::Shell::from_env(),
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "arx", author, version, long_version=VERSION, about, long_about=None)]
 struct Cli {
@@ -45,8 +69,8 @@ struct Cli {
     )]
     generate_man_page: Option<String>,
 
-    #[arg(long, help_heading = "Advanced")]
-    generate_complete: Option<clap_complete::Shell>,
+    #[arg(long, help_heading = "Advanced", num_args=0..=1, default_missing_value="auto", require_equals(true))]
+    generate_complete: Option<Shell>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -122,7 +146,13 @@ fn run() -> Result<()> {
     if let Some(what) = args.generate_complete {
         let mut command = Cli::command();
         let name = command.get_name().to_string();
-        clap_complete::generate(what, &mut command, name, &mut std::io::stdout());
+        let shell: Option<clap_complete::Shell> = what.into();
+        match shell {
+            Some(shell) => {
+                clap_complete::generate(shell, &mut command, name, &mut std::io::stdout())
+            }
+            None => anyhow::bail!("Cannot detect the current shell"),
+        }
         return Ok(());
     }
 
