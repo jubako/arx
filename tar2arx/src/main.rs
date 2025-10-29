@@ -146,8 +146,10 @@ impl TarEntry {
         adder: &mut impl ContentAdder,
     ) -> Result<Option<Self>, arx::CreatorError> {
         let header = entry.header();
-        let uid = header.uid()?;
-        let gid = header.gid()?;
+        // GnuHeader tar may store the user/group name and not the uid/gid.
+        // Store 0 for now.
+        let uid = header.uid().unwrap_or_default();
+        let gid = header.gid().unwrap_or_default();
         let mtime = header.mtime()?;
         let mode = header.mode()? as u64;
         let path = arx::PathBuf::from_path(entry.path()?)
