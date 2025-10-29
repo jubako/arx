@@ -18,16 +18,16 @@ harness = false
 jbk.workspace = true
 clap = { workspace=true, optional = true }
 libc = "0.2.148"
-lru = "0.12.4"
+lru = "0.16.2"
 fxhash = "0.2.1"
 tempfile = "3.8.0"
 walkdir = "2.4.0"
-relative-path = "1.9.2"
+relative-path = "2.0.1"
 epochs = "0.2.4"
 rayon = "1.10.0"
 bstr = "1.9.1"
 log = "0.4.22"
-thiserror = "1.0.64"
+thiserror = "2.0.17"
 
 [target.'cfg(not(windows))'.dependencies]
 fuser = { version = "0.16.0", features = ["libfuse"], optional = true }

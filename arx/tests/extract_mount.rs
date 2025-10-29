@@ -50,7 +50,8 @@ fn test_mount(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let mount_point = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
     let arx = arx::Arx::new(arx_file.path())?;
     let arxfs = arx::ArxFs::new(arx)?;
-    let _mount_handle = arxfs.spawn_mount("Test mounted arx".into(), mount_point.path())?;
+    let _mount_handle =
+        arxfs.spawn_mount("Test mounted arx".into(), mount_point.path(), false, false)?;
     assert!(tree_diff(
         mount_point,
         source_dir.path(),

@@ -50,9 +50,9 @@ impl Creator {
 
     fn __exit__(
         mut slf: PyRefMut<'_, Self>,
-        _exc_type: PyObject,
-        _exc_value: PyObject,
-        _traceback: PyObject,
+        _exc_type: Py<PyAny>,
+        _exc_value: Py<PyAny>,
+        _traceback: Py<PyAny>,
     ) -> PyResult<()> {
         if !slf.started {
             return Err(PyRuntimeError::new_err("Creator not started."));

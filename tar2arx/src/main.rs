@@ -331,7 +331,9 @@ fn main() -> Result<()> {
             } else if p.starts_with("https://") || p.starts_with("http://") {
                 #[cfg(feature = "http")]
                 {
-                    Box::new(ureq::get(&p).call()?.into_reader())
+                    let res = ureq::get(&p).call()?;
+                    let body = res.into_body();
+                    Box::new(body.into_reader())
                 }
                 #[cfg(not(feature = "http"))]
                 return Err(anyhow!("Cannot open remote tar without http feature"));
