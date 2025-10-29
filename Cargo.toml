@@ -17,7 +17,7 @@ clap = { version = "4.4.5", features = ["derive", "cargo"] }
 clap_mangen = "0.2.20"
 clap_complete = "4.5.0"
 human-panic = "2.0.1"
-indicatif = "0.17.7"
+indicatif = "0.18.1"
 anyhow = "1.0.75"
 git-version = "0.3.9"
 const_format = "0.2.33"

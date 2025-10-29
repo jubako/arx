@@ -143,8 +143,8 @@ struct ZipEntry {
 }
 
 impl ZipEntry {
-    pub fn new(
-        mut entry: zip::read::ZipFile<'_>,
+    pub fn new<R: std::io::Read>(
+        mut entry: zip::read::ZipFile<'_, R>,
         adder: &mut impl ContentAdder,
         archive_path: &Path,
     ) -> Result<Self, arx::CreatorError> {

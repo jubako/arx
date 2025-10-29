@@ -24,8 +24,8 @@ anyhow.workspace = true
 git-version.workspace = true
 const_format.workspace = true
 tar = "0.4.39"
-niffler = "2.5.0"
-ureq = { version = "2.9.6", optional = true }
+niffler = "3.0.0"
+ureq = { version = "3.1.2", optional = true }
 bstr = "1.9.1"
 
 [features]
