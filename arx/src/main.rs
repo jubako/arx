@@ -26,9 +26,8 @@ enum Shell {
     Bash,
     Elvish,
     Fish,
-    #[allow(clippy::enum_variant_names)]
-    PowerShell,
-    Zsf,
+    Powershell,
+    Zsh,
     Auto,
 }
 
@@ -38,8 +37,8 @@ impl From<Shell> for Option<clap_complete::Shell> {
             Shell::Bash => Some(clap_complete::Shell::Bash),
             Shell::Elvish => Some(clap_complete::Shell::Elvish),
             Shell::Fish => Some(clap_complete::Shell::Fish),
-            Shell::PowerShell => Some(clap_complete::Shell::PowerShell),
-            Shell::Zsf => Some(clap_complete::Shell::Zsh),
+            Shell::Powershell => Some(clap_complete::Shell::PowerShell),
+            Shell::Zsh => Some(clap_complete::Shell::Zsh),
             Shell::Auto => clap_complete::Shell::from_env(),
         }
     }

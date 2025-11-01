@@ -131,7 +131,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "arx"
-version = "0.4.0-dev.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -686,7 +686,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "jubako"
-version = "0.4.0-dev"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "camino",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "libarx"
-version = "0.4.0-dev.0"
+version = "0.4.0"
 dependencies = [
  "bstr",
  "clap",
@@ -1488,7 +1488,7 @@ dependencies = [
 
 [[package]]
 name = "python-libarx"
-version = "0.4.0-dev.0"
+version = "0.4.0"
 dependencies = [
  "jubako",
  "libarx",
@@ -1674,7 +1674,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "tar2arx"
-version = "0.4.0-dev.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bstr",
@@ -1891,7 +1891,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2204,7 +2204,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2513,7 +2513,7 @@ dependencies = [
 
 [[package]]
 name = "zip2arx"
-version = "0.4.0-dev.0"
+version = "0.4.0"
 dependencies = [
  "clap",
  "clap_complete",
