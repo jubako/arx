@@ -23,7 +23,7 @@ jobs:
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: |
-        cargo publish --workspace --exclude python
+        cargo publish --workspace --exclude python-libarx
 
   do_python_publication:
     name: Publish on PyPi
@@ -41,10 +41,10 @@ jobs:
       shell: bash
       run: |
         version=${{ github.event.release.name }}
-        gh release download "$version" -p "wheels-*"
+        gh release download "$version" -p "*.whl"
 
     - name: Publish to PyPI
       uses: PyO3/maturin-action@v1
       with:
         command: upload
-        args: --non-interactive --skip-existing wheels-*
+        args: --non-interactive --skip-existing *.whl

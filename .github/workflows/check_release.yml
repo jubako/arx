@@ -267,7 +267,7 @@ jobs:
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: |
-        cargo publish --dry-run --workspace --exclude python
+        cargo publish --dry-run --workspace --exclude python-libarx
 
   python-check-publication:
     name: Check pypi publication
