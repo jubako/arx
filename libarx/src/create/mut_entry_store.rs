@@ -1,6 +1,6 @@
 use super::entry_store_creator::{to_basic_entry, ArxSchema, JbkEntry};
 use crate::IncoherentStructure;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use super::{EntryKind, EntryTrait, Void};
 
@@ -260,28 +260,39 @@ impl DirEntry {
     }
 }
 
-fn set_idx(
-    parent_dir: &mut DirEntry,
-    idx: &mut impl Iterator<Item = u32>,
-    parent_idx: Option<jbk::EntryIdx>,
-) {
+fn set_idx(parent_dir: &mut DirEntry, idx: &mut impl Iterator<Item = u32>) {
+    let mut to_visit = VecDeque::new();
+
     for child in parent_dir.children.values_mut() {
-        child.set_idx(jbk::EntryIdx::from(idx.next().unwrap()), parent_idx);
+        to_visit.push_back((None, child));
     }
-    for child in parent_dir.children.values_mut() {
-        if let Kind::Dir(d) = &mut child.kind {
-            set_idx(d, idx, child.idx);
+
+    let mut next_idx = || idx.next().map(jbk::EntryIdx::from);
+
+    while let Some((parent_idx, entry)) = to_visit.pop_front() {
+        let idx = next_idx();
+        entry.set_idx(idx.unwrap(), parent_idx);
+        if let Kind::Dir(d) = &mut entry.kind {
+            for child in d.children.values_mut() {
+                to_visit.push_back((idx, child));
+            }
         }
     }
 }
 
 fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>, schema: &ArxSchema) {
+    let mut to_visit = VecDeque::new();
+
     for child in entry.children.values_mut() {
-        res.push(to_basic_entry(child, schema));
+        to_visit.push_back(child);
     }
-    for child in entry.children.values_mut() {
-        if let Kind::Dir(d) = &mut child.kind {
-            flatten(d, res, schema);
+
+    while let Some(entry) = to_visit.pop_front() {
+        res.push(to_basic_entry(entry, schema));
+        if let Kind::Dir(d) = &mut entry.kind {
+            for child in d.children.values_mut() {
+                to_visit.push_back(child);
+            }
         }
     }
 }
@@ -289,7 +300,7 @@ fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>, schema: &ArxSchema) {
 pub fn flat(mut tree: DirEntry, schema: &ArxSchema) -> Vec<JbkEntry> {
     let mut idx = std::ops::RangeFrom { start: 0 };
 
-    set_idx(&mut tree, &mut idx, None);
+    set_idx(&mut tree, &mut idx);
 
     let mut res = Vec::with_capacity(idx.next().unwrap() as usize);
     flatten(&mut tree, &mut res, schema);
