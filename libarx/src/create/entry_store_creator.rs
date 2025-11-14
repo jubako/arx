@@ -136,7 +136,7 @@ impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
             jbk::PropertyIdx::from(0),
             entry_store_id,
             entry_count,
-            jbk::EntryIdx::from(0).into(),
+            jbk::EntryIdx::from(0),
         );
         directory_pack.create_index(
             "arx_root",
@@ -144,7 +144,7 @@ impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
             jbk::PropertyIdx::from(0),
             entry_store_id,
             root_count,
-            jbk::EntryIdx::from(0).into(),
+            jbk::EntryIdx::from(0),
         );
     }
 }
