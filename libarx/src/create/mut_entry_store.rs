@@ -1,4 +1,4 @@
-use super::entry_store_creator::{to_basic_entry, JbkEntry};
+use super::entry_store_creator::JbkEntry;
 use crate::IncoherentStructure;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -288,7 +288,7 @@ fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>) {
     }
 
     while let Some(entry) = to_visit.pop_front() {
-        res.push(to_basic_entry(entry));
+        res.push(JbkEntry::new(entry));
         if let Kind::Dir(d) = &mut entry.kind {
             for child in d.children.values_mut() {
                 to_visit.push_back(child);

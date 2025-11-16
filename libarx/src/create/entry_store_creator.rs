@@ -1,60 +1,155 @@
 use super::mut_entry_store::{flat, DirEntry, Entry, Kind};
 use crate::common::{EntryType, Property};
 use jbk::creator::schema;
-use std::collections::HashMap;
+use jbk::Value;
 
 use super::{EntryTrait, Void};
 
-pub type JbkEntry = jbk::creator::SimpleEntry<Property, EntryType>;
 pub type ArxSchema = schema::Schema<Property, EntryType>;
 
 type EntryStore = jbk::creator::EntryStore<Property, EntryType>;
-
-pub fn to_basic_entry(entry: &Entry) -> JbkEntry {
-    let mut values = HashMap::from([
-        (
-            Property::Name,
-            jbk::Value::Array(entry.name.as_bytes().into()),
-        ),
-        (
-            Property::Parent,
-            jbk::Value::Unsigned(entry.parent.map_or(0, |p| p.into_u64() + 1)),
-        ),
-        (Property::Owner, jbk::Value::Unsigned(entry.owner)),
-        (Property::Group, jbk::Value::Unsigned(entry.group)),
-        (Property::Rights, jbk::Value::Unsigned(entry.rights)),
-        (Property::Mtime, jbk::Value::Unsigned(entry.mtime)),
-    ]);
-
-    let entry_type = match &entry.kind {
-        Kind::Dir(d) => {
-            values.insert(
-                Property::FirstChild,
-                jbk::Value::Unsigned(d.first_child().into_u64()),
-            );
-            values.insert(
-                Property::NbChildren,
-                jbk::Value::Unsigned(d.nb_children().into_u64()),
-            );
-            EntryType::Dir
-        }
-        Kind::File { content, size } => {
-            values.insert(Property::Content, jbk::Value::Content(*content));
-            values.insert(Property::Size, jbk::Value::Unsigned(*size));
-            EntryType::File
-        }
-        Kind::Link { target } => {
-            values.insert(Property::Target, jbk::Value::Array(target.to_vec().into()));
-            EntryType::Link
-        }
-    };
-    jbk::creator::SimpleEntry::new(entry_type, values)
-}
 
 pub struct EntryStoreCreator {
     schema: ArxSchema,
     path_store: jbk::creator::StoreHandle,
     root_entry: DirEntry,
+}
+
+#[derive(Debug)]
+pub enum JbkKind {
+    Dir {
+        first_child: jbk::EntryIdx,
+        nb_children: jbk::EntryCount,
+    },
+    File {
+        content: jbk::ContentAddress,
+        size: u64,
+    },
+    Link {
+        target: bstr::BString,
+    },
+}
+
+#[derive(Debug)]
+pub struct JbkEntry {
+    pub parent: Option<jbk::EntryIdx>,
+    pub name: String,
+    pub owner: u64,
+    pub group: u64,
+    pub rights: u64,
+    pub mtime: u64,
+    pub kind: JbkKind,
+}
+
+impl JbkEntry {
+    pub(crate) fn new(e: &Entry) -> Self {
+        Self {
+            parent: e.parent,
+            name: e.name.clone(),
+            owner: e.owner,
+            group: e.group,
+            rights: e.rights,
+            mtime: e.mtime,
+            kind: match &e.kind {
+                Kind::File { content, size } => JbkKind::File {
+                    content: *content,
+                    size: *size,
+                },
+                Kind::Link { target } => JbkKind::Link {
+                    target: target.clone(),
+                },
+                Kind::Dir(d_entry) => JbkKind::Dir {
+                    nb_children: d_entry.nb_children(),
+                    first_child: d_entry.first_child(),
+                },
+            },
+        }
+    }
+}
+
+impl jbk::creator::EntryTrait<Property, EntryType> for JbkEntry {
+    fn variant_name(&self) -> Option<EntryType> {
+        Some(match self.kind {
+            JbkKind::File {
+                content: _,
+                size: _,
+            } => EntryType::File,
+            JbkKind::Link { target: _ } => EntryType::Link,
+            JbkKind::Dir {
+                nb_children: _,
+                first_child: _,
+            } => EntryType::Dir,
+        })
+    }
+
+    fn value(&self, name: &Property) -> Value {
+        match name {
+            Property::Name => Value::Array(self.name.as_bytes().into()),
+            Property::Parent => Value::Unsigned(self.parent.map_or(0, |p| p.into_u64() + 1)),
+            Property::Owner => Value::Unsigned(self.owner),
+            Property::Group => Value::Unsigned(self.group),
+            Property::Rights => Value::Unsigned(self.rights),
+            Property::Mtime => Value::Unsigned(self.mtime),
+            Property::Content => {
+                if let JbkKind::File { content, size: _ } = self.kind {
+                    Value::Content(content)
+                } else {
+                    panic!("Should be a file")
+                }
+            }
+            Property::Size => {
+                if let JbkKind::File { content: _, size } = self.kind {
+                    Value::Unsigned(size)
+                } else {
+                    panic!("Should be a file")
+                }
+            }
+            Property::Target => {
+                if let JbkKind::Link { target } = &self.kind {
+                    Value::Array(target.to_vec().into())
+                } else {
+                    panic!("Should be a link")
+                }
+            }
+            Property::FirstChild => {
+                if let JbkKind::Dir {
+                    first_child,
+                    nb_children: _,
+                } = self.kind
+                {
+                    Value::Unsigned(first_child.into_u64())
+                } else {
+                    panic!("Should be a dir")
+                }
+            }
+            Property::NbChildren => {
+                if let JbkKind::Dir {
+                    first_child: _,
+                    nb_children,
+                } = self.kind
+                {
+                    Value::Unsigned(nb_children.into_u64())
+                } else {
+                    panic!("Should be a dir")
+                }
+            }
+        }
+    }
+
+    fn value_count(&self) -> jbk::PropertyCount {
+        match self.kind {
+            JbkKind::Dir {
+                first_child: _,
+                nb_children: _,
+            } => 6 + 2,
+            JbkKind::File {
+                content: _,
+                size: _,
+            } => 6 + 2,
+            JbkKind::Link { target: _ } => 6 + 1,
+        }
+        .into()
+    }
 }
 
 impl EntryStoreCreator {
