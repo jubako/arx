@@ -1,4 +1,4 @@
-use super::entry_store_creator::{to_basic_entry, ArxSchema, JbkEntry};
+use super::entry_store_creator::{to_basic_entry, JbkEntry};
 use crate::IncoherentStructure;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -280,7 +280,7 @@ fn set_idx(parent_dir: &mut DirEntry, idx: &mut impl Iterator<Item = u32>) {
     }
 }
 
-fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>, schema: &ArxSchema) {
+fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>) {
     let mut to_visit = VecDeque::new();
 
     for child in entry.children.values_mut() {
@@ -288,7 +288,7 @@ fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>, schema: &ArxSchema) {
     }
 
     while let Some(entry) = to_visit.pop_front() {
-        res.push(to_basic_entry(entry, schema));
+        res.push(to_basic_entry(entry));
         if let Kind::Dir(d) = &mut entry.kind {
             for child in d.children.values_mut() {
                 to_visit.push_back(child);
@@ -297,12 +297,12 @@ fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>, schema: &ArxSchema) {
     }
 }
 
-pub fn flat(mut tree: DirEntry, schema: &ArxSchema) -> Vec<JbkEntry> {
+pub fn flat(mut tree: DirEntry) -> Vec<JbkEntry> {
     let mut idx = std::ops::RangeFrom { start: 0 };
 
     set_idx(&mut tree, &mut idx);
 
     let mut res = Vec::with_capacity(idx.next().unwrap() as usize);
-    flatten(&mut tree, &mut res, schema);
+    flatten(&mut tree, &mut res);
     res
 }

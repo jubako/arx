@@ -5,13 +5,12 @@ use std::collections::HashMap;
 
 use super::{EntryTrait, Void};
 
-pub type JbkEntry = jbk::creator::BasicEntry<Property, EntryType>;
+pub type JbkEntry = jbk::creator::SimpleEntry<Property, EntryType>;
 pub type ArxSchema = schema::Schema<Property, EntryType>;
 
-type EntryStore =
-    jbk::creator::EntryStore<Property, EntryType, jbk::creator::BasicEntry<Property, EntryType>>;
+type EntryStore = jbk::creator::EntryStore<Property, EntryType>;
 
-pub fn to_basic_entry(entry: &Entry, schema: &ArxSchema) -> JbkEntry {
+pub fn to_basic_entry(entry: &Entry) -> JbkEntry {
     let mut values = HashMap::from([
         (
             Property::Name,
@@ -49,11 +48,11 @@ pub fn to_basic_entry(entry: &Entry, schema: &ArxSchema) -> JbkEntry {
             EntryType::Link
         }
     };
-    jbk::creator::BasicEntry::new_from_schema(schema, Some(entry_type), values)
+    jbk::creator::SimpleEntry::new(entry_type, values)
 }
 
 pub struct EntryStoreCreator {
-    schema: schema::Schema<Property, EntryType>,
+    schema: ArxSchema,
     path_store: jbk::creator::StoreHandle,
     root_entry: DirEntry,
 }
@@ -119,17 +118,14 @@ impl EntryStoreCreator {
     }
 }
 
-impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
+impl jbk::creator::EntryStoreCreatorTrait for EntryStoreCreator {
     fn finalize(self: Box<Self>, directory_pack: &mut jbk::creator::DirectoryPackCreator) {
         let entry_count = self.root_entry.nb_entry();
         let root_count = self.root_entry.nb_children();
         directory_pack.add_value_store(self.path_store);
-        let flatten = flat(self.root_entry, &self.schema);
-        let mut jbk_entry_store = EntryStore::new(self.schema, Some(flatten.len()));
-        for entry in flatten {
-            jbk_entry_store.add_entry(entry);
-        }
-        let entry_store_id = directory_pack.add_entry_store(Box::new(jbk_entry_store));
+        let flatten = flat(self.root_entry);
+        let jbk_entry_store = EntryStore::new(self.schema, flatten.into_iter());
+        let entry_store_id = directory_pack.add_entry_store(jbk_entry_store);
         directory_pack.create_index(
             "arx_entries",
             Default::default(),
@@ -159,7 +155,7 @@ impl Default for EntryStoreCreator {
 mod tests {
     use super::super::*;
     use super::*;
-    use jbk::creator::EntryStoreTrait;
+    use jbk::creator::EntryStoreCreatorTrait;
     use rustest::{test, *};
 
     #[test]
