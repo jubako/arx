@@ -42,28 +42,29 @@ pub struct JbkEntry {
 }
 
 impl JbkEntry {
-    pub(crate) fn new(e: &Entry) -> Self {
-        Self {
+    pub(crate) fn new(e: Entry) -> (Self, Option<impl Iterator<Item = Entry>>) {
+        let mut next_children = None;
+        let s = Self {
             parent: e.parent,
-            name: e.name.clone(),
+            name: e.name,
             owner: e.owner,
             group: e.group,
             rights: e.rights,
             mtime: e.mtime,
-            kind: match &e.kind {
-                Kind::File { content, size } => JbkKind::File {
-                    content: *content,
-                    size: *size,
-                },
-                Kind::Link { target } => JbkKind::Link {
-                    target: target.clone(),
-                },
-                Kind::Dir(d_entry) => JbkKind::Dir {
-                    nb_children: d_entry.nb_children(),
-                    first_child: d_entry.first_child(),
-                },
+            kind: match e.kind {
+                Kind::File { content, size } => JbkKind::File { content, size },
+                Kind::Link { target } => JbkKind::Link { target },
+                Kind::Dir(d_entry) => {
+                    let d = JbkKind::Dir {
+                        nb_children: d_entry.nb_children(),
+                        first_child: d_entry.first_child(),
+                    };
+                    next_children = Some(d_entry.children.into_values());
+                    d
+                }
             },
-        }
+        };
+        (s, next_children)
     }
 }
 
@@ -219,7 +220,7 @@ impl jbk::creator::EntryStoreCreatorTrait for EntryStoreCreator {
         let root_count = self.root_entry.nb_children();
         directory_pack.add_value_store(self.path_store);
         let flatten = flat(self.root_entry);
-        let jbk_entry_store = EntryStore::new(self.schema, flatten.into_iter());
+        let jbk_entry_store = EntryStore::new(self.schema, flatten);
         let entry_store_id = directory_pack.add_entry_store(jbk_entry_store);
         directory_pack.create_index(
             "arx_entries",

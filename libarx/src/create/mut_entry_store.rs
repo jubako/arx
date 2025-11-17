@@ -98,7 +98,7 @@ type DirCache = BTreeMap<String, Entry>;
 /// This is needed as we may adde file without recursion, and so we need
 /// to find the parent of "foo/bar/baz.txt" ("foo/bar") when we add it.
 pub struct DirEntry {
-    children: DirCache,
+    pub children: DirCache,
 }
 
 impl DirEntry {
@@ -280,29 +280,41 @@ fn set_idx(parent_dir: &mut DirEntry, idx: &mut impl Iterator<Item = u32>) {
     }
 }
 
-fn flatten(entry: &mut DirEntry, res: &mut Vec<JbkEntry>) {
-    let mut to_visit = VecDeque::new();
+struct FlattenTree {
+    to_visit: VecDeque<Entry>,
+}
 
-    for child in entry.children.values_mut() {
-        to_visit.push_back(child);
-    }
+impl FlattenTree {
+    fn new(dir_entry: DirEntry) -> Self {
+        let mut to_visit = VecDeque::new();
 
-    while let Some(entry) = to_visit.pop_front() {
-        res.push(JbkEntry::new(entry));
-        if let Kind::Dir(d) = &mut entry.kind {
-            for child in d.children.values_mut() {
-                to_visit.push_back(child);
-            }
+        for child in dir_entry.children.into_values() {
+            to_visit.push_back(child);
         }
+        Self { to_visit }
     }
 }
 
-pub fn flat(mut tree: DirEntry) -> Vec<JbkEntry> {
+impl Iterator for FlattenTree {
+    type Item = JbkEntry;
+
+    fn next(&mut self) -> Option<JbkEntry> {
+        self.to_visit.pop_front().map(|e| {
+            let (jbk_entry, next_children) = JbkEntry::new(e);
+            if let Some(next_children) = next_children {
+                for child in next_children {
+                    self.to_visit.push_back(child);
+                }
+            }
+            jbk_entry
+        })
+    }
+}
+
+pub fn flat(mut tree: DirEntry) -> impl Iterator<Item = JbkEntry> {
     let mut idx = std::ops::RangeFrom { start: 0 };
 
     set_idx(&mut tree, &mut idx);
 
-    let mut res = Vec::with_capacity(idx.next().unwrap() as usize);
-    flatten(&mut tree, &mut res);
-    res
+    FlattenTree::new(tree)
 }
