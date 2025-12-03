@@ -135,7 +135,7 @@ tar2arx -o my_archive.arx https://example.com/my_archive.tar.gz
 
 Arx mimetype can be registered by:
 
-- Copying misc/mime_type.xml as `~/.local/share/mime/packages/arx.xml`.
+- Copying arx/misc/mime_type.xml as `~/.local/share/mime/packages/arx.xml`.
 - Run `update-mime-database ~/.local/share/mime`
 
 ## Completion scripts
