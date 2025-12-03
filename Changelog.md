@@ -1,3 +1,8 @@
+# Arx 0.4.1
+
+- Add missing misc/mime_type.xml file
+- Fix LICENSE-MIT file issue (not being packaged)
+
 # Arx 0.4.0
 
 - Add an option `--overwrite` to specify how `arx extract` overwrite existing files.
