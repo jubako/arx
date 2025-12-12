@@ -62,6 +62,8 @@ Extract list and filter are relative to the root filter.
 /// Extract the content of an archive
 #[derive(Parser, Debug)]
 #[command(after_long_help=AFTER_LONG_HELP)]
+#[command(display_name("arx extract"))]
+#[command(bin_name("arx extract"))]
 pub struct Options {
     /// Archive to read
     #[arg(value_hint=ValueHint::FilePath)]
