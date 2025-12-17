@@ -93,6 +93,8 @@ impl std::fmt::Display for StatCounter {
 
 /// Mount an archive in a directory.
 #[derive(Parser, Debug)]
+#[command(display_name("arx mount"))]
+#[command(bin_name("arx mount"))]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser, value_hint=ValueHint::FilePath)]
