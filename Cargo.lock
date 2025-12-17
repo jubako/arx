@@ -131,7 +131,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "arx"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -686,7 +686,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "jubako"
-version = "0.4.0"
+version = "0.5.0-dev"
 dependencies = [
  "blake3",
  "camino",
@@ -1039,6 +1039,7 @@ dependencies = [
  "rayon",
  "smallvec",
  "spmc",
+ "static_assertions",
  "tempfile",
  "thiserror 2.0.17",
  "uuid",
@@ -1047,7 +1048,7 @@ dependencies = [
 
 [[package]]
 name = "libarx"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bstr",
  "clap",
@@ -1488,7 +1489,7 @@ dependencies = [
 
 [[package]]
 name = "python-libarx"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "jubako",
  "libarx",
@@ -1674,7 +1675,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1822,6 +1823,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02a8428da277a8e3a15271d79943e80ccc2ef254e78813a166a08d65e4c3ece5"
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1857,7 +1864,7 @@ dependencies = [
 
 [[package]]
 name = "tar2arx"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "bstr",
@@ -1891,7 +1898,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2204,7 +2211,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2513,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "zip2arx"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2576,12 +2583,4 @@ dependencies = [
 
 [[patch.unused]]
 name = "libwaj"
-version = "0.4.0-dev"
-
-[[patch.unused]]
-name = "waj"
-version = "0.4.0-dev"
-
-[[patch.unused]]
-name = "zim-sys"
-version = "0.1.0"
+version = "0.4.1"
