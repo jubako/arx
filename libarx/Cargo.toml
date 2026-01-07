@@ -18,7 +18,7 @@ harness = false
 jbk.workspace = true
 clap = { workspace=true, optional = true }
 libc = "0.2.148"
-lru = "0.16.2"
+lru = "0.16.3"
 fxhash = "0.2.1"
 tempfile = "3.8.0"
 walkdir = "2.4.0"
