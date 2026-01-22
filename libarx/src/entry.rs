@@ -229,3 +229,12 @@ pub type FullBuilder = (
 );
 
 pub type FullEntry = super::Entry<(FileEntry, Link, Dir)>;
+impl CommonEntry for FullEntry {
+    fn common(&self) -> &CommonPart {
+        match self {
+            crate::Entry::File(e) => e.common(),
+            crate::Entry::Link(l) => l.common(),
+            crate::Entry::Dir(_, d) => d.common(),
+        }
+    }
+}
