@@ -14,9 +14,11 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+    let archive = std::env::args().nth(1);
+
     eframe::run_native(
         "Arx Archive Viewer",
         options,
-        Box::new(|cc| Ok(Box::new(ArxApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(ArxApp::new(cc, archive)))),
     )
 }

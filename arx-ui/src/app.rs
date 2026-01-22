@@ -27,6 +27,14 @@ fn entries<'a>(
 }
 
 impl AppModel {
+    fn new(path: Option<String>) -> AnyResult<Self> {
+        let mut s: Self = Default::default();
+        if let Some(path) = path {
+            s.load_archive(path.into());
+        }
+        Ok(s)
+    }
+
     fn load_archive(&mut self, path: PathBuf) {
         self.status_message = format!("Loading {}...", path.display());
 
@@ -69,11 +77,13 @@ pub struct ArxApp {
 }
 
 impl ArxApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, archive: Option<String>) -> Self {
         cc.egui_ctx.all_styles_mut(|style| {
             style.interaction.selectable_labels = false;
         });
-        Self::default()
+        Self {
+            model: AppModel::new(archive).unwrap(),
+        }
     }
 
     fn menubar(&mut self, ui: &mut Ui) {
