@@ -64,6 +64,7 @@ pub struct ReadEntry<'builder, Builder: BuilderTrait> {
     builder: MayRef<'builder, Builder>,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
+    size: jbk::EntryCount,
 }
 
 impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
@@ -73,6 +74,7 @@ impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
             builder: MayRef::Borrowed(builder),
             current: range.offset(),
             end,
+            size: range.count(),
         }
     }
 
@@ -88,6 +90,7 @@ impl<Builder: BuilderTrait> ReadEntry<'static, Builder> {
             builder: MayRef::Owned(builder),
             current: range.offset(),
             end,
+            size: range.count(),
         }
     }
 }
@@ -107,5 +110,11 @@ impl<Builder: BuilderTrait> Iterator for ReadEntry<'_, Builder> {
             self.current += 1;
             Some(entry)
         }
+    }
+}
+
+impl<Builder: BuilderTrait> ExactSizeIterator for ReadEntry<'_, Builder> {
+    fn len(&self) -> usize {
+        self.size.into_usize()
     }
 }
