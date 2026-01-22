@@ -3,7 +3,7 @@ mod entry;
 mod entry_type;
 mod properties;
 
-pub(crate) use builder::RealBuilder;
+pub use builder::RealBuilder;
 pub use builder::{Builder, FullBuilderTrait};
 pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
