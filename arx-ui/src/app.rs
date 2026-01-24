@@ -1,73 +1,110 @@
 use anyhow::Result as AnyResult;
 use egui::{global_theme_preference_switch, Context, Layout, Sense, TextBuffer, Ui};
 use egui_extras::{Column, TableBuilder};
-use libarx::{Arx, CommonEntry, ExtractBuilder};
+use libarx::{Arx, ArxError, CommonEntry, ExtractBuilder};
 use std::path::PathBuf;
 
 #[derive(Default)]
-pub struct AppModel {
-    archive: Option<Arx>,
-    path: PathBuf,
-    roots: Vec<(jbk::EntryRange, String)>,
-    status_message: String,
+struct ErrorMsg {
+    error: Option<String>,
 }
 
-fn entries<'a>(
-    archive: &Arx,
-    root: Option<jbk::EntryRange>,
-) -> AnyResult<impl ExactSizeIterator<Item = Result<libarx::FullEntry, libarx::BaseError>> + 'a> {
-    let builder = libarx::RealBuilder::<libarx::FullBuilder>::new(&archive.properties);
-    let read_entry = match root {
-        None => {
-            libarx::ReadEntry::new_owned(&archive.get_index_for_name("arx_root")?.unwrap(), builder)
+impl ErrorMsg {
+    fn catch<T, E: ToString>(&mut self, result: Result<T, E>) -> Option<T> {
+        if let Err(e) = &result {
+            self.error = Some(e.to_string());
         }
-        Some(r) => libarx::ReadEntry::new_owned(&r, builder),
-    };
-    Ok(read_entry)
+        result.ok()
+    }
+
+    fn take(&mut self) -> Option<String> {
+        self.error.take()
+    }
+}
+
+struct ArxModel {
+    archive: Arx,
+    path: PathBuf,
+    roots: Vec<(jbk::EntryRange, String)>,
+    entry_list: Vec<libarx::FullEntry>,
+}
+
+impl ArxModel {
+    pub fn open(path: PathBuf) -> Result<Self, libarx::ArxError> {
+        let archive = Arx::new(&path)?;
+
+        let mut s = Self {
+            archive,
+            path,
+            roots: vec![],
+            entry_list: vec![],
+        };
+        s.update_entries()?;
+        Ok(s)
+    }
+
+    pub fn root(&self) -> Option<(jbk::EntryRange, String)> {
+        self.roots.last().cloned()
+    }
+
+    pub fn enter_in(&mut self, new_root: (jbk::EntryRange, String)) -> Result<(), ArxError> {
+        self.roots.push(new_root);
+        self.update_entries()
+    }
+
+    pub fn jump_off(&mut self, index: usize) -> Result<(), ArxError> {
+        let _ = self.roots.split_off(index);
+        self.update_entries()
+    }
+
+    fn update_entries(&mut self) -> Result<(), libarx::ArxError> {
+        let builder = libarx::RealBuilder::<libarx::FullBuilder>::new(&self.archive.properties);
+        let read_entry = match self.root() {
+            None => libarx::ReadEntry::new(&self.archive.root_index, &builder),
+            Some(r) => libarx::ReadEntry::new(&r.0, &builder),
+        };
+        self.entry_list = read_entry.collect::<Result<Vec<_>, _>>()?;
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct AppModel {
+    archive: Option<ArxModel>,
+    status_message: String,
+    error_msg: ErrorMsg,
 }
 
 impl AppModel {
-    fn new(path: Option<String>) -> AnyResult<Self> {
+    fn new(path: Option<String>) -> Self {
         let mut s: Self = Default::default();
         if let Some(path) = path {
             s.load_archive(path.into());
         }
-        Ok(s)
+        s
     }
 
     fn load_archive(&mut self, path: PathBuf) {
         self.status_message = format!("Loading {}...", path.display());
-
-        match Arx::new(&path) {
-            Ok(archive) => {
-                self.archive = Some(archive);
-                self.path = path.clone();
-                //self.apply_filter();
-                self.status_message = format!(
-                    "{} opened",
-                    path.file_name().unwrap_or_default().to_string_lossy()
-                );
-                self.roots.clear()
-            }
-            Err(e) => {
-                self.status_message = format!("Error opening archive: {}", e);
-            }
-        }
+        self.archive = self.error_msg.catch(ArxModel::open(path));
     }
-    fn extract_all(&self) {
+
+    fn extract_all(&mut self) -> AnyResult<()> {
         if let Some(archive) = &self.archive {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                std::fs::create_dir_all(&folder).unwrap();
+                self.status_message = format!("Extracting {}...", archive.path.display());
+                std::fs::create_dir_all(&folder)?;
                 ExtractBuilder::new(&folder)
                     .overwrite(libarx::Overwrite::Skip)
-                    .extract(archive, None)
-                    .unwrap();
+                    .extract(&archive.archive, None)?;
+                self.status_message = format!("{} extracted..", archive.path.display());
             }
         }
+        Ok(())
     }
 
-    fn root(&self) -> Option<(jbk::EntryRange, String)> {
-        self.roots.last().cloned()
+    fn has_archive(&self) -> bool {
+        self.archive.is_some()
     }
 }
 
@@ -82,7 +119,7 @@ impl ArxApp {
             style.interaction.selectable_labels = false;
         });
         Self {
-            model: AppModel::new(archive).unwrap(),
+            model: AppModel::new(archive),
         }
     }
 
@@ -97,34 +134,40 @@ impl ArxApp {
                 }
             }
 
-            ui.add_enabled_ui(self.model.archive.is_some(), |ui| {
+            ui.add_enabled_ui(self.model.has_archive(), |ui| {
                 if ui.button("📦 Extract All").clicked() {
-                    self.model.extract_all();
+                    let result = self.model.extract_all();
+                    self.model.error_msg.catch(result);
                 }
             });
         });
     }
 
     fn breadcrumbs(&mut self, ui: &mut Ui) {
-        let mut to_split = None;
-        ui.horizontal(|ui| {
-            if ui.button("📂").clicked() {
-                to_split = Some(0);
-            }
-            for (idx, dir) in self.model.roots.iter().enumerate() {
-                ui.separator();
-                if ui.button(&dir.1).clicked() {
-                    to_split = Some(idx + 1);
+        if let Some(archive) = self.model.archive.as_mut() {
+            let mut to_split = None;
+            ui.horizontal(|ui| {
+                if ui.button("📂").clicked() {
+                    to_split = Some(0);
                 }
+
+                for (idx, dir) in archive.roots.iter().enumerate() {
+                    ui.label("/");
+                    if ui.button(&dir.1).clicked() {
+                        to_split = Some(idx + 1);
+                    }
+                }
+            });
+            if let Some(to_split) = to_split {
+                self.model.error_msg.catch(archive.jump_off(to_split));
             }
-        });
-        to_split.map(|idx| self.model.roots.split_off(idx));
+        }
     }
 
     fn file_list(&mut self, ui: &mut Ui) {
-        let root = self.model.root().map(|(r, _)| r);
-        if let Some(archive) = self.model.archive.as_ref() {
-            let mut entry_iter = entries(archive, root).unwrap().enumerate();
+        if let Some(archive) = self.model.archive.as_mut() {
+            let mut new_root = None;
+            let mut entry_iter = archive.entry_list.iter().enumerate();
             TableBuilder::new(ui)
                 .sense(Sense::click())
                 .cell_layout(Layout::left_to_right(egui::Align::Min).with_main_wrap(false))
@@ -144,8 +187,10 @@ impl ArxApp {
                     body.rows(20., entry_iter.len(), |mut row| {
                         let row_idx = row.index();
                         let mut skip_iter = entry_iter.by_ref().skip_while(|(i, _)| i < &row_idx);
-                        let entry = skip_iter.next().unwrap().1;
-                        let entry = entry.as_ref().unwrap();
+                        let entry = skip_iter
+                            .next()
+                            .expect("We should have a entry as we skip until we found our")
+                            .1;
                         let path = String::from_utf8_lossy(entry.path());
                         let (icon, size) = match entry {
                             libarx::Entry::File(f) => ("📄", Some(f.size())),
@@ -168,11 +213,14 @@ impl ArxApp {
 
                         if response.double_clicked() {
                             if let libarx::Entry::Dir(r, _) = entry {
-                                self.model.roots.push((*r, path.to_string()))
+                                new_root = Some((*r, path.to_string()));
                             }
                         }
                     });
                 });
+            if let Some(new_root) = new_root {
+                self.model.error_msg.catch(archive.enter_in(new_root));
+            }
         }
     }
 
@@ -180,11 +228,11 @@ impl ArxApp {
         ui.horizontal(|ui| {
             ui.label(&self.model.status_message);
 
-            if self.model.archive.is_some() {
+            if let Some(archive) = self.model.archive.as_ref() {
                 ui.separator();
                 ui.label(format!(
                     "Archive: {}",
-                    self.model
+                    archive
                         .path
                         .file_name()
                         .unwrap_or_default()
@@ -220,6 +268,16 @@ impl eframe::App for ArxApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.file_list(ui);
         });
+
+        if let Some(message) = self.model.error_msg.take() {
+            let ctx = ctx.clone();
+            rfd::MessageDialog::new()
+                .set_title("Error")
+                .set_description(message)
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+            ctx.request_repaint();
+        }
     }
 }
 
