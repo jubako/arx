@@ -18,7 +18,7 @@ use jbk::reader::MayMissPack;
 use std::sync::{Arc, Condvar, LazyLock, Mutex, OnceLock};
 
 static FD_LIMIT: LazyLock<Arc<(Mutex<usize>, Condvar)>> =
-    std::sync::LazyLock::new(|| Arc::new((Mutex::new(1000), Condvar::new())));
+    std::sync::LazyLock::new(|| Arc::new((Mutex::new(500), Condvar::new())));
 
 struct LimitedFile(std::fs::File);
 
