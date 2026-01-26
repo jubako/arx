@@ -1,9 +1,12 @@
 use anyhow::Result as AnyResult;
+use eframe::glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY;
 use egui::{global_theme_preference_switch, Context, Layout, Sense, TextBuffer, Ui};
 use egui_extras::{Column, TableBuilder};
-use libarx::{Arx, ArxError, CommonEntry, ExtractBuilder};
+use jbk::{reader::MayMissPack, EntryRange};
+use libarx::{Arx, ArxError, ArxFormatError, CommonEntry, ExtractBuilder, FileEntry};
 use std::{
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle},
 };
@@ -68,6 +71,44 @@ impl ArxModel {
             Some(r) => libarx::ReadEntry::new(&r.0, &builder),
         };
         self.entry_list = read_entry.collect::<Result<Vec<_>, _>>()?;
+        Ok(())
+    }
+
+    fn extract_and_open(&self, f: FileEntry) -> Result<(), libarx::ArxError> {
+        let bytes = self
+            .archive
+            .get_bytes(f.content())?
+            .and_then(|m| m.transpose())
+            .ok_or(ArxFormatError(
+                "Entry Content should point to valid content",
+            ))?;
+        match bytes {
+            MayMissPack::FOUND(bytes) => {
+                use std::io::Write;
+                let tmpdir = tempfile::tempdir()?;
+                let tmp_file = tmpdir
+                    .keep()
+                    .join(String::from_utf8_lossy(f.path()).as_ref());
+
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .open(&tmp_file)?;
+                let size = bytes.size().into_u64();
+                let mut offset = 0;
+                loop {
+                    let sub_size = std::cmp::min(size - offset, 4 * 1024) as usize;
+                    let written = file.write(&bytes.get_slice(offset.into(), sub_size)?)?;
+                    offset += written as u64;
+                    if offset == size {
+                        break;
+                    }
+                }
+
+                open::that_detached(tmp_file)?;
+            }
+            MayMissPack::MISSING(_) => {}
+        }
         Ok(())
     }
 }
@@ -162,6 +203,11 @@ pub struct ArxApp {
     background_task: Option<Box<dyn TaskCallbackTrait>>,
 }
 
+enum Action {
+    Enter((EntryRange, String)),
+    Open(FileEntry),
+}
+
 impl ArxApp {
     pub fn new(cc: &eframe::CreationContext<'_>, archive: Option<String>) -> Self {
         cc.egui_ctx.all_styles_mut(|style| {
@@ -218,7 +264,7 @@ impl ArxApp {
 
     fn file_list(&mut self, ui: &mut Ui) {
         if let Some(archive) = self.model.archive.as_mut() {
-            let mut new_root = None;
+            let mut action = None;
             let mut entry_iter = archive.entry_list.iter().enumerate();
             TableBuilder::new(ui)
                 .sense(Sense::click())
@@ -264,14 +310,26 @@ impl ArxApp {
                         let response = row.response();
 
                         if response.double_clicked() {
-                            if let libarx::Entry::Dir(r, _) = entry {
-                                new_root = Some((*r, path.to_string()));
+                            match entry {
+                                libarx::Entry::Dir(r, _) => {
+                                    action = Some(Action::Enter((*r, path.to_string())));
+                                }
+                                libarx::Entry::File(f) => {
+                                    action = Some(Action::Open(f.clone()));
+                                }
+                                libarx::Entry::Link(_) => {}
                             }
                         }
                     });
                 });
-            if let Some(new_root) = new_root {
-                self.model.error_msg.catch(archive.enter_in(new_root));
+            match action {
+                Some(Action::Enter(new_root)) => {
+                    self.model.error_msg.catch(archive.enter_in(new_root));
+                }
+                Some(Action::Open(f)) => {
+                    self.model.error_msg.catch(archive.extract_and_open(f));
+                }
+                _ => {}
             }
         }
     }

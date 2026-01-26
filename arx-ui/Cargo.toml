@@ -11,6 +11,8 @@ egui_extras = { version = "0.33", features = ["all_loaders"] }
 rfd = "0.15"
 anyhow = "1.0"
 jbk.workspace = true
+open = "5.3.3"
+tempfile = "3.24.0"
 
 [dependencies.libarx]
 path = "../libarx"
