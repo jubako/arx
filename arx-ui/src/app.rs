@@ -144,6 +144,16 @@ impl<T> TaskCallbackTrait for TaskCallback<T> {
     }
 }
 
+type DynTaskCallback = Box<dyn TaskCallbackTrait>;
+
+enum Action {
+    Enter((EntryRange, String)),
+    Open(FileEntry),
+    OpenArchive(PathBuf),
+    JumpTo(usize),
+    ExtractAll,
+}
+
 #[derive(Default)]
 pub struct AppModel {
     archive: Option<ArxModel>,
@@ -169,7 +179,7 @@ impl AppModel {
         self.archive = self.error_msg.catch(ArxModel::open(path));
     }
 
-    fn extract_all(&mut self) -> AnyResult<Option<Box<dyn TaskCallbackTrait>>> {
+    fn extract_all(&mut self) -> AnyResult<Option<DynTaskCallback>> {
         if let Some(archive) = &self.archive {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 self.status_message = format!("Extracting {}...", archive.path.display());
@@ -203,11 +213,6 @@ pub struct ArxApp {
     background_task: Option<Box<dyn TaskCallbackTrait>>,
 }
 
-enum Action {
-    Enter((EntryRange, String)),
-    Open(FileEntry),
-}
-
 impl ArxApp {
     pub fn new(cc: &eframe::CreationContext<'_>, archive: Option<String>) -> Self {
         cc.egui_ctx.all_styles_mut(|style| {
@@ -219,30 +224,30 @@ impl ArxApp {
         }
     }
 
-    fn menubar(&mut self, ui: &mut Ui) {
+    fn menubar(&self, ui: &mut Ui) -> Option<Action> {
+        let mut action = None;
         egui::MenuBar::new().ui(ui, |ui| {
             if ui.button("📂 Open Archive").clicked() {
                 if let Some(file) = rfd::FileDialog::new()
                     .add_filter("Arx Archive", &["arx"])
                     .pick_file()
                 {
-                    self.model.load_archive(file);
+                    action = Some(Action::OpenArchive(file));
                 }
             }
 
             ui.add_enabled_ui(self.model.has_archive(), |ui| {
                 if ui.button("📦 Extract All").clicked() {
-                    let result = self.model.extract_all();
-                    if let Some(r) = self.model.error_msg.catch(result) {
-                        self.background_task = r;
-                    }
+                    action = Some(Action::ExtractAll);
                 }
             });
         });
+        action
     }
 
-    fn breadcrumbs(&mut self, ui: &mut Ui) {
-        if let Some(archive) = self.model.archive.as_mut() {
+    fn breadcrumbs(&self, ui: &mut Ui) -> Option<Action> {
+        let mut action = None;
+        if let Some(archive) = &self.model.archive {
             let mut to_split = None;
             ui.horizontal(|ui| {
                 if ui.button("📂").clicked() {
@@ -257,14 +262,15 @@ impl ArxApp {
                 }
             });
             if let Some(to_split) = to_split {
-                self.model.error_msg.catch(archive.jump_off(to_split));
+                action = Some(Action::JumpTo(to_split));
             }
         }
+        action
     }
 
-    fn file_list(&mut self, ui: &mut Ui) {
-        if let Some(archive) = self.model.archive.as_mut() {
-            let mut action = None;
+    fn file_list(&self, ui: &mut Ui) -> Option<Action> {
+        let mut action = None;
+        if let Some(archive) = &self.model.archive {
             let mut entry_iter = archive.entry_list.iter().enumerate();
             TableBuilder::new(ui)
                 .sense(Sense::click())
@@ -322,16 +328,8 @@ impl ArxApp {
                         }
                     });
                 });
-            match action {
-                Some(Action::Enter(new_root)) => {
-                    self.model.error_msg.catch(archive.enter_in(new_root));
-                }
-                Some(Action::Open(f)) => {
-                    self.model.error_msg.catch(archive.extract_and_open(f));
-                }
-                _ => {}
-            }
         }
+        action
     }
 
     fn status_bar(&self, ui: &mut Ui) {
@@ -364,30 +362,57 @@ impl eframe::App for ArxApp {
                 self.background_task = None
             }
         }
+        let mut action = None;
 
-        egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
-            self.menubar(ui);
-        });
+        action = action.or(egui::TopBottomPanel::top("menubar")
+            .show(ctx, |ui| self.menubar(ui))
+            .inner);
 
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.add_space(5.0);
-            self.status_bar(ui);
-            ui.add_space(5.0);
-        });
+        action = action.or(egui::TopBottomPanel::bottom("status")
+            .show(ctx, |ui| {
+                self.status_bar(ui);
+                None
+            })
+            .inner);
 
-        egui::TopBottomPanel::top("breadcrumbs").show(ctx, |ui| {
-            ui.add_space(5.0);
-            self.breadcrumbs(ui);
-            ui.add_space(5.0);
-        });
+        action = action.or(egui::TopBottomPanel::top("breadcrumbs")
+            .show(ctx, |ui| self.breadcrumbs(ui))
+            .inner);
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.file_list(ui);
+        action = action.or(egui::CentralPanel::default()
+            .show(ctx, |ui| {
+                if self.background_task.is_some() {
+                    egui::Modal::new(egui::Id::new("Spinner")).show(ctx, |ui| ui.spinner());
+                }
+                self.file_list(ui)
+            })
+            .inner);
 
-            if self.background_task.is_some() {
-                egui::Modal::new(egui::Id::new("Spinner")).show(ctx, |ui| ui.spinner());
+        if let Some(action) = action {
+            match action {
+                Action::Enter(new_root) => {
+                    let result = self.model.archive.as_mut().map(|a| a.enter_in(new_root));
+                    result.map(|result| self.model.error_msg.catch(result));
+                }
+                Action::Open(f) => {
+                    let result = self.model.archive.as_mut().map(|a| a.extract_and_open(f));
+                    result.map(|result| self.model.error_msg.catch(result));
+                }
+                Action::OpenArchive(path) => {
+                    self.model.load_archive(path);
+                }
+                Action::JumpTo(index) => {
+                    let result = self.model.archive.as_mut().map(|a| a.jump_off(index));
+                    result.map(|result| self.model.error_msg.catch(result));
+                }
+                Action::ExtractAll => {
+                    let result = self.model.extract_all();
+                    if let Some(r) = self.model.error_msg.catch(result) {
+                        self.background_task = r;
+                    }
+                }
             }
-        });
+        }
 
         if let Some(message) = self.model.error_msg.take() {
             let ctx = ctx.clone();
