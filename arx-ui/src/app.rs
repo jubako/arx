@@ -159,6 +159,7 @@ pub struct AppModel {
     archive: Option<ArxModel>,
     status_message: String,
     error_msg: ErrorMsg,
+    background_task: Option<DynTaskCallback>,
 }
 
 impl AppModel {
@@ -167,6 +168,7 @@ impl AppModel {
             archive: None,
             status_message: String::new(),
             error_msg: ErrorMsg::default(),
+            background_task: None,
         };
         if let Some(path) = path {
             s.load_archive(path.into());
@@ -174,18 +176,32 @@ impl AppModel {
         s
     }
 
+    fn process_background_task(&mut self) {
+        let mut background_task = self.background_task.take();
+        let consumed = if let Some(background_task) = background_task.as_mut() {
+            background_task.handle(self)
+        } else {
+            false
+        };
+        if consumed {
+            self.background_task = None;
+        } else {
+            self.background_task = background_task;
+        }
+    }
+
     fn load_archive(&mut self, path: PathBuf) {
         self.status_message = format!("Loading {}...", path.display());
         self.archive = self.error_msg.catch(ArxModel::open(path));
     }
 
-    fn extract_all(&mut self) -> AnyResult<Option<DynTaskCallback>> {
+    fn extract_all(&mut self) -> AnyResult<()> {
         if let Some(archive) = &self.archive {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 self.status_message = format!("Extracting {}...", archive.path.display());
                 std::fs::create_dir_all(&folder)?;
                 let archive_clone = Arc::clone(&archive.archive);
-                return Ok(Some(Box::new(TaskCallback::new(
+                self.background_task = Some(Box::new(TaskCallback::new(
                     move || {
                         let ret = ExtractBuilder::new(&folder)
                             .overwrite(libarx::Overwrite::Skip)
@@ -196,10 +212,10 @@ impl AppModel {
                     |app_model, result| {
                         app_model.error_msg.catch(result);
                     },
-                ))));
+                )));
             }
         }
-        Ok(None)
+        Ok(())
     }
 
     fn has_archive(&self) -> bool {
@@ -210,7 +226,6 @@ impl AppModel {
 #[derive(Default)]
 pub struct ArxApp {
     model: AppModel,
-    background_task: Option<Box<dyn TaskCallbackTrait>>,
 }
 
 impl ArxApp {
@@ -220,7 +235,6 @@ impl ArxApp {
         });
         Self {
             model: AppModel::new(archive),
-            background_task: None,
         }
     }
 
@@ -357,11 +371,7 @@ impl ArxApp {
 
 impl eframe::App for ArxApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        if let Some(background_task) = self.background_task.as_mut() {
-            if background_task.handle(&mut self.model) {
-                self.background_task = None
-            }
-        }
+        self.model.process_background_task();
         let mut action = None;
 
         action = action.or(egui::TopBottomPanel::top("menubar")
@@ -381,7 +391,7 @@ impl eframe::App for ArxApp {
 
         action = action.or(egui::CentralPanel::default()
             .show(ctx, |ui| {
-                if self.background_task.is_some() {
+                if self.model.background_task.is_some() {
                     egui::Modal::new(egui::Id::new("Spinner")).show(ctx, |ui| ui.spinner());
                 }
                 self.file_list(ui)
@@ -407,9 +417,7 @@ impl eframe::App for ArxApp {
                 }
                 Action::ExtractAll => {
                     let result = self.model.extract_all();
-                    if let Some(r) = self.model.error_msg.catch(result) {
-                        self.background_task = r;
-                    }
+                    self.model.error_msg.catch(result);
                 }
             }
         }
