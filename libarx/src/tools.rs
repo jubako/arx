@@ -50,14 +50,14 @@ trait OpenLimited {
 
 impl OpenLimited for std::fs::OpenOptions {
     fn open_limited<P: AsRef<Path>>(&self, path: P) -> std::io::Result<LimitedFile> {
-        {
-            let (lock, cvar) = &**FD_LIMIT;
-            let mut fd_left = cvar
-                .wait_while(lock.lock().unwrap(), |fd_left| *fd_left == 0)
-                .unwrap();
+        let (lock, cvar) = &**FD_LIMIT;
+        let mut fd_left = cvar
+            .wait_while(lock.lock().unwrap(), |fd_left| *fd_left == 0)
+            .unwrap();
+        self.open(path).map(|f| {
             *fd_left -= 1;
-        }
-        Ok(LimitedFile(self.open(path)?))
+            LimitedFile(f)
+        })
     }
 }
 
