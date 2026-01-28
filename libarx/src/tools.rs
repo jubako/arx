@@ -569,8 +569,13 @@ impl<'a, F> ExtractBuilder<'a, F, ()>
 where
     F: FileFilter,
 {
-    pub fn extract(self, arx: &Arx, root: Option<&crate::Path>) -> Result<(), ExtractError> {
-        self.items(&[] as &[&crate::Path], true).extract(arx, root)
+    pub fn extract(self, arx: &Arx, root_path: Option<&crate::Path>) -> Result<(), ExtractError> {
+        self.items(&[] as &[&crate::Path], true)
+            .extract(arx, root_path)
+    }
+    pub fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
+        self.items(&[] as &[&crate::Path], true)
+            .extract_root(arx, root)
     }
 }
 
@@ -597,7 +602,7 @@ where
         self.extract_root(arx, root)
     }
 
-    fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
+    pub fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
         let error = rayon::scope(|scope| -> Result<Arc<OnceLock<jbk::Error>>, ExtractError> {
             let extractor = Extractor {
                 arx,

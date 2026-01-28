@@ -1,12 +1,10 @@
 use anyhow::Result as AnyResult;
-use eframe::glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY;
-use egui::{global_theme_preference_switch, Context, Layout, Sense, TextBuffer, Ui};
+use egui::{global_theme_preference_switch, Context, Layout, Popup, Sense, TextBuffer, Ui};
 use egui_extras::{Column, TableBuilder};
 use jbk::{reader::MayMissPack, EntryRange};
 use libarx::{Arx, ArxError, ArxFormatError, CommonEntry, ExtractBuilder, FileEntry};
 use std::{
     path::PathBuf,
-    str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle},
 };
@@ -30,7 +28,7 @@ impl ErrorMsg {
 }
 
 struct ArxModel {
-    archive: Arc<Arx>,
+    archive: Arx,
     path: PathBuf,
     roots: Vec<(jbk::EntryRange, String)>,
     entry_list: Vec<libarx::FullEntry>,
@@ -41,7 +39,7 @@ impl ArxModel {
         let archive = Arx::new(&path)?;
 
         let mut s = Self {
-            archive: Arc::new(archive),
+            archive: archive,
             path,
             roots: vec![],
             entry_list: vec![],
@@ -74,7 +72,7 @@ impl ArxModel {
         Ok(())
     }
 
-    fn extract_and_open(&self, f: FileEntry) -> Result<(), libarx::ArxError> {
+    fn extract(&self, f: FileEntry, outfile: &std::path::Path) -> Result<bool, libarx::ArxError> {
         let bytes = self
             .archive
             .get_bytes(f.content())?
@@ -85,15 +83,11 @@ impl ArxModel {
         match bytes {
             MayMissPack::FOUND(bytes) => {
                 use std::io::Write;
-                let tmpdir = tempfile::tempdir()?;
-                let tmp_file = tmpdir
-                    .keep()
-                    .join(String::from_utf8_lossy(f.path()).as_ref());
 
                 let mut file = std::fs::OpenOptions::new()
                     .write(true)
                     .create(true)
-                    .open(&tmp_file)?;
+                    .open(&outfile)?;
                 let size = bytes.size().into_u64();
                 let mut offset = 0;
                 loop {
@@ -104,10 +98,20 @@ impl ArxModel {
                         break;
                     }
                 }
-
-                open::that_detached(tmp_file)?;
+                Ok(true)
             }
-            MayMissPack::MISSING(_) => {}
+            MayMissPack::MISSING(_) => Ok(false),
+        }
+    }
+
+    fn extract_and_open(&self, f: FileEntry) -> Result<(), libarx::ArxError> {
+        let tmpdir = tempfile::tempdir()?;
+        let tmp_file = tmpdir
+            .keep()
+            .join(String::from_utf8_lossy(f.path()).as_ref());
+
+        if self.extract(f, &tmp_file)? {
+            open::that_detached(tmp_file)?;
         }
         Ok(())
     }
@@ -119,24 +123,25 @@ trait TaskCallbackTrait {
 
 struct TaskCallback<T> {
     task: Option<JoinHandle<T>>,
-    callback: Box<dyn Fn(&mut AppModel, T) -> ()>,
+    callback: Option<Box<dyn FnOnce(&mut AppModel, T) -> ()>>,
 }
 impl<T: Send + 'static> TaskCallback<T> {
     fn new(
-        task: impl Fn() -> T + Send + 'static,
-        callback: impl Fn(&mut AppModel, T) -> () + 'static,
+        task: impl FnOnce() -> T + Send + 'static,
+        callback: impl FnOnce(&mut AppModel, T) -> () + 'static,
     ) -> Self {
         Self {
             task: Some(thread::spawn(task)),
-            callback: Box::new(callback),
+            callback: Some(Box::new(callback)),
         }
     }
 }
+
 impl<T> TaskCallbackTrait for TaskCallback<T> {
     fn handle(&mut self, app_model: &mut AppModel) -> bool {
         if self.task.as_ref().unwrap().is_finished() {
             let result = self.task.take().unwrap().join().unwrap();
-            (self.callback)(app_model, result);
+            self.callback.take().unwrap()(app_model, result);
             true
         } else {
             false
@@ -149,14 +154,16 @@ type DynTaskCallback = Box<dyn TaskCallbackTrait>;
 enum Action {
     Enter((EntryRange, String)),
     Open(FileEntry),
-    OpenArchive(PathBuf),
+    LoadArchive(PathBuf),
     JumpTo(usize),
     ExtractAll,
+    ExtractOne(FileEntry),
+    ExtractDir((EntryRange, String)),
 }
 
 #[derive(Default)]
 pub struct AppModel {
-    archive: Option<ArxModel>,
+    archive: Option<Arc<ArxModel>>,
     status_message: String,
     error_msg: ErrorMsg,
     background_task: Option<DynTaskCallback>,
@@ -192,7 +199,7 @@ impl AppModel {
 
     fn load_archive(&mut self, path: PathBuf) {
         self.status_message = format!("Loading {}...", path.display());
-        self.archive = self.error_msg.catch(ArxModel::open(path));
+        self.archive = self.error_msg.catch(ArxModel::open(path)).map(Arc::new);
     }
 
     fn extract_all(&mut self) -> AnyResult<()> {
@@ -200,15 +207,59 @@ impl AppModel {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 self.status_message = format!("Extracting {}...", archive.path.display());
                 std::fs::create_dir_all(&folder)?;
-                let archive_clone = Arc::clone(&archive.archive);
+                let archive_clone = Arc::clone(&archive);
                 self.background_task = Some(Box::new(TaskCallback::new(
                     move || {
-                        let ret = ExtractBuilder::new(&folder)
+                        ExtractBuilder::new(&folder)
                             .overwrite(libarx::Overwrite::Skip)
-                            .extract(&archive_clone, None);
-                        println!("end extract");
-                        ret
+                            .extract(&archive_clone.archive, None)
                     },
+                    |app_model, result| {
+                        app_model.error_msg.catch(result);
+                    },
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn extract_dir(&mut self, range: jbk::EntryRange, dir_name: String) -> AnyResult<()> {
+        if let Some(archive) = &self.archive {
+            if let Some(parent_folder) = rfd::FileDialog::new()
+                .set_can_create_directories(true)
+                .pick_folder()
+            {
+                let folder = parent_folder.join(dir_name);
+                self.status_message = format!("Extracting {}...", archive.path.display());
+                std::fs::create_dir_all(&folder)?;
+                let archive_clone = Arc::clone(&archive);
+                self.background_task = Some(Box::new(TaskCallback::new(
+                    move || {
+                        ExtractBuilder::new(&folder)
+                            .overwrite(libarx::Overwrite::Skip)
+                            .extract_root(&archive_clone.archive, range)
+                    },
+                    |app_model, result| {
+                        app_model.error_msg.catch(result);
+                    },
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn extract_one(&mut self, entry: FileEntry) -> AnyResult<()> {
+        if let Some(archive) = &self.archive {
+            let entry_path = String::from_utf8_lossy(entry.path()).to_owned();
+            if let Some(outfile) = rfd::FileDialog::new()
+                .set_file_name(entry_path.as_ref())
+                .save_file()
+            {
+                self.status_message = format!("Extracting {}...", entry_path);
+                let archive_clone = Arc::clone(&archive);
+                let entry = entry.clone();
+                self.background_task = Some(Box::new(TaskCallback::new(
+                    move || archive_clone.extract(entry, &outfile),
                     |app_model, result| {
                         app_model.error_msg.catch(result);
                     },
@@ -246,7 +297,7 @@ impl ArxApp {
                     .add_filter("Arx Archive", &["arx"])
                     .pick_file()
                 {
-                    action = Some(Action::OpenArchive(file));
+                    action = Some(Action::LoadArchive(file));
                 }
             }
 
@@ -329,6 +380,23 @@ impl ArxApp {
                         });
                         let response = row.response();
 
+                        Popup::context_menu(&response).show(|ui| {
+                            if ui.button("Extract").clicked() {
+                                match entry {
+                                    libarx::Entry::Dir(r, d) => {
+                                        action = Some(Action::ExtractDir((
+                                            *r,
+                                            String::from_utf8_lossy(d.path()).to_string(),
+                                        )))
+                                    }
+                                    libarx::Entry::File(f) => {
+                                        action = Some(Action::ExtractOne(f.clone()));
+                                    }
+                                    libarx::Entry::Link(_) => {}
+                                }
+                            }
+                        });
+
                         if response.double_clicked() {
                             match entry {
                                 libarx::Entry::Dir(r, _) => {
@@ -401,22 +469,38 @@ impl eframe::App for ArxApp {
         if let Some(action) = action {
             match action {
                 Action::Enter(new_root) => {
-                    let result = self.model.archive.as_mut().map(|a| a.enter_in(new_root));
+                    let result = self
+                        .model
+                        .archive
+                        .as_mut()
+                        .map(|a| Arc::get_mut(a).unwrap().enter_in(new_root));
                     result.map(|result| self.model.error_msg.catch(result));
                 }
                 Action::Open(f) => {
                     let result = self.model.archive.as_mut().map(|a| a.extract_and_open(f));
                     result.map(|result| self.model.error_msg.catch(result));
                 }
-                Action::OpenArchive(path) => {
+                Action::LoadArchive(path) => {
                     self.model.load_archive(path);
                 }
                 Action::JumpTo(index) => {
-                    let result = self.model.archive.as_mut().map(|a| a.jump_off(index));
+                    let result = self
+                        .model
+                        .archive
+                        .as_mut()
+                        .map(|a| Arc::get_mut(a).unwrap().jump_off(index));
                     result.map(|result| self.model.error_msg.catch(result));
                 }
                 Action::ExtractAll => {
                     let result = self.model.extract_all();
+                    self.model.error_msg.catch(result);
+                }
+                Action::ExtractOne(entry) => {
+                    let result = self.model.extract_one(entry);
+                    self.model.error_msg.catch(result);
+                }
+                Action::ExtractDir((r, n)) => {
+                    let result = self.model.extract_dir(r, n);
                     self.model.error_msg.catch(result);
                 }
             }

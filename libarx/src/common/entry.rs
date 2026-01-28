@@ -10,6 +10,7 @@ impl<F, L, D> EntryDef for (F, L, D) {
     type Dir = D;
 }
 
+#[derive(Clone)]
 pub enum Entry<E: EntryDef> {
     File(E::File),
     Link(E::Link),
