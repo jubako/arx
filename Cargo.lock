@@ -332,12 +332,14 @@ dependencies = [
  "anyhow",
  "eframe",
  "egui",
+ "egui-async",
  "egui_extras",
  "jubako",
  "libarx",
  "open",
  "rfd",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -535,6 +537,12 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atomic_float"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 
 [[package]]
 name = "atspi"
@@ -1445,6 +1453,20 @@ dependencies = [
  "profiling",
  "smallvec",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "egui-async"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1aa3b5da1effe917bb71052ab3718459aeede9150db9f0770802fe66fa02840"
+dependencies = [
+ "atomic_float",
+ "bitflags 2.10.0",
+ "egui",
+ "tokio",
+ "tracing",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -4649,6 +4671,15 @@ checksum = "42d3e9c45c09de15d06dd8acf5f4e0e399e85927b7f00711024eb7ae10fa4869"
 dependencies = [
  "displaydoc",
  "zerovec",
+]
+
+[[package]]
+name = "tokio"
+version = "1.49.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
+dependencies = [
+ "pin-project-lite",
 ]
 
 [[package]]

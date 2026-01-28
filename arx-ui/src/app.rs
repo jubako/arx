@@ -1,13 +1,11 @@
 use anyhow::Result as AnyResult;
 use egui::{global_theme_preference_switch, Context, Layout, Popup, Sense, TextBuffer, Ui};
+use egui_async::{Bind, EguiAsyncPlugin};
 use egui_extras::{Column, TableBuilder};
 use jbk::{reader::MayMissPack, EntryRange};
 use libarx::{Arx, ArxError, ArxFormatError, CommonEntry, ExtractBuilder, FileEntry};
-use std::{
-    path::PathBuf,
-    sync::Arc,
-    thread::{self, JoinHandle},
-};
+use std::{path::PathBuf, sync::Arc};
+use tokio::task::spawn_blocking;
 
 #[derive(Default)]
 struct ErrorMsg {
@@ -117,40 +115,6 @@ impl ArxModel {
     }
 }
 
-trait TaskCallbackTrait {
-    fn handle(&mut self, app_model: &mut AppModel) -> bool;
-}
-
-struct TaskCallback<T> {
-    task: Option<JoinHandle<T>>,
-    callback: Option<Box<dyn FnOnce(&mut AppModel, T) -> ()>>,
-}
-impl<T: Send + 'static> TaskCallback<T> {
-    fn new(
-        task: impl FnOnce() -> T + Send + 'static,
-        callback: impl FnOnce(&mut AppModel, T) -> () + 'static,
-    ) -> Self {
-        Self {
-            task: Some(thread::spawn(task)),
-            callback: Some(Box::new(callback)),
-        }
-    }
-}
-
-impl<T> TaskCallbackTrait for TaskCallback<T> {
-    fn handle(&mut self, app_model: &mut AppModel) -> bool {
-        if self.task.as_ref().unwrap().is_finished() {
-            let result = self.task.take().unwrap().join().unwrap();
-            self.callback.take().unwrap()(app_model, result);
-            true
-        } else {
-            false
-        }
-    }
-}
-
-type DynTaskCallback = Box<dyn TaskCallbackTrait>;
-
 enum Action {
     Enter((EntryRange, String)),
     Open(FileEntry),
@@ -166,7 +130,7 @@ pub struct AppModel {
     archive: Option<Arc<ArxModel>>,
     status_message: String,
     error_msg: ErrorMsg,
-    background_task: Option<DynTaskCallback>,
+    background_task: Bind<bool, ()>,
 }
 
 impl AppModel {
@@ -175,26 +139,12 @@ impl AppModel {
             archive: None,
             status_message: String::new(),
             error_msg: ErrorMsg::default(),
-            background_task: None,
+            background_task: Bind::new(false),
         };
         if let Some(path) = path {
             s.load_archive(path.into());
         }
         s
-    }
-
-    fn process_background_task(&mut self) {
-        let mut background_task = self.background_task.take();
-        let consumed = if let Some(background_task) = background_task.as_mut() {
-            background_task.handle(self)
-        } else {
-            false
-        };
-        if consumed {
-            self.background_task = None;
-        } else {
-            self.background_task = background_task;
-        }
     }
 
     fn load_archive(&mut self, path: PathBuf) {
@@ -204,67 +154,94 @@ impl AppModel {
 
     fn extract_all(&mut self) -> AnyResult<()> {
         if let Some(archive) = &self.archive {
-            if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                self.status_message = format!("Extracting {}...", archive.path.display());
-                std::fs::create_dir_all(&folder)?;
-                let archive_clone = Arc::clone(&archive);
-                self.background_task = Some(Box::new(TaskCallback::new(
-                    move || {
-                        ExtractBuilder::new(&folder)
+            let archive_clone = Arc::clone(&archive);
+            self.status_message = format!("Extracting {}...", archive.path.display());
+            self.background_task.request(async move {
+                if let Some(folder) = rfd::AsyncFileDialog::new().pick_folder().await {
+                    spawn_blocking(move || -> Result<bool, ()> {
+                        std::fs::create_dir_all(folder.path()).map_err(|_| ())?;
+
+                        ExtractBuilder::new(folder.path())
                             .overwrite(libarx::Overwrite::Skip)
                             .extract(&archive_clone.archive, None)
-                    },
-                    |app_model, result| {
-                        app_model.error_msg.catch(result);
-                    },
-                )));
-            }
+                            .map_err(|_| ())?;
+                        Ok(true)
+                    })
+                    .await
+                    .unwrap()
+                } else {
+                    Ok(true)
+                }
+            });
         }
         Ok(())
     }
 
     fn extract_dir(&mut self, range: jbk::EntryRange, dir_name: String) -> AnyResult<()> {
         if let Some(archive) = &self.archive {
-            if let Some(parent_folder) = rfd::FileDialog::new()
-                .set_can_create_directories(true)
-                .pick_folder()
-            {
-                let folder = parent_folder.join(dir_name);
-                self.status_message = format!("Extracting {}...", archive.path.display());
-                std::fs::create_dir_all(&folder)?;
-                let archive_clone = Arc::clone(&archive);
-                self.background_task = Some(Box::new(TaskCallback::new(
-                    move || {
+            let archive_clone = Arc::clone(&archive);
+            self.status_message = format!("Extracting {}...", archive.path.display());
+            self.background_task.request(async move {
+                if let Some(parent_folder) = rfd::AsyncFileDialog::new()
+                    .set_can_create_directories(true)
+                    .pick_folder()
+                    .await
+                {
+                    let folder = parent_folder.path().join(dir_name);
+                    spawn_blocking(move || {
+                        std::fs::create_dir_all(&folder).map_err(|_| ())?;
                         ExtractBuilder::new(&folder)
                             .overwrite(libarx::Overwrite::Skip)
                             .extract_root(&archive_clone.archive, range)
-                    },
-                    |app_model, result| {
-                        app_model.error_msg.catch(result);
-                    },
-                )));
-            }
+                            .map_err(|_| ())?;
+                        Ok(true)
+                    })
+                    .await
+                    .unwrap()
+                } else {
+                    Ok(true)
+                }
+            });
         }
         Ok(())
     }
 
     fn extract_one(&mut self, entry: FileEntry) -> AnyResult<()> {
         if let Some(archive) = &self.archive {
-            let entry_path = String::from_utf8_lossy(entry.path()).to_owned();
-            if let Some(outfile) = rfd::FileDialog::new()
-                .set_file_name(entry_path.as_ref())
-                .save_file()
-            {
-                self.status_message = format!("Extracting {}...", entry_path);
-                let archive_clone = Arc::clone(&archive);
-                let entry = entry.clone();
-                self.background_task = Some(Box::new(TaskCallback::new(
-                    move || archive_clone.extract(entry, &outfile),
-                    |app_model, result| {
-                        app_model.error_msg.catch(result);
-                    },
-                )));
-            }
+            let archive_clone = Arc::clone(&archive);
+            let entry_path = String::from_utf8_lossy(entry.path()).to_string();
+            let entry = entry.clone();
+            self.status_message = format!("Extracting {}...", entry_path);
+            self.background_task.request(async move {
+                if let Some(outfile) = rfd::AsyncFileDialog::new()
+                    .set_file_name(entry_path)
+                    .save_file()
+                    .await
+                {
+                    spawn_blocking(move || {
+                        archive_clone.extract(entry, outfile.path()).map_err(|_| ())
+                    })
+                    .await
+                    .unwrap()
+                } else {
+                    Ok(false)
+                }
+            });
+        }
+        Ok(())
+    }
+
+    fn extract_and_open(&mut self, entry: FileEntry) -> AnyResult<()> {
+        if let Some(archive) = &self.archive {
+            let archive_clone = Arc::clone(&archive);
+            self.background_task.request(async move {
+                spawn_blocking(move || {
+                    archive_clone.extract_and_open(entry).map_err(|_| ())?;
+                    Ok(true)
+                })
+                .await
+                .unwrap()
+            });
         }
         Ok(())
     }
@@ -439,7 +416,7 @@ impl ArxApp {
 
 impl eframe::App for ArxApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        self.model.process_background_task();
+        ctx.plugin_or_default::<EguiAsyncPlugin>();
         let mut action = None;
 
         action = action.or(egui::TopBottomPanel::top("menubar")
@@ -459,7 +436,7 @@ impl eframe::App for ArxApp {
 
         action = action.or(egui::CentralPanel::default()
             .show(ctx, |ui| {
-                if self.model.background_task.is_some() {
+                if self.model.background_task.is_pending() {
                     egui::Modal::new(egui::Id::new("Spinner")).show(ctx, |ui| ui.spinner());
                 }
                 self.file_list(ui)
@@ -477,8 +454,8 @@ impl eframe::App for ArxApp {
                     result.map(|result| self.model.error_msg.catch(result));
                 }
                 Action::Open(f) => {
-                    let result = self.model.archive.as_mut().map(|a| a.extract_and_open(f));
-                    result.map(|result| self.model.error_msg.catch(result));
+                    let result = self.model.extract_and_open(f);
+                    self.model.error_msg.catch(result);
                 }
                 Action::LoadArchive(path) => {
                     self.model.load_archive(path);
