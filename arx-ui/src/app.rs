@@ -1,5 +1,5 @@
 use anyhow::Result as AnyResult;
-use egui::{global_theme_preference_switch, Context, Layout, Popup, Sense, TextBuffer, Ui};
+use egui::{global_theme_preference_switch, Context, Layout, Popup, Sense, Ui};
 use egui_async::{Bind, EguiAsyncPlugin};
 use egui_extras::{Column, TableBuilder};
 use jbk::{reader::MayMissPack, EntryRange};
@@ -251,6 +251,26 @@ impl AppModel {
     }
 }
 
+fn file_context_menu(ui: &mut Ui, f: &FileEntry, action: &mut Option<Action>) {
+    if ui.button("Open").clicked() {
+        *action = Some(Action::Open(f.clone()))
+    }
+    ui.separator();
+    if ui.button("Extract").clicked() {
+        *action = Some(Action::ExtractOne(f.clone()));
+    }
+}
+
+fn dir_context_menu(ui: &mut Ui, r: &EntryRange, path: &str, action: &mut Option<Action>) {
+    if ui.button("Enter").clicked() {
+        *action = Some(Action::Enter((*r, path.to_string())));
+    }
+    ui.separator();
+    if ui.button("Extract").clicked() {
+        *action = Some(Action::ExtractDir((*r, path.to_string())))
+    }
+}
+
 #[derive(Default)]
 pub struct ArxApp {
     model: AppModel,
@@ -332,7 +352,7 @@ impl ArxApp {
                     body.rows(20., archive.entry_list.len(), |mut row| {
                         let row_idx = row.index();
                         let entry = &archive.entry_list[row_idx];
-                        let path = String::from_utf8_lossy(entry.path());
+                        let path = String::from_utf8_lossy(entry.path()).to_string();
                         let (icon, size) = match entry {
                             libarx::Entry::File(f) => ("📄", Some(f.size())),
                             libarx::Entry::Link(_) => ("🔗", None),
@@ -352,32 +372,25 @@ impl ArxApp {
                         });
                         let response = row.response();
 
-                        Popup::context_menu(&response).show(|ui| {
-                            if ui.button("Extract").clicked() {
-                                match entry {
-                                    libarx::Entry::Dir(r, d) => {
-                                        action = Some(Action::ExtractDir((
-                                            *r,
-                                            String::from_utf8_lossy(d.path()).to_string(),
-                                        )))
-                                    }
-                                    libarx::Entry::File(f) => {
-                                        action = Some(Action::ExtractOne(f.clone()));
-                                    }
-                                    libarx::Entry::Link(_) => {}
-                                }
+                        Popup::context_menu(&response).show(|ui| match entry {
+                            libarx::Entry::Dir(r, _) => {
+                                dir_context_menu(ui, r, &path, &mut action);
                             }
+                            libarx::Entry::File(f) => {
+                                file_context_menu(ui, f, &mut action);
+                            }
+                            _ => {}
                         });
 
                         if response.double_clicked() {
                             match entry {
                                 libarx::Entry::Dir(r, _) => {
-                                    action = Some(Action::Enter((*r, path.to_string())));
+                                    action = Some(Action::Enter((*r, path)));
                                 }
                                 libarx::Entry::File(f) => {
                                     action = Some(Action::Open(f.clone()));
                                 }
-                                libarx::Entry::Link(_) => {}
+                                _ => {}
                             }
                         }
                     });
