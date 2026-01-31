@@ -133,6 +133,11 @@ trait Widget {
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>);
 }
 
+trait Model {
+    type Action;
+    fn update(&mut self, action: Action);
+}
+
 enum Action {
     Enter((EntryRange, String)),
     Open(FileEntry),
@@ -266,6 +271,47 @@ impl AppModel {
 
     fn has_archive(&self) -> bool {
         self.archive.is_some()
+    }
+}
+
+impl Model for AppModel {
+    type Action = Action;
+    fn update(&mut self, action: Action) {
+        match action {
+            Action::Enter(new_root) => {
+                let result = self
+                    .archive
+                    .as_mut()
+                    .map(|a| Arc::get_mut(a).unwrap().enter_in(new_root));
+                result.map(|result| self.error_msg.catch(result));
+            }
+            Action::Open(f) => {
+                let result = self.extract_and_open(f);
+                self.error_msg.catch(result);
+            }
+            Action::LoadArchive(path) => {
+                self.load_archive(path);
+            }
+            Action::JumpTo(index) => {
+                let result = self
+                    .archive
+                    .as_mut()
+                    .map(|a| Arc::get_mut(a).unwrap().jump_off(index));
+                result.map(|result| self.error_msg.catch(result));
+            }
+            Action::ExtractAll => {
+                let result = self.extract_all();
+                self.error_msg.catch(result);
+            }
+            Action::ExtractOne(entry) => {
+                let result = self.extract_one(entry);
+                self.error_msg.catch(result);
+            }
+            Action::ExtractDir((r, n)) => {
+                let result = self.extract_dir(r, n);
+                self.error_msg.catch(result);
+            }
+        }
     }
 }
 
@@ -543,44 +589,8 @@ impl eframe::App for ArxApp {
             }
         });
 
-        if let Some(action) = action {
-            match action {
-                Action::Enter(new_root) => {
-                    let result = self
-                        .model
-                        .archive
-                        .as_mut()
-                        .map(|a| Arc::get_mut(a).unwrap().enter_in(new_root));
-                    result.map(|result| self.model.error_msg.catch(result));
-                }
-                Action::Open(f) => {
-                    let result = self.model.extract_and_open(f);
-                    self.model.error_msg.catch(result);
-                }
-                Action::LoadArchive(path) => {
-                    self.model.load_archive(path);
-                }
-                Action::JumpTo(index) => {
-                    let result = self
-                        .model
-                        .archive
-                        .as_mut()
-                        .map(|a| Arc::get_mut(a).unwrap().jump_off(index));
-                    result.map(|result| self.model.error_msg.catch(result));
-                }
-                Action::ExtractAll => {
-                    let result = self.model.extract_all();
-                    self.model.error_msg.catch(result);
-                }
-                Action::ExtractOne(entry) => {
-                    let result = self.model.extract_one(entry);
-                    self.model.error_msg.catch(result);
-                }
-                Action::ExtractDir((r, n)) => {
-                    let result = self.model.extract_dir(r, n);
-                    self.model.error_msg.catch(result);
-                }
-            }
+        if let Some(a) = action {
+            self.model.update(a)
         }
 
         if let Some(message) = self.model.error_msg.take() {
