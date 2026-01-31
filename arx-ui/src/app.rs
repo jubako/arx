@@ -3,7 +3,7 @@ use egui::{global_theme_preference_switch, Context, Layout, Popup, Sense, Ui};
 use egui_async::{Bind, EguiAsyncPlugin};
 use egui_extras::{Column, TableBuilder};
 use jbk::{reader::MayMissPack, EntryRange};
-use libarx::{Arx, ArxError, ArxFormatError, CommonEntry, ExtractBuilder, FileEntry};
+use libarx::{Arx, ArxError, ArxFormatError, CommonEntry, ExtractBuilder, FileEntry, FullEntry};
 use std::{path::PathBuf, sync::Arc};
 use tokio::task::spawn_blocking;
 
@@ -113,6 +113,24 @@ impl ArxModel {
         }
         Ok(())
     }
+}
+
+trait Actionner {
+    type Action;
+    fn trigger(&mut self, action: Action);
+}
+
+impl Actionner for Option<Action> {
+    type Action = Action;
+    fn trigger(&mut self, action: Action) {
+        *self = Some(action)
+    }
+}
+
+trait Widget {
+    type Action;
+
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>);
 }
 
 enum Action {
@@ -251,23 +269,233 @@ impl AppModel {
     }
 }
 
-fn file_context_menu(ui: &mut Ui, f: &FileEntry, action: &mut Option<Action>) {
-    if ui.button("Open").clicked() {
-        *action = Some(Action::Open(f.clone()))
-    }
-    ui.separator();
-    if ui.button("Extract").clicked() {
-        *action = Some(Action::ExtractOne(f.clone()));
+struct MenuBar {
+    has_archive: bool,
+}
+
+impl MenuBar {
+    fn new(model: &AppModel) -> Self {
+        Self {
+            has_archive: model.has_archive(),
+        }
     }
 }
 
-fn dir_context_menu(ui: &mut Ui, r: &EntryRange, path: &str, action: &mut Option<Action>) {
-    if ui.button("Enter").clicked() {
-        *action = Some(Action::Enter((*r, path.to_string())));
+impl Widget for MenuBar {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
+        egui::MenuBar::new().ui(ui, |ui| {
+            if ui.button("📂 Open Archive").clicked() {
+                if let Some(file) = rfd::FileDialog::new()
+                    .add_filter("Arx Archive", &["arx"])
+                    .pick_file()
+                {
+                    actionner.trigger(Action::LoadArchive(file));
+                }
+            }
+
+            ui.add_enabled_ui(self.has_archive, |ui| {
+                if ui.button("📦 Extract All").clicked() {
+                    actionner.trigger(Action::ExtractAll);
+                }
+            });
+        });
     }
-    ui.separator();
-    if ui.button("Extract").clicked() {
-        *action = Some(Action::ExtractDir((*r, path.to_string())))
+}
+
+struct StatusBar<'a> {
+    status_message: &'a str,
+    archive_file_name: Option<String>,
+}
+
+impl<'a> StatusBar<'a> {
+    fn new(model: &'a AppModel) -> Self {
+        Self {
+            status_message: &model.status_message,
+            archive_file_name: model
+                .archive
+                .as_ref()
+                .and_then(|a| a.path.file_name())
+                .map(|os| os.to_string_lossy().to_string()),
+        }
+    }
+}
+
+impl Widget for StatusBar<'_> {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, _actionner: &mut dyn Actionner<Action = Self::Action>) {
+        ui.horizontal(|ui| {
+            ui.label(self.status_message);
+
+            if let Some(archive_file_name) = &self.archive_file_name {
+                ui.separator();
+                ui.label(format!("Archive: {archive_file_name}",));
+            }
+            ui.with_layout(
+                Layout::right_to_left(egui::Align::Min),
+                global_theme_preference_switch,
+            );
+        });
+    }
+}
+
+struct Breadcrubms<'a> {
+    roots: &'a [(EntryRange, String)],
+}
+
+impl<'a> Breadcrubms<'a> {
+    fn new(model: &'a ArxModel) -> Self {
+        Self {
+            roots: &model.roots,
+        }
+    }
+}
+
+impl Widget for Breadcrubms<'_> {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
+        ui.horizontal(|ui| {
+            if ui.button("📂").clicked() {
+                actionner.trigger(Action::JumpTo(0));
+            }
+
+            for (idx, dir) in self.roots.iter().enumerate() {
+                ui.label("/");
+                if ui.button(&dir.1).clicked() {
+                    actionner.trigger(Action::JumpTo(idx + 1));
+                }
+            }
+        });
+    }
+}
+
+struct Spinner;
+
+impl Widget for Spinner {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, _actionner: &mut dyn Actionner<Action = Self::Action>) {
+        egui::Modal::new(egui::Id::new("Spinner")).show(ui.ctx(), |ui| ui.spinner());
+    }
+}
+
+struct FileContextMenu<'a> {
+    f: &'a FileEntry,
+}
+
+impl<'a> Widget for FileContextMenu<'a> {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
+        if ui.button("Open").clicked() {
+            actionner.trigger(Action::Open(self.f.clone()))
+        }
+        ui.separator();
+        if ui.button("Extract").clicked() {
+            actionner.trigger(Action::ExtractOne(self.f.clone()));
+        }
+    }
+}
+
+struct DirContextMenu<'a> {
+    range: EntryRange,
+    path: &'a str,
+}
+
+impl<'a> DirContextMenu<'a> {
+    fn new(range: EntryRange, path: &'a str) -> Self {
+        Self { range, path }
+    }
+}
+
+impl<'a> Widget for DirContextMenu<'a> {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
+        if ui.button("Enter").clicked() {
+            actionner.trigger(Action::Enter((self.range, self.path.to_string())));
+        }
+        ui.separator();
+        if ui.button("Extract").clicked() {
+            actionner.trigger(Action::ExtractDir((self.range, self.path.to_string())))
+        }
+    }
+}
+
+struct FileList<'a> {
+    entry_list: &'a [FullEntry],
+}
+
+impl<'a> FileList<'a> {
+    fn new(model: &'a ArxModel) -> Self {
+        Self {
+            entry_list: &model.entry_list,
+        }
+    }
+}
+
+impl Widget for FileList<'_> {
+    type Action = Action;
+    fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
+        TableBuilder::new(ui)
+            .sense(Sense::click())
+            .cell_layout(Layout::left_to_right(egui::Align::Min).with_main_wrap(false))
+            .column(Column::auto().resizable(false))
+            .column(Column::remainder())
+            .column(Column::auto())
+            .header(20., |mut header| {
+                header.col(|_| {});
+                header.col(|ui| {
+                    ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Size");
+                });
+            })
+            .body(|body| {
+                body.rows(20., self.entry_list.len(), |mut row| {
+                    let row_idx = row.index();
+                    let entry = &self.entry_list[row_idx];
+                    let path = String::from_utf8_lossy(entry.path()).to_string();
+                    let (icon, size) = match entry {
+                        libarx::Entry::File(f) => ("📄", Some(f.size())),
+                        libarx::Entry::Link(_) => ("🔗", None),
+                        libarx::Entry::Dir(_, _) => ("📁", None),
+                    };
+                    row.col(|ui| {
+                        ui.label(icon);
+                    });
+                    row.col(|ui| {
+                        ui.label(path.as_str());
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            size.map(|s| format_size(s.into_u64()))
+                                .unwrap_or(String::new()),
+                        );
+                    });
+                    let response = row.response();
+
+                    Popup::context_menu(&response).show(|ui| match entry {
+                        libarx::Entry::Dir(r, _) => {
+                            DirContextMenu::new(*r, &path).interact(ui, actionner);
+                        }
+                        libarx::Entry::File(f) => {
+                            FileContextMenu { f }.interact(ui, actionner);
+                        }
+                        _ => {}
+                    });
+
+                    if response.double_clicked() {
+                        match entry {
+                            libarx::Entry::Dir(r, _) => {
+                                actionner.trigger(Action::Enter((*r, path)));
+                            }
+                            libarx::Entry::File(f) => {
+                                actionner.trigger(Action::Open(f.clone()));
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+            });
     }
 }
 
@@ -285,141 +513,6 @@ impl ArxApp {
             model: AppModel::new(archive),
         }
     }
-
-    fn menubar(&self, ui: &mut Ui) -> Option<Action> {
-        let mut action = None;
-        egui::MenuBar::new().ui(ui, |ui| {
-            if ui.button("📂 Open Archive").clicked() {
-                if let Some(file) = rfd::FileDialog::new()
-                    .add_filter("Arx Archive", &["arx"])
-                    .pick_file()
-                {
-                    action = Some(Action::LoadArchive(file));
-                }
-            }
-
-            ui.add_enabled_ui(self.model.has_archive(), |ui| {
-                if ui.button("📦 Extract All").clicked() {
-                    action = Some(Action::ExtractAll);
-                }
-            });
-        });
-        action
-    }
-
-    fn breadcrumbs(&self, ui: &mut Ui) -> Option<Action> {
-        let mut action = None;
-        if let Some(archive) = &self.model.archive {
-            let mut to_split = None;
-            ui.horizontal(|ui| {
-                if ui.button("📂").clicked() {
-                    to_split = Some(0);
-                }
-
-                for (idx, dir) in archive.roots.iter().enumerate() {
-                    ui.label("/");
-                    if ui.button(&dir.1).clicked() {
-                        to_split = Some(idx + 1);
-                    }
-                }
-            });
-            if let Some(to_split) = to_split {
-                action = Some(Action::JumpTo(to_split));
-            }
-        }
-        action
-    }
-
-    fn file_list(&self, ui: &mut Ui) -> Option<Action> {
-        let mut action = None;
-        if let Some(archive) = &self.model.archive {
-            TableBuilder::new(ui)
-                .sense(Sense::click())
-                .cell_layout(Layout::left_to_right(egui::Align::Min).with_main_wrap(false))
-                .column(Column::auto().resizable(false))
-                .column(Column::remainder())
-                .column(Column::auto())
-                .header(20., |mut header| {
-                    header.col(|_| {});
-                    header.col(|ui| {
-                        ui.heading("Name");
-                    });
-                    header.col(|ui| {
-                        ui.heading("Size");
-                    });
-                })
-                .body(|body| {
-                    body.rows(20., archive.entry_list.len(), |mut row| {
-                        let row_idx = row.index();
-                        let entry = &archive.entry_list[row_idx];
-                        let path = String::from_utf8_lossy(entry.path()).to_string();
-                        let (icon, size) = match entry {
-                            libarx::Entry::File(f) => ("📄", Some(f.size())),
-                            libarx::Entry::Link(_) => ("🔗", None),
-                            libarx::Entry::Dir(_, _) => ("📁", None),
-                        };
-                        row.col(|ui| {
-                            ui.label(icon);
-                        });
-                        row.col(|ui| {
-                            ui.label(path.as_str());
-                        });
-                        row.col(|ui| {
-                            ui.label(
-                                size.map(|s| format_size(s.into_u64()))
-                                    .unwrap_or(String::new()),
-                            );
-                        });
-                        let response = row.response();
-
-                        Popup::context_menu(&response).show(|ui| match entry {
-                            libarx::Entry::Dir(r, _) => {
-                                dir_context_menu(ui, r, &path, &mut action);
-                            }
-                            libarx::Entry::File(f) => {
-                                file_context_menu(ui, f, &mut action);
-                            }
-                            _ => {}
-                        });
-
-                        if response.double_clicked() {
-                            match entry {
-                                libarx::Entry::Dir(r, _) => {
-                                    action = Some(Action::Enter((*r, path)));
-                                }
-                                libarx::Entry::File(f) => {
-                                    action = Some(Action::Open(f.clone()));
-                                }
-                                _ => {}
-                            }
-                        }
-                    });
-                });
-        }
-        action
-    }
-
-    fn status_bar(&self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.label(&self.model.status_message);
-
-            if let Some(archive) = self.model.archive.as_ref() {
-                ui.separator();
-                ui.label(format!(
-                    "Archive: {}",
-                    archive
-                        .path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                ));
-            }
-            ui.with_layout(
-                Layout::right_to_left(egui::Align::Min),
-                global_theme_preference_switch,
-            );
-        });
-    }
 }
 
 impl eframe::App for ArxApp {
@@ -427,29 +520,28 @@ impl eframe::App for ArxApp {
         ctx.plugin_or_default::<EguiAsyncPlugin>();
         let mut action = None;
 
-        action = action.or(egui::TopBottomPanel::top("menubar")
-            .show(ctx, |ui| self.menubar(ui))
-            .inner);
+        egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
+            MenuBar::new(&self.model).interact(ui, &mut action)
+        });
 
-        action = action.or(egui::TopBottomPanel::bottom("status")
-            .show(ctx, |ui| {
-                self.status_bar(ui);
-                None
-            })
-            .inner);
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            StatusBar::new(&self.model).interact(ui, &mut action);
+        });
 
-        action = action.or(egui::TopBottomPanel::top("breadcrumbs")
-            .show(ctx, |ui| self.breadcrumbs(ui))
-            .inner);
+        egui::TopBottomPanel::top("breadcrumbs").show(ctx, |ui| {
+            if let Some(model) = &self.model.archive {
+                Breadcrubms::new(model).interact(ui, &mut action);
+            }
+        });
 
-        action = action.or(egui::CentralPanel::default()
-            .show(ctx, |ui| {
-                if self.model.background_task.is_pending() {
-                    egui::Modal::new(egui::Id::new("Spinner")).show(ctx, |ui| ui.spinner());
-                }
-                self.file_list(ui)
-            })
-            .inner);
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if self.model.background_task.is_pending() {
+                Spinner.interact(ui, &mut action);
+            }
+            if let Some(archive) = &self.model.archive {
+                FileList::new(archive).interact(ui, &mut action);
+            }
+        });
 
         if let Some(action) = action {
             match action {
