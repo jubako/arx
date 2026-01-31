@@ -313,7 +313,6 @@ impl ArxApp {
     fn file_list(&self, ui: &mut Ui) -> Option<Action> {
         let mut action = None;
         if let Some(archive) = &self.model.archive {
-            let mut entry_iter = archive.entry_list.iter().enumerate();
             TableBuilder::new(ui)
                 .sense(Sense::click())
                 .cell_layout(Layout::left_to_right(egui::Align::Min).with_main_wrap(false))
@@ -330,13 +329,9 @@ impl ArxApp {
                     });
                 })
                 .body(|body| {
-                    body.rows(20., entry_iter.len(), |mut row| {
+                    body.rows(20., archive.entry_list.len(), |mut row| {
                         let row_idx = row.index();
-                        let mut skip_iter = entry_iter.by_ref().skip_while(|(i, _)| i < &row_idx);
-                        let entry = skip_iter
-                            .next()
-                            .expect("We should have a entry as we skip until we found our")
-                            .1;
+                        let entry = &archive.entry_list[row_idx];
                         let path = String::from_utf8_lossy(entry.path());
                         let (icon, size) = match entry {
                             libarx::Entry::File(f) => ("📄", Some(f.size())),
