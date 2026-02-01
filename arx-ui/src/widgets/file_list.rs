@@ -1,4 +1,4 @@
-use super::{Actionner, Widget};
+use super::{Actionner, View};
 use crate::app::Action;
 use crate::models::ArxModel;
 use egui::{Layout, Popup, Sense, Ui};
@@ -10,7 +10,7 @@ struct FileContextMenu<'a> {
     f: &'a FileEntry,
 }
 
-impl<'a> Widget for FileContextMenu<'a> {
+impl<'a> View for FileContextMenu<'a> {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
         if ui.button("Open").clicked() {
@@ -34,7 +34,7 @@ impl<'a> DirContextMenu<'a> {
     }
 }
 
-impl<'a> Widget for DirContextMenu<'a> {
+impl<'a> View for DirContextMenu<'a> {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
         if ui.button("Enter").clicked() {
@@ -59,7 +59,7 @@ impl<'a> FileList<'a> {
     }
 }
 
-impl Widget for FileList<'_> {
+impl View for FileList<'_> {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
         TableBuilder::new(ui)

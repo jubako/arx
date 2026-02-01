@@ -1,4 +1,4 @@
-use super::{Actionner, Widget};
+use super::{Actionner, View};
 use crate::app::Action;
 use crate::models::AppModel;
 use egui::Ui;
@@ -15,7 +15,7 @@ impl MenuBar {
     }
 }
 
-impl Widget for MenuBar {
+impl View for MenuBar {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
         egui::MenuBar::new().ui(ui, |ui| {

@@ -1,4 +1,4 @@
-use super::{Actionner, Widget};
+use super::{Actionner, View};
 use crate::app::Action;
 use crate::models::ArxModel;
 use egui::Ui;
@@ -16,7 +16,7 @@ impl<'a> Breadcrumbs<'a> {
     }
 }
 
-impl Widget for Breadcrumbs<'_> {
+impl View for Breadcrumbs<'_> {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>) {
         ui.horizontal(|ui| {

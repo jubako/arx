@@ -1,4 +1,4 @@
-use super::{Actionner, Widget};
+use super::{Actionner, View};
 use crate::app::Action;
 use crate::models::AppModel;
 use egui::{global_theme_preference_switch, Layout, Ui};
@@ -21,7 +21,7 @@ impl<'a> StatusBar<'a> {
     }
 }
 
-impl Widget for StatusBar<'_> {
+impl View for StatusBar<'_> {
     type Action = Action;
     fn interact(&self, ui: &mut Ui, _actionner: &mut dyn Actionner<Action = Self::Action>) {
         ui.horizontal(|ui| {

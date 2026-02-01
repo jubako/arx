@@ -17,14 +17,21 @@ pub trait Actionner {
 pub trait Widget {
     type Action;
 
+    fn interact(&self, ui: &mut Ui) -> Option<Self::Action>;
+}
+
+pub trait View {
+    type Action;
+
     fn interact(&self, ui: &mut Ui, actionner: &mut dyn Actionner<Action = Self::Action>);
 }
 
 pub struct Spinner;
 
 impl Widget for Spinner {
-    type Action = Action;
-    fn interact(&self, ui: &mut Ui, _actionner: &mut dyn Actionner<Action = Self::Action>) {
+    type Action = ();
+    fn interact(&self, ui: &mut Ui) -> Option<()> {
         egui::Modal::new(egui::Id::new("Spinner")).show(ui.ctx(), |ui| ui.spinner());
+        None
     }
 }

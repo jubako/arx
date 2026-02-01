@@ -5,7 +5,7 @@ use libarx::FileEntry;
 use std::path::PathBuf;
 
 use crate::models::{AppModel, Model};
-use crate::widgets::{Actionner, Breadcrumbs, FileList, MenuBar, Spinner, StatusBar, Widget};
+use crate::widgets::{Actionner, Breadcrumbs, FileList, MenuBar, Spinner, StatusBar, View, Widget};
 
 pub enum Action {
     Enter((EntryRange, String)),
@@ -61,7 +61,7 @@ impl eframe::App for ArxApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.model.background_task.is_pending() {
-                Spinner.interact(ui, &mut action);
+                Spinner.interact(ui);
             }
             if let Some(archive) = &self.model.archive {
                 FileList::new(archive).interact(ui, &mut action);
