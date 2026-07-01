@@ -17,7 +17,7 @@ pub use arx::Arx;
 pub use arx_fs::{ArxFs, Stats};
 pub use common::{
     AllProperties, Builder, Entry, FromPathError, FromPathErrorKind, FullBuilderTrait, Path,
-    PathBuf, VENDOR_ID,
+    PathBuf, ReadEntry, RealBuilder, VENDOR_ID,
 };
 pub use entry::*;
 pub use error::*;

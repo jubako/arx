@@ -81,7 +81,7 @@ where
     }
 }
 
-pub(crate) struct RealBuilder<B: FullBuilderTrait> {
+pub struct RealBuilder<B: FullBuilderTrait> {
     store: jbk::reader::EntryStore,
     variant_id_property: jbk::reader::builder::VariantIdBuilder<EntryType>,
     first_child_property: jbk::reader::builder::IntProperty,

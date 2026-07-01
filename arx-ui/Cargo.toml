@@ -1,0 +1,24 @@
+
+[package]
+name = "arx-ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.33"
+egui = "0.33"
+egui_extras = { version = "0.33", features = ["all_loaders"] }
+rfd = "0.15"
+anyhow = "1.0"
+jbk.workspace = true
+open = "5.3.3"
+tempfile = "3.24.0"
+egui-async = "0.3.2"
+tokio = "1.49.0"
+
+[dependencies.libarx]
+path = "../libarx"
+
+[[bin]]
+name = "arx-ui"
+path = "src/main.rs"

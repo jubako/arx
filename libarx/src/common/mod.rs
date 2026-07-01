@@ -3,12 +3,13 @@ mod entry;
 mod entry_type;
 mod properties;
 
-pub(crate) use builder::RealBuilder;
+pub use builder::RealBuilder;
 pub use builder::{Builder, FullBuilderTrait};
 pub use entry::{Entry, EntryDef};
 pub use entry_type::EntryType;
 use jbk::reader::builder::{BuilderTrait, PropertyBuilderTrait};
 use jbk::reader::Range;
+use jbk::MayRef;
 pub use properties::{AllProperties, Property};
 
 pub const VENDOR_ID: jbk::VendorId = jbk::VendorId::new([0x41, 0x52, 0x58, 0x00]);
@@ -60,23 +61,37 @@ impl jbk::reader::CompareTrait for EntryCompare<'_> {
 }
 
 pub struct ReadEntry<'builder, Builder: BuilderTrait> {
-    builder: &'builder Builder,
+    builder: MayRef<'builder, Builder>,
     current: jbk::EntryIdx,
     end: jbk::EntryIdx,
+    size: jbk::EntryCount,
 }
 
 impl<'builder, Builder: BuilderTrait> ReadEntry<'builder, Builder> {
     pub fn new<R: Range>(range: &R, builder: &'builder Builder) -> Self {
         let end = range.offset() + range.count();
         Self {
-            builder,
+            builder: MayRef::Borrowed(builder),
             current: range.offset(),
             end,
+            size: range.count(),
         }
     }
 
     pub fn skip(&mut self, to_skip: jbk::EntryCount) {
         self.current += to_skip;
+    }
+}
+
+impl<Builder: BuilderTrait> ReadEntry<'static, Builder> {
+    pub fn new_owned<R: Range>(range: &R, builder: Builder) -> Self {
+        let end = range.offset() + range.count();
+        Self {
+            builder: MayRef::Owned(builder),
+            current: range.offset(),
+            end,
+            size: range.count(),
+        }
     }
 }
 
@@ -95,5 +110,11 @@ impl<Builder: BuilderTrait> Iterator for ReadEntry<'_, Builder> {
             self.current += 1;
             Some(entry)
         }
+    }
+}
+
+impl<Builder: BuilderTrait> ExactSizeIterator for ReadEntry<'_, Builder> {
+    fn len(&self) -> usize {
+        self.size.into_usize()
     }
 }

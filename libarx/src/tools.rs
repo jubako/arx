@@ -18,7 +18,7 @@ use jbk::reader::MayMissPack;
 use std::sync::{Arc, Condvar, LazyLock, Mutex, OnceLock};
 
 static FD_LIMIT: LazyLock<Arc<(Mutex<usize>, Condvar)>> =
-    std::sync::LazyLock::new(|| Arc::new((Mutex::new(1000), Condvar::new())));
+    std::sync::LazyLock::new(|| Arc::new((Mutex::new(500), Condvar::new())));
 
 struct LimitedFile(std::fs::File);
 
@@ -50,14 +50,14 @@ trait OpenLimited {
 
 impl OpenLimited for std::fs::OpenOptions {
     fn open_limited<P: AsRef<Path>>(&self, path: P) -> std::io::Result<LimitedFile> {
-        {
-            let (lock, cvar) = &**FD_LIMIT;
-            let mut fd_left = cvar
-                .wait_while(lock.lock().unwrap(), |fd_left| *fd_left == 0)
-                .unwrap();
+        let (lock, cvar) = &**FD_LIMIT;
+        let mut fd_left = cvar
+            .wait_while(lock.lock().unwrap(), |fd_left| *fd_left == 0)
+            .unwrap();
+        self.open(path).map(|f| {
             *fd_left -= 1;
-        }
-        Ok(LimitedFile(self.open(path)?))
+            LimitedFile(f)
+        })
     }
 }
 
@@ -569,8 +569,13 @@ impl<'a, F> ExtractBuilder<'a, F, ()>
 where
     F: FileFilter,
 {
-    pub fn extract(self, arx: &Arx, root: Option<&crate::Path>) -> Result<(), ExtractError> {
-        self.items(&[] as &[&crate::Path], true).extract(arx, root)
+    pub fn extract(self, arx: &Arx, root_path: Option<&crate::Path>) -> Result<(), ExtractError> {
+        self.items(&[] as &[&crate::Path], true)
+            .extract(arx, root_path)
+    }
+    pub fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
+        self.items(&[] as &[&crate::Path], true)
+            .extract_root(arx, root)
     }
 }
 
@@ -597,7 +602,7 @@ where
         self.extract_root(arx, root)
     }
 
-    fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
+    pub fn extract_root(self, arx: &Arx, root: jbk::EntryRange) -> Result<(), ExtractError> {
         let error = rayon::scope(|scope| -> Result<Arc<OnceLock<jbk::Error>>, ExtractError> {
             let extractor = Extractor {
                 arx,
