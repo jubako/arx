@@ -111,7 +111,6 @@ fn test_mount_subdir(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result
     Ok(())
 }
 
-#[cfg(all(unix, not(feature = "in_ci")))]
 #[test]
 fn test_extract(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
     let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
@@ -121,6 +120,32 @@ fn test_extract(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
         false,
         arx::Overwrite::Error,
     )?;
+    assert!(tree_diff(
+        extract_dir,
+        source_dir.path(),
+        SimpleDiffer::new()
+    )?);
+    Ok(())
+}
+
+#[test]
+fn test_extract_embeded(source_dir: SharedTestDir, arx_file: BaseArxFile) -> Result {
+    use std::fs::File;
+    use std::io::Write;
+    let extract_dir = tempfile::TempDir::new_in(env!("CARGO_TARGET_TMPDIR"))?;
+    let mut embeded_file = tempfile::NamedTempFile::new_in(env!("CARGO_TARGET_TMPDIR"))?;
+    embeded_file.write(b"Some dummy content")?;
+    let mut opened_arx_file = File::open(arx_file.path())?;
+    std::io::copy(&mut opened_arx_file, &mut embeded_file)?;
+
+    cmd!(
+        "arx",
+        "extract",
+        embeded_file.path(),
+        "-C",
+        extract_dir.path()
+    )
+    .check_output(Some(""), Some(""));
     assert!(tree_diff(
         extract_dir,
         source_dir.path(),
