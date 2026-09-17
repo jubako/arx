@@ -1,5 +1,6 @@
 [workspace]
 members = ["libarx", "arx", "tar2arx", "zip2arx", "python"]
+exclude = [".copr"]
 resolver = "2"
 
 [workspace.package]
