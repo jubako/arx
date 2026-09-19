@@ -1,10 +1,11 @@
 [workspace]
 members = ["libarx", "arx", "tar2arx", "zip2arx", "python"]
+exclude = [".copr"]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
 repository = "https://github.com/jubako/arx"
 homepage = "https://github.com/jubako/arx"
