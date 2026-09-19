@@ -152,6 +152,8 @@ where
 
 /// List the content in an archive.
 #[derive(Parser, Debug)]
+#[command(display_name("arx list"))]
+#[command(bin_name("arx list"))]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser, value_hint= ValueHint::FilePath)]

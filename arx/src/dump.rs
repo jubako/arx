@@ -56,6 +56,8 @@ fn dump_entry(
 
 /// Print the content of an entry in the archive.
 #[derive(Parser, Debug)]
+#[command(display_name("arx dump"))]
+#[command(bin_name("arx dump"))]
 pub struct Options {
     /// Archive to read
     #[arg(value_parser, value_hint=ValueHint::FilePath)]

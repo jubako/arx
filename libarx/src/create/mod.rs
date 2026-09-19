@@ -1,6 +1,7 @@
 mod creator;
 mod entry_store_creator;
 mod fs_adder;
+mod mut_entry_store;
 
 use crate::CreatorError;
 pub use creator::SimpleCreator;

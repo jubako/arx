@@ -1,274 +1,163 @@
+use super::mut_entry_store::{flat, DirEntry, Entry, Kind};
 use crate::common::{EntryType, Property};
-use crate::IncoherentStructure;
 use jbk::creator::schema;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use jbk::Value;
 
-use super::{EntryKind, EntryTrait, Void};
+use super::{EntryTrait, Void};
 
-type EntryStore = jbk::creator::EntryStore<
-    Property,
-    EntryType,
-    Box<jbk::creator::BasicEntry<Property, EntryType>>,
->;
+pub type ArxSchema = schema::Schema<Property, EntryType>;
 
-type DirCache = HashMap<String, DirOrFile>;
-type EntryIdx = jbk::Bound<jbk::EntryIdx>;
+type EntryStore = jbk::creator::EntryStore<Property, EntryType>;
 
-enum DirOrFile {
-    Dir(DirEntry),
-    File(EntryIdx),
+pub struct EntryStoreCreator {
+    schema: ArxSchema,
+    path_store: jbk::creator::StoreHandle,
+    root_entry: DirEntry,
 }
 
-/// A DirEntry structure to keep track of added direcotry in the archive.
-/// This is needed as we may adde file without recursion, and so we need
-/// to find the parent of "foo/bar/baz.txt" ("foo/bar") when we add it.
-struct DirEntry {
-    idx: Option<EntryIdx>,
-    children: Arc<RwLock<DirCache>>,
+#[derive(Debug)]
+pub enum JbkKind {
+    Dir {
+        first_child: jbk::EntryIdx,
+        nb_children: jbk::EntryCount,
+    },
+    File {
+        content: jbk::ContentAddress,
+        size: u64,
+    },
+    Link {
+        target: bstr::BString,
+    },
 }
 
-impl DirEntry {
-    fn new_root() -> Self {
-        Self {
-            idx: None,
-            children: Default::default(),
-        }
-    }
-    fn new(idx: EntryIdx) -> Self {
-        Self {
-            idx: Some(idx),
-            children: Default::default(),
-        }
-    }
+#[derive(Debug)]
+pub struct JbkEntry {
+    pub parent: Option<jbk::EntryIdx>,
+    pub name: String,
+    pub owner: u64,
+    pub group: u64,
+    pub rights: u64,
+    pub mtime: u64,
+    pub kind: JbkKind,
+}
 
-    fn first_entry_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
-        let children = Arc::clone(&self.children);
-        Box::new(move || {
-            children
-                .try_read()
-                .unwrap()
-                .values()
-                .map(|e| match e {
-                    DirOrFile::File(i) => i.get().into_u64(),
-                    DirOrFile::Dir(e) => e.idx.as_ref().unwrap().get().into_u64(),
-                })
-                .min()
-                .unwrap_or(0)
+impl JbkEntry {
+    pub(crate) fn new(e: Entry) -> (Self, Option<impl Iterator<Item = Entry>>) {
+        let mut next_children = None;
+        let s = Self {
+            parent: e.parent,
+            name: e.name,
+            owner: e.owner,
+            group: e.group,
+            rights: e.rights,
+            mtime: e.mtime,
+            kind: match e.kind {
+                Kind::File { content, size } => JbkKind::File { content, size },
+                Kind::Link { target } => JbkKind::Link { target },
+                Kind::Dir(d_entry) => {
+                    let d = JbkKind::Dir {
+                        nb_children: d_entry.nb_children(),
+                        first_child: d_entry.first_child(),
+                    };
+                    next_children = Some(d_entry.children.into_values());
+                    d
+                }
+            },
+        };
+        (s, next_children)
+    }
+}
+
+impl jbk::creator::EntryTrait<Property, EntryType> for JbkEntry {
+    fn variant_name(&self) -> Option<EntryType> {
+        Some(match self.kind {
+            JbkKind::File {
+                content: _,
+                size: _,
+            } => EntryType::File,
+            JbkKind::Link { target: _ } => EntryType::Link,
+            JbkKind::Dir {
+                nb_children: _,
+                first_child: _,
+            } => EntryType::Dir,
         })
     }
 
-    fn entry_count_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
-        let children = Arc::clone(&self.children);
-        Box::new(move || (children.try_read().unwrap().len()) as u64)
-    }
-
-    fn as_parent_idx_generator(&self) -> Box<dyn Fn() -> u64 + Sync + Send> {
-        match &self.idx {
-            Some(idx) => {
-                let idx = idx.clone();
-                Box::new(move || idx.get().into_u64() + 1)
-            }
-            None => Box::new(|| 0),
-        }
-    }
-
-    fn add<'a, E, C>(&mut self, entry: &E, mut components: C, entry_store: &mut EntryStore) -> Void
-    where
-        E: EntryTrait + ?Sized,
-        C: Iterator<Item = relative_path::Component<'a>>,
-    {
-        match components.next() {
-            None => self.add_entry(entry, entry_store),
-            Some(component) => {
-                self.ensure_dir(component.as_str(), entry_store)?;
-                let mut write_children = self.children.try_write().unwrap();
-                match write_children.get_mut(component.as_str()).unwrap() {
-                    DirOrFile::Dir(e) => e.add(entry, components, entry_store),
-                    DirOrFile::File(_) => Err(IncoherentStructure(format!(
-                        "Adding {}, cannot add a entry to something which is not a directory",
-                        entry.path()
-                    ))
-                    .into()),
+    fn value(&self, name: &Property) -> Value {
+        match name {
+            Property::Name => Value::Array(self.name.as_bytes().into()),
+            Property::Parent => Value::Unsigned(self.parent.map_or(0, |p| p.into_u64() + 1)),
+            Property::Owner => Value::Unsigned(self.owner),
+            Property::Group => Value::Unsigned(self.group),
+            Property::Rights => Value::Unsigned(self.rights),
+            Property::Mtime => Value::Unsigned(self.mtime),
+            Property::Content => {
+                if let JbkKind::File { content, size: _ } = self.kind {
+                    Value::Content(content)
+                } else {
+                    panic!("Should be a file")
                 }
             }
-        }
-    }
-
-    fn ensure_dir(&mut self, dir_name: &str, entry_store: &mut EntryStore) -> Void {
-        self.children
-            .try_write()
-            .unwrap()
-            .entry(dir_name.into())
-            .or_insert_with(|| {
-                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
-                let dir_entry = DirEntry::new(entry_idx.bind());
-                let values = HashMap::from([
-                    (
-                        Property::Name,
-                        jbk::Value::Array(dir_name.as_bytes().into()),
-                    ),
-                    (
-                        Property::Parent,
-                        jbk::Value::UnsignedWord(self.as_parent_idx_generator().into()),
-                    ),
-                    (Property::Owner, jbk::Value::Unsigned(1000)),
-                    (Property::Group, jbk::Value::Unsigned(1000)),
-                    (Property::Rights, jbk::Value::Unsigned(0o755)),
-                    (Property::Mtime, jbk::Value::Unsigned(0)),
-                    (
-                        Property::FirstChild,
-                        jbk::Value::UnsignedWord(dir_entry.first_entry_generator().into()),
-                    ),
-                    (
-                        Property::NbChildren,
-                        jbk::Value::UnsignedWord(dir_entry.entry_count_generator().into()),
-                    ),
-                ]);
-
-                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
-                    &entry_store.schema,
-                    entry_idx,
-                    Some(EntryType::Dir),
-                    values,
-                ));
-                entry_store.add_entry(entry);
-                DirOrFile::Dir(dir_entry)
-            });
-
-        Ok(())
-    }
-
-    fn add_entry<E>(&mut self, entry: &E, entry_store: &mut EntryStore) -> Void
-    where
-        E: EntryTrait + ?Sized,
-    {
-        let entry_kind = match entry.kind()? {
-            Some(k) => k,
-            None => {
-                return Ok(());
+            Property::Size => {
+                if let JbkKind::File { content: _, size } = self.kind {
+                    Value::Unsigned(size)
+                } else {
+                    panic!("Should be a file")
+                }
             }
-        };
-        let entry_name = entry
-            .path()
-            .file_name()
-            .unwrap_or_else(|| panic!("{:?} has no file name", entry.path()));
-        let mut values = HashMap::from([
-            (
-                Property::Name,
-                jbk::Value::Array(entry_name.as_bytes().into()),
-            ),
-            (
-                Property::Parent,
-                jbk::Value::UnsignedWord(self.as_parent_idx_generator().into()),
-            ),
-            (Property::Owner, jbk::Value::Unsigned(entry.uid())),
-            (Property::Group, jbk::Value::Unsigned(entry.gid())),
-            (Property::Rights, jbk::Value::Unsigned(entry.mode())),
-            (Property::Mtime, jbk::Value::Unsigned(entry.mtime())),
-        ]);
-
-        match entry_kind {
-            EntryKind::Dir => {
-                match self.children.try_read().unwrap().get(entry_name) {
-                    Some(DirOrFile::Dir(_)) => return Ok(()),
-                    Some(DirOrFile::File(_)) => {
-                        return Err(IncoherentStructure(format!(
-                            "Adding {}, cannot add a dir when file or link already exists",
-                            entry.path()
-                        ))
-                        .into())
-                    }
-                    None => {}
-                };
-                let entry_idx = jbk::Vow::new(jbk::EntryIdx::from(0));
-                let dir_entry = DirEntry::new(entry_idx.bind());
-
+            Property::Target => {
+                if let JbkKind::Link { target } = &self.kind {
+                    Value::Array(target.to_vec().into())
+                } else {
+                    panic!("Should be a link")
+                }
+            }
+            Property::FirstChild => {
+                if let JbkKind::Dir {
+                    first_child,
+                    nb_children: _,
+                } = self.kind
                 {
-                    values.insert(
-                        Property::FirstChild,
-                        jbk::Value::UnsignedWord(dir_entry.first_entry_generator().into()),
-                    );
-                    values.insert(
-                        Property::NbChildren,
-                        jbk::Value::UnsignedWord(dir_entry.entry_count_generator().into()),
-                    );
-                    let entry = Box::new(jbk::creator::BasicEntry::new_from_schema_idx(
-                        &entry_store.schema,
-                        entry_idx,
-                        Some(EntryType::Dir),
-                        values,
-                    ));
-                    entry_store.add_entry(entry);
+                    Value::Unsigned(first_child.into_u64())
+                } else {
+                    panic!("Should be a dir")
                 }
-
-                self.children
-                    .try_write()
-                    .unwrap()
-                    .insert(entry_name.into(), DirOrFile::Dir(dir_entry));
-                Ok(())
             }
-            EntryKind::File(size, content_address) => {
-                if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err(IncoherentStructure(format!(
-                        "Adding {}, cannot add a file when one already exists",
-                        entry.path()
-                    ))
-                    .into());
+            Property::NbChildren => {
+                if let JbkKind::Dir {
+                    first_child: _,
+                    nb_children,
+                } = self.kind
+                {
+                    Value::Unsigned(nb_children.into_u64())
+                } else {
+                    panic!("Should be a dir")
                 }
-                values.insert(Property::Content, jbk::Value::Content(content_address));
-                values.insert(Property::Size, jbk::Value::Unsigned(size.into_u64()));
-                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
-                    &entry_store.schema,
-                    Some(EntryType::File),
-                    values,
-                ));
-                let current_idx = entry_store.add_entry(entry);
-                self.children
-                    .try_write()
-                    .unwrap()
-                    .insert(entry_name.into(), DirOrFile::File(current_idx));
-                Ok(())
-            }
-            EntryKind::Link(target) => {
-                if self.children.try_read().unwrap().contains_key(entry_name) {
-                    return Err(IncoherentStructure(format!(
-                        "Adding {}, cannot add a link when one already exists",
-                        entry.path()
-                    ))
-                    .into());
-                }
-                values.insert(
-                    Property::Target,
-                    jbk::Value::Array(Vec::from(target).into()),
-                );
-                let entry = Box::new(jbk::creator::BasicEntry::new_from_schema(
-                    &entry_store.schema,
-                    Some(EntryType::Link),
-                    values,
-                ));
-                let current_idx = entry_store.add_entry(entry);
-                self.children
-                    .try_write()
-                    .unwrap()
-                    .insert(entry_name.into(), DirOrFile::File(current_idx));
-                Ok(())
             }
         }
     }
-}
 
-pub struct EntryStoreCreator {
-    entry_store: Box<EntryStore>,
-    path_store: jbk::creator::StoreHandle,
-    root_entry: DirEntry,
+    fn value_count(&self) -> jbk::PropertyCount {
+        match self.kind {
+            JbkKind::Dir {
+                first_child: _,
+                nb_children: _,
+            } => 6 + 2,
+            JbkKind::File {
+                content: _,
+                size: _,
+            } => 6 + 2,
+            JbkKind::Link { target: _ } => 6 + 1,
+        }
+        .into()
+    }
 }
 
 impl EntryStoreCreator {
     pub fn new() -> Self {
         let path_store = jbk::creator::ValueStore::new_plain(None);
 
-        let entry_def = schema::Schema::new(
+        let schema = schema::Schema::new(
             // Common part
             schema::CommonProperties::new(vec![
                 schema::Property::new_array(1, path_store.clone(), Property::Name), // the path
@@ -305,20 +194,12 @@ impl EntryStoreCreator {
             ],
             Some(vec![Property::Parent, Property::Name]),
         );
-
-        let entry_store = Box::new(EntryStore::new(entry_def, None));
-
-        let root_entry = DirEntry::new_root();
-
+        let root_entry = DirEntry::new();
         Self {
-            entry_store,
+            schema,
             path_store,
             root_entry,
         }
-    }
-
-    pub fn entry_count(&self) -> jbk::EntryCount {
-        jbk::EntryCount::from(self.root_entry.entry_count_generator()() as u32)
     }
 
     pub fn add_entry<E>(&mut self, entry: &E) -> Void
@@ -327,29 +208,27 @@ impl EntryStoreCreator {
     {
         let path = entry.path();
         match path.parent() {
-            None => self
-                .root_entry
-                .add(entry, std::iter::empty(), &mut self.entry_store),
-            Some(parent) => self
-                .root_entry
-                .add(entry, parent.components(), &mut self.entry_store),
+            None => self.root_entry.add(entry, std::iter::empty()),
+            Some(parent) => self.root_entry.add(entry, parent.components()),
         }
     }
 }
 
-impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
+impl jbk::creator::EntryStoreCreatorTrait for EntryStoreCreator {
     fn finalize(self: Box<Self>, directory_pack: &mut jbk::creator::DirectoryPackCreator) {
-        let root_count = self.entry_count();
-        let entry_count = self.entry_store.len();
+        let entry_count = self.root_entry.nb_entry();
+        let root_count = self.root_entry.nb_children();
         directory_pack.add_value_store(self.path_store);
-        let entry_store_id = directory_pack.add_entry_store(self.entry_store);
+        let flatten = flat(self.root_entry);
+        let jbk_entry_store = EntryStore::new(self.schema, flatten);
+        let entry_store_id = directory_pack.add_entry_store(jbk_entry_store);
         directory_pack.create_index(
             "arx_entries",
             Default::default(),
             jbk::PropertyIdx::from(0),
             entry_store_id,
-            jbk::EntryCount::from(entry_count as u32),
-            jbk::EntryIdx::from(0).into(),
+            entry_count,
+            jbk::EntryIdx::from(0),
         );
         directory_pack.create_index(
             "arx_root",
@@ -357,7 +236,7 @@ impl jbk::creator::EntryStoreTrait for EntryStoreCreator {
             jbk::PropertyIdx::from(0),
             entry_store_id,
             root_count,
-            jbk::EntryIdx::from(0).into(),
+            jbk::EntryIdx::from(0),
         );
     }
 }
@@ -372,7 +251,7 @@ impl Default for EntryStoreCreator {
 mod tests {
     use super::super::*;
     use super::*;
-    use jbk::creator::EntryStoreTrait;
+    use jbk::creator::EntryStoreCreatorTrait;
     use rustest::{test, *};
 
     #[test]

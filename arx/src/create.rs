@@ -87,6 +87,8 @@ const USAGE: &str = cstr!("<s>arx create</s> -o archive.arx [OPTIONS] [INFILES].
 /// Create an archive.
 #[derive(Parser, Debug)]
 #[command(after_long_help=AFTER_HELP, override_usage=USAGE)]
+#[command(display_name("arx create"))]
+#[command(bin_name("arx create"))]
 pub struct Options {
     /// File path of the archive to create.
     ///
